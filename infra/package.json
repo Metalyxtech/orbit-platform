@@ -1,0 +1,26 @@
+{
+  "name": "@orbit/infra",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "cdk": "cdk",
+    "synth:dev": "cdk synth -c stage=dev",
+    "deploy:dev": "cdk deploy --all -c stage=dev --require-approval never",
+    "deploy:prod": "cdk deploy --all -c stage=prod --require-approval never",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.275.0",
+    "constructs": "10.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "aws-cdk": "2.1146.1",
+    "esbuild": "0.25.12",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vitest": "4.1.12"
+  }
+}

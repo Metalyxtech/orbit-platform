@@ -47,6 +47,7 @@ export interface EventMap {
     filters: Record<string, unknown>;
     notifyEmail: string;
   };
+  'report.export_ready': { exportId: string; email?: EmailIntent };
   'company.purge_requested': { reason: 'sandbox_reset' | 'promote' | 'delete' };
 }
 

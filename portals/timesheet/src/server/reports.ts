@@ -9,8 +9,10 @@ import {
   timesheets,
   users,
   workflowTasks,
-  type Tx,
+  type Queryable,
 } from '@orbit/db';
+
+type Tx = Queryable;
 import { deadlineDate } from '../calc';
 import { assertRole, emit, loadSettings } from './shared';
 
@@ -85,13 +87,13 @@ export async function kpis(tx: Tx, ctx: SessionContext, raw: ReportFilter) {
     .select({ weekStart: timesheets.weekStart, submittedAt: timesheets.submittedAt, status: timesheets.status })
     .from(timesheets)
     .where(and(gte(timesheets.weekStart, start), lt(timesheets.weekStart, end), eq(timesheets.revision, 0)));
-  const submitted = weeks.filter((w) => w.submittedAt);
-  const onTime = submitted.filter((w) => {
-    const d = deadlineDate(w.weekStart, settings.deadlineDow);
-    // Deadline time is in the company time zone; compare on the local date + time string.
-    const local = w.submittedAt!.toLocaleString('sv-SE', { timeZone: ctx.timezone }).slice(0, 16);
-    return local <= `${d} ${settings.deadlineTime}`;
-  });
+  // Only weeks whose deadline has passed (or that were already submitted) count.
+  const nowLocal = new Date().toLocaleString('sv-SE', { timeZone: ctx.timezone }).slice(0, 16);
+  const deadlineOf = (w: { weekStart: string }) => `${deadlineDate(w.weekStart, settings.deadlineDow)} ${settings.deadlineTime}`;
+  const due = weeks.filter((w) => w.submittedAt || deadlineOf(w) <= nowLocal);
+  const onTime = due.filter(
+    (w) => w.submittedAt && w.submittedAt.toLocaleString('sv-SE', { timeZone: ctx.timezone }).slice(0, 16) <= deadlineOf(w),
+  );
   const [{ waiting }] = await tx
     .select({ waiting: sql<number>`count(*)::int` })
     .from(timesheets)
@@ -101,7 +103,7 @@ export async function kpis(tx: Tx, ctx: SessionContext, raw: ReportFilter) {
     approvedHours: Math.round(approved * 10) / 10,
     overtimeHours: Math.round(overtime * 10) / 10,
     overtimePct: approved ? Math.round((overtime / approved) * 1000) / 10 : 0,
-    onTimePct: weeks.length ? Math.round((onTime.length / weeks.length) * 100) : 0,
+    onTimePct: due.length ? Math.round((onTime.length / due.length) * 100) : 0,
     waiting,
   };
 }

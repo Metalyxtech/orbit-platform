@@ -1,4 +1,4 @@
-import { auditLog, type Tx } from '@orbit/db';
+import { auditLog, type Queryable as Tx } from '@orbit/db';
 
 export async function audit(
   tx: Tx,

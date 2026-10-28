@@ -168,10 +168,14 @@ export function MyWeekClient({ view, draftKey }: { view: WeekView; draftKey: str
     }
     if (readOnly) return;
     const t = setTimeout(async () => {
-      const res = await previewRouteAction({
-        rows: rowsRef.current.map(({ key, projectId, costCodeId, hours }) => ({ key, projectId, costCodeId, hours })),
-      });
-      if (res.ok) setRoute(res.data);
+      try {
+        const res = await previewRouteAction({
+          rows: rowsRef.current.map(({ key, projectId, costCodeId, hours }) => ({ key, projectId, costCodeId, hours })),
+        });
+        if (res.ok) setRoute(res.data);
+      } catch {
+        /* offline: keep the last route */
+      }
     }, 1500);
     return () => clearTimeout(t);
   }, [routeKey, readOnly]);
@@ -384,7 +388,7 @@ export function MyWeekClient({ view, draftKey }: { view: WeekView; draftKey: str
                     <div className="muted cond" style={{ fontSize: 12, marginBottom: 8 }}>
                       {r.costCodeLabel || 'Choose cost code'}
                     </div>
-                    {!r.projectId && !readOnly && <div style={{ marginBottom: 8 }}>{rowEditor(r, i)}</div>}
+                    {(!r.projectId || !r.costCodeId) && !readOnly && <div style={{ marginBottom: 8 }}>{rowEditor(r, i)}</div>}
                     <Stepper value={r.hours[day]} onChange={(v) => setHours(i, day, v)} disabled={readOnly} />
                     {totals.dayTotals[day] > view.rules.stdDayHours && r.hours[day] > 0 && (
                       <div className="hivis" style={{ fontSize: 12, textAlign: 'center', marginTop: 4 }}>

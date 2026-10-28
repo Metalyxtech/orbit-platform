@@ -46,23 +46,18 @@ export function SettingsClient({
         if (f.multiple) {
           const arr = (v as (string | number)[]) ?? [];
           return (
-            <select
-              className="o-select"
-              multiple
-              value={arr.map(String)}
-              onChange={(e) =>
-                set(
-                  f.key,
-                  [...e.target.selectedOptions].map((o) => f.options.find((x) => String(x.value) === o.value)!.value),
-                )
-              }
-            >
+            <div className="o-seg" role="group" aria-label={f.label}>
               {f.options.map((o) => (
-                <option key={String(o.value)} value={String(o.value)}>
-                  {o.label}
-                </option>
+                <button
+                  type="button"
+                  key={String(o.value)}
+                  aria-pressed={arr.includes(o.value)}
+                  onClick={() => set(f.key, arr.includes(o.value) ? arr.filter((x) => x !== o.value) : [...arr, o.value])}
+                >
+                  {o.label.slice(0, 3)}
+                </button>
               ))}
-            </select>
+            </div>
           );
         }
         return <Select value={v as string | number} options={f.options} onChange={(x) => set(f.key, x)} />;

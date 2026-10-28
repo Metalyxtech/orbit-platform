@@ -1,4 +1,4 @@
-import type { Db, TenantScope, Tx } from '@orbit/db';
+import type { Db, Queryable, TenantScope } from '@orbit/db';
 import type { PlatformEvent } from './events';
 import { enqueue, publishNow } from './outbox';
 import { createTaskTimers, deleteTaskTimers } from './timers';
@@ -15,7 +15,7 @@ export class Effects {
   readonly timersToDelete: string[] = [];
   readonly after: (() => Promise<unknown>)[] = [];
 
-  async emit(tx: Tx, event: PlatformEvent) {
+  async emit(tx: Queryable, event: PlatformEvent) {
     await enqueue(tx, event);
     this.events.push(event);
   }

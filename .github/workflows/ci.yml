@@ -1,0 +1,68 @@
+name: CI
+
+# Pull requests and feature branches: type-check, unit tests, build, CDK synth,
+# migrations + seed + tenant isolation check against a throwaway Postgres.
+on:
+  pull_request:
+  push:
+    branches-ignore: [main, production]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DB_DRIVER: pg
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm --filter web build
+      - name: CDK synth (dev and prod)
+        working-directory: infra
+        env:
+          CDK_DEFAULT_ACCOUNT: '111111111111'
+          CDK_DEFAULT_REGION: ap-southeast-1
+        run: |
+          npx cdk synth -c stage=dev --quiet
+          npx cdk synth -c stage=prod --quiet
+
+      # Database: a non-superuser owner (like Neon's), so RLS is really enforced.
+      - name: Prepare database
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -c "create role owner login createrole password 'owner'"
+          psql -h localhost -U postgres -c "create database neondb owner owner"
+          psql -h localhost -U postgres -d neondb -c "alter schema public owner to owner"
+      - name: Migrate, create roles, seed
+        env:
+          DATABASE_OWNER_URL: postgres://owner:owner@localhost:5432/neondb
+        run: |
+          pnpm db:migrate
+          pnpm --filter @orbit/db roles > roles.txt
+          pnpm db:seed
+          echo "APP_DATABASE_URL=$(grep '^app_user:' roles.txt | awk '{print $2}')" >> "$GITHUB_ENV"
+          rm roles.txt
+      - name: Tenant isolation (RLS) check
+        run: pnpm --filter @orbit/db check-rls

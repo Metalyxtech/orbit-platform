@@ -1,5 +1,5 @@
-import { Pool } from '@neondatabase/serverless';
 import { randomBytes } from 'node:crypto';
+import { createPoolDb } from '../src';
 
 /**
  * Creates (or rotates the password of) the three login roles from Section 9 and prints
@@ -16,7 +16,7 @@ const roles = [
   { name: 'reports_ro', group: 'orbit_reports', pooled: true, extra: 'NOBYPASSRLS' },
 ];
 
-const pool = new Pool({ connectionString: ownerUrl });
+const pool = createPoolDb(ownerUrl).$client;
 for (const role of roles) {
   const password = randomBytes(24).toString('base64url');
   const { rows } = await pool.query('SELECT 1 FROM pg_roles WHERE rolname = $1', [role.name]);
@@ -27,7 +27,7 @@ for (const role of roles) {
   const url = new URL(ownerUrl);
   url.username = role.name;
   url.password = password;
-  if (role.pooled && !url.hostname.includes('-pooler')) {
+  if (role.pooled && url.hostname.includes('.neon.tech') && !url.hostname.includes('-pooler')) {
     url.hostname = url.hostname.replace(/^([^.]+)/, '$1-pooler');
   }
   console.log(`${role.name}: ${url.toString()}`);

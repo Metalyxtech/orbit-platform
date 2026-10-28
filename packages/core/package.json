@@ -10,7 +10,8 @@
     "./workflow": "./src/workflow/index.ts",
     "./portals": "./src/portals.ts",
     "./hmac": "./src/hmac.ts",
-    "./next": "./src/next/index.ts"
+    "./next": "./src/next/index.ts",
+    "./outbox": "./src/outbox.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

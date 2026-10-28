@@ -1,0 +1,10 @@
+{
+  "name": "@orbit/portal-template",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./manifest": "./src/manifest.ts",
+    "./routes": "./src/screens/routes.tsx"
+  }
+}

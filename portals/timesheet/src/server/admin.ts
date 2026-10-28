@@ -59,18 +59,19 @@ export async function updateSettings(tx: Tx, ctx: ActionContext, raw: unknown) {
 export async function listProjects(tx: Tx, ctx: SessionContext) {
   assertRole(ctx, 'company_admin');
   const rows = await tx
-    .select({
-      id: projects.id,
-      code: projects.code,
-      name: projects.name,
-      status: projects.status,
-      pmId: projects.pmId,
-      costCodes: sql<number>`(select count(*)::int from ${costCodes} where ${costCodes.projectId} = ${projects.id})`,
-    })
+    .select({ id: projects.id, code: projects.code, name: projects.name, status: projects.status, pmId: projects.pmId })
     .from(projects)
     .orderBy(asc(projects.code));
+  const counts = await tx
+    .select({ projectId: costCodes.projectId, n: sql<number>`count(*)::int` })
+    .from(costCodes)
+    .groupBy(costCodes.projectId);
   const pms = await membersById(tx, rows.map((r) => r.pmId).filter((x): x is string => !!x));
-  return rows.map((r) => ({ ...r, pm: r.pmId ? (pms.get(r.pmId)?.name ?? '') : 'Company admin' }));
+  return rows.map((r) => ({
+    ...r,
+    costCodes: counts.find((c) => c.projectId === r.id)?.n ?? 0,
+    pm: r.pmId ? (pms.get(r.pmId)?.name ?? '') : 'Company admin',
+  }));
 }
 
 export interface CsvPreviewRow {

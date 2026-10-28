@@ -8,8 +8,10 @@ import {
   tsSettings,
   users,
   workflowDefinitions,
-  type Tx,
+  type Queryable,
 } from '@orbit/db';
+
+type Tx = Queryable;
 import { defaultRules, type TsRules } from '../calc';
 import { timesheetManifest } from '../manifest';
 

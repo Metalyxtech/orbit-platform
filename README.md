@@ -47,7 +47,7 @@ orbit-platform/
 
 | Spec | Here | Why |
 | --- | --- | --- |
-| One SQS queue `wepcm-*-events` for notifier, exporter and company-purge with event filters | Three queues (`-events`, `-exports`, `-purge`) sharing the DLQ | Lambda deletes SQS messages that don't match its filter, so consumers sharing a queue would lose each other's messages. The app derives the extra URLs from `APP_SQS_EVENTS_URL`; no new settings |
+| One SQS queue `orbit-*-events` for notifier, exporter and company-purge with event filters | Three queues (`-events`, `-exports`, `-purge`) sharing the DLQ | Lambda deletes SQS messages that don't match its filter, so consumers sharing a queue would lose each other's messages. The app derives the extra URLs from `APP_SQS_EVENTS_URL`; no new settings |
 | Queue visibility timeout 60 s | 60 s events, 180 s exports, 360 s purge | AWS requires visibility timeout >= the consumer's timeout (120 s, 300 s) |
 | Export email with a 24-hour link | The email links to `/api/exports/{id}`, which checks the session and the 24 h window, then redirects to a 5-minute pre-signed URL | A URL signed by a Lambda role's temporary credentials stops working long before 24 h |
 | Exports lifecycle on `exports/` | Exporter tags objects `retention=export`; lifecycle deletes tagged objects after 7 days | Keys start with `{companyId}/`, so a prefix rule cannot match |
@@ -96,7 +96,7 @@ cd infra && npx cdk synth -c stage=dev
 | Roll back the app | Amplify console > app > branch > *Deployments* > pick the previous build > *Redeploy this version* |
 | Roll back infra | Revert the commit on `main` (or re-tag the previous version for prod) |
 | Restore the database | Neon > *Branches* > *Restore* to a point in time (Free: 6 h, Launch: 7 days). Test on `staging` before the pilot |
-| Rotate a secret | `AWS_PROFILE=wepcm-<env> ./infra/scripts/put-secrets.sh <env>`; the app picks it up within 5 minutes. For Neon passwords: `pnpm --filter @orbit/db roles` rotates and prints new URLs |
+| Rotate a secret | `AWS_PROFILE=orbit-<env> ./infra/scripts/put-secrets.sh <env>`; the app picks it up within 5 minutes. For Neon passwords: `pnpm --filter @orbit/db roles` rotates and prints new URLs |
 | Remove a collaborator | GitHub collaborators, IAM Identity Center user, Neon/WorkOS member; rotate any secret they could see |
 | Move to Vercel Pro | [docs/AWS_SETUP.md](docs/AWS_SETUP.md#optional-later-move-hosting-to-vercel-pro-no-code-change) |
 | Add a region | Add `infra/config/<region>.ts`, a Neon project in that region, deploy the stacks, and set `companies.region` |

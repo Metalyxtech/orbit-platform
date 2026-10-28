@@ -43,7 +43,7 @@ async function verifySns(m: SnsMessage): Promise<boolean> {
   return verifier.verify(cert, m.Signature, 'base64');
 }
 
-/** SNS topic wepcm-<env>-ses-feedback: bounces and complaints go on the suppression list. */
+/** SNS topic orbit-<env>-ses-feedback: bounces and complaints go on the suppression list. */
 export async function POST(req: NextRequest) {
   const m = JSON.parse(await req.text()) as SnsMessage;
   if (process.env.APP_SES_TOPIC_ARN && m.TopicArn !== process.env.APP_SES_TOPIC_ARN) {

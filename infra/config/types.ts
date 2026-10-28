@@ -1,6 +1,6 @@
 export interface StageConfig {
   stage: 'dev' | 'prod';
-  /** AWS account id of wepcm-dev / wepcm-prod. Falls back to the CLI's account. */
+  /** AWS account id of orbit-dev / orbit-prod. Falls back to the CLI's account. */
   account?: string;
   region: 'ap-southeast-1';
   /** GitHub owner of orbit-platform (the company info@ account or organisation). */

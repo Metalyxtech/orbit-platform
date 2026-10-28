@@ -67,7 +67,7 @@ export class WorkersStack extends Stack {
           NODE_OPTIONS: '--enable-source-maps',
         },
       });
-      // Every worker reads /wepcm/<env>/workers/* (Neon URL, HMAC secret, from address).
+      // Every worker reads /orbit/<env>/workers/* (Neon URL, HMAC secret, from address).
       f.addToRolePolicy(
         new iam.PolicyStatement({
           actions: ['ssm:GetParametersByPath', 'ssm:GetParameter'],

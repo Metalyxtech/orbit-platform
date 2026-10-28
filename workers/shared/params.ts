@@ -4,7 +4,7 @@ const ssm = new SSMClient({});
 let cache: Promise<Record<string, string>> | undefined;
 
 /**
- * Reads /wepcm/<stage>/workers/* once per cold start:
+ * Reads /orbit/<stage>/workers/* once per cold start:
  * neonUrl, timerHmacSecret, fromAddress, replyTo, sandboxAllowlist.
  */
 export function workerParams(): Promise<Record<string, string>> {

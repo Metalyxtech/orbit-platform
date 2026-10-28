@@ -13,7 +13,7 @@ const payloadSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('ts_deadline_reminder'), companyId: z.uuid() }),
 ]);
 
-/** Called by the escalator Lambda (EventBridge Scheduler). HMAC signed with /wepcm/<env>/app/timerHmacSecret. */
+/** Called by the escalator Lambda (EventBridge Scheduler). HMAC signed with /orbit/<env>/app/timerHmacSecret. */
 export async function POST(req: NextRequest) {
   const body = await req.text();
   const secret = await getSecret('timerHmacSecret');

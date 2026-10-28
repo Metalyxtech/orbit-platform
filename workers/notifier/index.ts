@@ -14,7 +14,7 @@ const ses = new SESv2Client({});
 
 /**
  * Sandbox email guard: sandbox companies only email addresses on the allowlist
- * (/wepcm/<env>/workers/sandboxAllowlist, comma separated; '*@domain' allowed).
+ * (/orbit/<env>/workers/sandboxAllowlist, comma separated; '*@domain' allowed).
  */
 export function guardRecipients(to: string[], stage: PlatformEvent['companyStage'], allowlist: string) {
   if (stage !== 'sandbox') return to;

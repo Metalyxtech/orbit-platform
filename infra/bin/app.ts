@@ -16,7 +16,7 @@ const cfg = { dev, prod }[stage as 'dev' | 'prod'];
 if (!cfg) throw new Error(`Unknown stage "${stage}". Use -c stage=dev or -c stage=prod`);
 
 const env = { account: cfg.account ?? process.env.CDK_DEFAULT_ACCOUNT, region: cfg.region };
-const p = `Wepcm${stage[0].toUpperCase()}${stage.slice(1)}`;
+const p = `Orbit${stage[0].toUpperCase()}${stage.slice(1)}`;
 
 const identity = new IdentityStack(app, `${p}Identity`, {
   env,

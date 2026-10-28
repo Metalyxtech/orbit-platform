@@ -6,16 +6,16 @@ import type { StageConfig } from '../config/types';
  * policy can be written with plain ARNs and stacks never depend on each other in cycles.
  */
 export function names(cfg: StageConfig) {
-  const p = `wepcm-${cfg.stage}`;
+  const p = `orbit-${cfg.stage}`;
   const acct = Aws.ACCOUNT_ID;
   const region = cfg.region;
   return {
     prefix: p,
-    paramPrefix: `/wepcm/${cfg.stage}`,
+    paramPrefix: `/orbit/${cfg.stage}`,
     appRole: `${p}-app`,
     githubDeployRole: `${p}-github-deploy`,
     schedulerInvokeRole: `${p}-scheduler-invoke`,
-    bucket: `${p}-files-apse1`,
+    bucket: `${p}-files-apse1-${acct}`, // account id keeps the global S3 name unique
     eventsQueue: `${p}-events`,
     exportsQueue: `${p}-exports`,
     purgeQueue: `${p}-purge`,
@@ -27,11 +27,11 @@ export function names(cfg: StageConfig) {
     budget: `${p}-monthly`,
     fn: (name: string) => `${p}-${name}`,
     arn: {
-      bucket: `arn:aws:s3:::${p}-files-apse1`,
+      bucket: `arn:aws:s3:::${p}-files-apse1-${acct}`,
       queue: (name: string) => `arn:aws:sqs:${region}:${acct}:${name}`,
       scheduleGroup: `arn:aws:scheduler:${region}:${acct}:schedule/${p}-timers/*`,
       role: (name: string) => `arn:aws:iam::${acct}:role/${name}`,
-      params: (path: string) => `arn:aws:ssm:${region}:${acct}:parameter/wepcm/${cfg.stage}/${path}`,
+      params: (path: string) => `arn:aws:ssm:${region}:${acct}:parameter/orbit/${cfg.stage}/${path}`,
       fn: (name: string) => `arn:aws:lambda:${region}:${acct}:function:${p}-${name}`,
     },
   };

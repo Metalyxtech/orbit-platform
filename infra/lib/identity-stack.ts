@@ -22,7 +22,7 @@ export class IdentityStack extends Stack {
     const { cfg } = props;
     const n = names(cfg);
 
-    // ---------- App role: wepcm-<env>-app ----------
+    // ---------- App role: orbit-<env>-app ----------
     const principals: iam.IPrincipal[] = [new iam.ServicePrincipal('amplify.amazonaws.com')];
     if (props.enableVercel) {
       if (!props.vercelTeamSlug) throw new Error('-c vercelTeamSlug=<team> is required with enableVercel=true');

@@ -18,7 +18,7 @@ export async function enqueue(tx: Queryable, event: PlatformEvent) {
 /**
  * Each SQS consumer has its own queue: a Lambda event filter deletes the messages it does not
  * match, so consumers must never share a queue. URLs are derived from APP_SQS_EVENTS_URL
- * (.../wepcm-<env>-events -> -exports, -purge).
+ * (.../orbit-<env>-events -> -exports, -purge).
  */
 export function queueUrlFor(type: string, eventsUrl: string) {
   if (type === 'report.export_requested') return eventsUrl.replace(/-events$/, '-exports');

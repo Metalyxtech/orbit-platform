@@ -5,7 +5,7 @@
 set -euo pipefail
 STAGE="${1:?usage: put-secrets.sh dev|prod}"
 REGION="${AWS_REGION:-ap-southeast-1}"
-P="/wepcm/${STAGE}"
+P="/orbit/${STAGE}"
 
 put() { # name description [generate]
   local name="$1" desc="$2" gen="${3:-}"

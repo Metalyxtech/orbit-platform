@@ -1,8 +1,8 @@
 name: Release to production
 
 # Tag v* (e.g. v1.2.0): manual approval (GitHub environment "production"), CDK deploy to
-# wepcm-prod, migrations on Neon production, then fast-forward branch `production`, which
-# the wepcm-prod-web Amplify app builds.
+# orbit-prod, migrations on Neon production, then fast-forward branch `production`, which
+# the orbit-prod-web Amplify app builds.
 on:
   push:
     tags: ['v*']
@@ -35,7 +35,7 @@ jobs:
         run: npx cdk deploy --all -c stage=prod --require-approval never
       - name: Migrate Neon production
         run: |
-          export DATABASE_OWNER_URL="$(aws ssm get-parameter --name /wepcm/prod/ci/neonOwnerUrl --with-decryption --query Parameter.Value --output text)"
+          export DATABASE_OWNER_URL="$(aws ssm get-parameter --name /orbit/prod/ci/neonOwnerUrl --with-decryption --query Parameter.Value --output text)"
           echo "::add-mask::$DATABASE_OWNER_URL"
           pnpm db:migrate
       - name: Fast-forward branch production

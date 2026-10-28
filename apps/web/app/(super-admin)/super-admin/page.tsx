@@ -7,7 +7,7 @@ import { approveCompanyAction, resetSandboxAction, setStageAction } from './acti
 
 export const dynamic = 'force-dynamic';
 
-/** Super Admin portal (first slice). Full behaviour: WEPCM-ADM-001. */
+/** Super Admin portal (first slice). */
 export default async function SuperAdmin() {
   const s = await getSession();
   const isSuper = (s.state === 'ok' && s.ctx.isSuperAdmin) || ((s.state === 'no_company' || s.state === 'pending') && s.isSuperAdmin);

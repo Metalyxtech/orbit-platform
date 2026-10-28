@@ -8,7 +8,7 @@ export const prod: StageConfig = {
   githubRepo: 'orbit-platform',
   appBaseUrl: 'https://app.example.com',
   corsOrigins: ['https://app.example.com'],
-  mailDomain: 'mail.westepcm.com',
+  mailDomain: 'mail.example.com',
   alarmEmail: 'info@example.com',
   budgetUsd: 40,
   logRetentionDays: 14,

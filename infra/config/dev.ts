@@ -8,7 +8,7 @@ export const dev: StageConfig = {
   githubRepo: 'orbit-platform',
   appBaseUrl: 'https://main.REPLACE_ME.amplifyapp.com',
   corsOrigins: ['https://*.amplifyapp.com', 'http://localhost:3000'],
-  mailDomain: undefined, // e.g. 'mail.westepcm.com' once you can add DNS records
+  mailDomain: undefined, // e.g. 'mail.example.com' once you can add DNS records
   alarmEmail: 'info@example.com',
   budgetUsd: 5,
   logRetentionDays: 7,

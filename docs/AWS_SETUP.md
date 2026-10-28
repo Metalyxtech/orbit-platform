@@ -1,6 +1,6 @@
 # AWS setup, step by step (testing stage, `wepcm-dev`)
 
-This sets up the testing environment from WEPCM-DEV-002 Section 1 to 9: AWS, Neon, WorkOS and
+This sets up the testing environment: AWS, Neon, WorkOS and
 Amplify Hosting. Do it once. It takes about 1 to 2 hours. Everything runs in **ap-southeast-1 (Singapore)**.
 
 When you finish, you will have:
@@ -94,7 +94,7 @@ You need: the company **info@** email, a phone for MFA, Node.js 22, and `pnpm` (
    | WorkOS API key | `sk_test_...` from Part C |
    | Cookie password | press Enter (it generates one) |
    | Neon worker connection string | `worker` URL from Part B |
-   | From address | e.g. `notifications@mail.westepcm.com` (or a verified tester address while in the SES sandbox) |
+   | From address | e.g. `notifications@mail.example.com` (or a verified tester address while in the SES sandbox) |
    | Sandbox allowlist | tester emails, comma separated, e.g. `you@company.com,*@company.com` |
    | Neon OWNER connection string | the owner URL (used only by the pipeline for migrations) |
 
@@ -130,7 +130,7 @@ If `s3` or `ssm` is not `ok`, the compute role is not attached (Part E step 6) o
 
 While testing, SES is in the **sandbox**: it only sends to verified addresses.
 1. Console > **Amazon SES** > *Identities* > *Create identity* > *Email address*, for each tester. Click the link in each email.
-2. When you can edit DNS for the company domain: set `mailDomain: 'mail.westepcm.com'` in `infra/config/dev.ts`,
+2. When you can edit DNS for the company domain: set `mailDomain: 'mail.example.com'` in `infra/config/dev.ts`,
    redeploy CDK, and add the DNS records printed in the `WepcmDevEmail` outputs (3 DKIM CNAMEs, MAIL FROM MX + SPF TXT, DMARC TXT).
 3. Before the first pilot company: SES > *Account dashboard* > **Request production access**
    (use case: transactional workflow emails).

@@ -2,7 +2,7 @@
 
 Orbit is a multi-company portal platform. The first portal is **Timesheet**. This repository holds
 everything: the Next.js app (front end and back end), the Super Admin portal, the AWS workers and
-the infrastructure as code. It implements **WEPCM-DEV-002 Rev 2** (AWS backend + Timesheet UI).
+the infrastructure as code (AWS backend + Timesheet UI).
 
 - **Set up AWS, Neon, WorkOS and Amplify:** [docs/AWS_SETUP.md](docs/AWS_SETUP.md)
 - **Region:** ap-southeast-1 (Singapore) for everything.
@@ -53,7 +53,6 @@ orbit-platform/
 | Exports lifecycle on `exports/` | Exporter tags objects `retention=export`; lifecycle deletes tagged objects after 7 days | Keys start with `{companyId}/`, so a prefix rule cannot match |
 | `@workos-inc/authkit-nextjs` | `@workos-inc/node` + our own sealed cookie | authkit-nextjs reads secrets from env vars at build time; the spec keeps secrets in SSM |
 | Neon control + tenant databases | One database for now (`neonControlUrl` = `neonTenantUrl`) | Same schema works for both; split later without code changes in portals |
-| Branding "West EPCM" | **Orbit** (`apps/web/src/portals.ts` `BRAND`) | Requested |
 
 ## Local development
 

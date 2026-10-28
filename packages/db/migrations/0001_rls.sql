@@ -1,4 +1,4 @@
--- Row level security for every tenant table (WEPCM-DEV-002 Section 9).
+-- Row level security for every tenant table.
 -- Group roles; login roles (app_user, worker, reports_ro) are created by scripts/create-roles.ts.
 DO $$
 BEGIN

@@ -1,0 +1,9 @@
+{
+  "name": "Orbit",
+  "short_name": "Orbit",
+  "start_url": "/timesheet",
+  "display": "standalone",
+  "background_color": "#F7F8F6",
+  "theme_color": "#262C33",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

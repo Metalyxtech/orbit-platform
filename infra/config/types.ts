@@ -3,7 +3,7 @@ export interface StageConfig {
   /** AWS account id of orbit-dev / orbit-prod. Falls back to the CLI's account. */
   account?: string;
   region: 'ap-southeast-1';
-  /** GitHub owner of orbit-platform (the company info@ account or organisation). */
+  /** GitHub owner of orbit-platform, spelled exactly as on GitHub (the OIDC check is case-sensitive). */
   githubOwner: string;
   githubRepo: string;
   /** Public URL of the app on this stage, e.g. https://test.example.com. */

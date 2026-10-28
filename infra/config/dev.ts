@@ -4,7 +4,7 @@ import type { StageConfig } from './types';
 export const dev: StageConfig = {
   stage: 'dev',
   region: 'ap-southeast-1',
-  githubOwner: 'metalyxtech',
+  githubOwner: 'Metalyxtech',
   githubRepo: 'orbit-platform',
   appBaseUrl: 'https://main.REPLACE_ME.amplifyapp.com',
   corsOrigins: ['https://*.amplifyapp.com', 'http://localhost:3000'],

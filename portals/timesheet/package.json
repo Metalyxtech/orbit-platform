@@ -8,7 +8,9 @@
     "./calc": "./src/calc.ts",
     "./messages": "./src/messages.ts",
     "./manifest": "./src/manifest.ts",
-    "./server": "./src/server/index.ts"
+    "./server": "./src/server/index.ts",
+    "./actions": "./src/actions.ts",
+    "./routes": "./src/screens/routes.tsx"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
@@ -18,11 +20,20 @@
     "@orbit/core": "workspace:*",
     "@orbit/db": "workspace:*",
     "drizzle-orm": "0.45.4",
-    "zod": "4.6.7"
+    "zod": "4.6.7",
+    "@orbit/ui": "workspace:*",
+    "idb-keyval": "6.3.0"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
     "typescript": "5.9.3",
-    "vitest": "4.1.12"
+    "vitest": "4.1.12",
+    "next": "15.5.28",
+    "react": "19.1.10",
+    "@types/react": "19.1.17"
+  },
+  "peerDependencies": {
+    "next": ">=15",
+    "react": ">=19"
   }
 }

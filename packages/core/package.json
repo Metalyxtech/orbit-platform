@@ -9,7 +9,8 @@
     "./events": "./src/events.ts",
     "./workflow": "./src/workflow/index.ts",
     "./portals": "./src/portals.ts",
-    "./hmac": "./src/hmac.ts"
+    "./hmac": "./src/hmac.ts",
+    "./next": "./src/next/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
@@ -26,11 +27,19 @@
     "@vercel/oidc-aws-credentials-provider": "3.3.16",
     "drizzle-orm": "0.45.4",
     "uuid": "14.0.3",
-    "zod": "4.6.7"
+    "zod": "4.6.7",
+    "@workos-inc/node": "12.0.0"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
     "typescript": "5.9.3",
-    "vitest": "4.1.12"
+    "vitest": "4.1.12",
+    "next": "15.5.28",
+    "react": "19.1.10",
+    "@types/react": "19.1.17"
+  },
+  "peerDependencies": {
+    "next": ">=15",
+    "react": ">=19"
   }
 }

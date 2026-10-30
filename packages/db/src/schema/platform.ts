@@ -91,7 +91,7 @@ export const companyPortals = pgTable(
   (t) => [primaryKey({ columns: [t.companyId, t.portal] })],
 );
 
-/** Global workflow library, versioned. */
+/** Workflow library (global) and company-built workflows, versioned. */
 export const workflowDefinitions = pgTable(
   'workflow_definitions',
   {
@@ -101,6 +101,8 @@ export const workflowDefinitions = pgTable(
     name: text('name').notNull(),
     description: text('description'),
     definition: jsonb('definition').notNull(),
+    /** Null for the Orbit library; set for a workflow a company built itself. */
+    companyId: uuid('company_id').references(() => companies.id),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex('workflow_definitions_key_version').on(t.key, t.version)],

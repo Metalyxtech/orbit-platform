@@ -120,6 +120,15 @@ export function approverResolver(tx: Tx, companyId: string): ApproverResolver {
           }));
         return out.length ? out : admins();
       }
+      if (rule.type === 'person') {
+        // A named approver who left, was disabled or is the submitter falls back to the admins.
+        const [m] = await tx
+          .select({ membershipId: memberships.id, name: users.name, email: users.email, title: memberships.title })
+          .from(memberships)
+          .innerJoin(users, eq(users.id, memberships.userId))
+          .where(and(eq(memberships.id, rule.membershipId), eq(memberships.companyId, companyId), eq(memberships.status, 'active')));
+        return m && m.membershipId !== ctx.submitterId ? [toApprover(m)] : admins();
+      }
       const holders = (await membersWithRole(tx, companyId, rule.role)).filter((m) => m.membershipId !== ctx.submitterId);
       return holders.length ? holders.map(toApprover) : admins();
     },

@@ -8,7 +8,8 @@ export type Condition =
 export type ApproverRule =
   | { type: 'supervisor' } // the submitter's supervisor
   | { type: 'project_managers' } // every PM of the projects in the context (all must approve)
-  | { type: 'role'; role: MemberRole }; // any one member with the role
+  | { type: 'role'; role: MemberRole } // any one member with the role
+  | { type: 'person'; membershipId: string }; // one named member of the company
 
 export interface StepDef {
   id: string;

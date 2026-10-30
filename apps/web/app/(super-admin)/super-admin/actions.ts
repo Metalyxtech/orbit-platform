@@ -33,7 +33,7 @@ export async function approveCompanyAction(companyId: string) {
       .onConflictDoUpdate({ target: [companyPortals.companyId, companyPortals.portal], set: { enabled: true } });
     await audit(tx, { companyId, actorId: null, action: 'company.approve', entity: 'companies', entityId: companyId });
   });
-  revalidatePath('/super-admin');
+  revalidatePath('/super-admin', 'layout');
 }
 
 /** Block (suspend) or unblock a company. Its people see "Access blocked" until it is unblocked. */
@@ -47,7 +47,7 @@ export async function setCompanyBlockedAction(companyId: string, blocked: boolea
   await withTenant(db, { companyId: id, userId }, (tx) =>
     audit(tx, { companyId: id, actorId: null, action: blocked ? 'company.block' : 'company.unblock', entity: 'companies', entityId: id }),
   );
-  revalidatePath('/super-admin');
+  revalidatePath('/super-admin', 'layout');
 }
 
 /** Block or unblock one person in one company (for example a company admin). */
@@ -62,14 +62,14 @@ export async function setMemberBlockedAction(companyId: string, membershipId: st
       .where(and(eq(memberships.id, id), eq(memberships.companyId, companyId)));
     await audit(tx, { companyId, actorId: null, action: blocked ? 'membership.block' : 'membership.unblock', entity: 'memberships', entityId: id });
   });
-  revalidatePath('/super-admin');
+  revalidatePath('/super-admin', 'layout');
 }
 
 export async function setStageAction(companyId: string, stage: 'sandbox' | 'pilot' | 'live') {
   await requireSuperAdmin();
   const db = await getDb();
   await db.update(companies).set({ stage: z.enum(['sandbox', 'pilot', 'live']).parse(stage) }).where(eq(companies.id, companyId));
-  revalidatePath('/super-admin');
+  revalidatePath('/super-admin', 'layout');
 }
 
 /** Sandbox reset: the company-purge Lambda deletes transactional rows and the S3 prefix. */
@@ -84,5 +84,5 @@ export async function resetSandboxAction(companyId: string) {
     effects.emit(tx, newEvent('company.purge_requested', { companyId, companyStage: c.stage, requestId: uuidv7() }, { reason: 'sandbox_reset' })),
   );
   await effects.flush(db, scope);
-  revalidatePath('/super-admin');
+  revalidatePath('/super-admin', 'layout');
 }

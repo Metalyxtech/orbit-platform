@@ -36,6 +36,35 @@ export async function approveCompanyAction(companyId: string) {
   revalidatePath('/super-admin');
 }
 
+/** Block (suspend) or unblock a company. Its people see "Access blocked" until it is unblocked. */
+export async function setCompanyBlockedAction(companyId: string, blocked: boolean) {
+  const userId = await requireSuperAdmin();
+  const db = await getDb();
+  const id = z.uuid().parse(companyId);
+  const [c] = await db.select().from(companies).where(eq(companies.id, id));
+  if (!c || c.status === 'pending') throw new Error('Approve the company first');
+  await db.update(companies).set({ status: blocked ? 'suspended' : 'active' }).where(eq(companies.id, id));
+  await withTenant(db, { companyId: id, userId }, (tx) =>
+    audit(tx, { companyId: id, actorId: null, action: blocked ? 'company.block' : 'company.unblock', entity: 'companies', entityId: id }),
+  );
+  revalidatePath('/super-admin');
+}
+
+/** Block or unblock one person in one company (for example a company admin). */
+export async function setMemberBlockedAction(companyId: string, membershipId: string, blocked: boolean) {
+  const userId = await requireSuperAdmin();
+  const db = await getDb();
+  const id = z.uuid().parse(membershipId);
+  await withTenant(db, { companyId, userId }, async (tx) => {
+    await tx
+      .update(memberships)
+      .set({ status: blocked ? 'disabled' : 'active' })
+      .where(and(eq(memberships.id, id), eq(memberships.companyId, companyId)));
+    await audit(tx, { companyId, actorId: null, action: blocked ? 'membership.block' : 'membership.unblock', entity: 'memberships', entityId: id });
+  });
+  revalidatePath('/super-admin');
+}
+
 export async function setStageAction(companyId: string, stage: 'sandbox' | 'pilot' | 'live') {
   await requireSuperAdmin();
   const db = await getDb();

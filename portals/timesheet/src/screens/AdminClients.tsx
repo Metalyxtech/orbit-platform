@@ -301,6 +301,12 @@ export function UsersClient({ users, corrections }: { users: UserRow[]; correcti
       <TopBar crumbs={['Timesheet', 'Company admin', 'Users']} />
       <div className="o-page">
         <h1>Users</h1>
+        {users.some((u) => u.status === 'pending') && (
+          <p className="o-panel" style={{ padding: '10px 16px' }}>
+            {users.filter((u) => u.status === 'pending').length} people asked to join. Set their role and supervisor, then approve
+            them below.
+          </p>
+        )}
         {corrections.length > 0 && (
           <div className="o-panel flush">
             <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
@@ -394,9 +400,14 @@ export function UsersClient({ users, corrections }: { users: UserRow[]; correcti
                 header: '',
                 render: (u) =>
                   u.status === 'pending' ? (
-                    <Button size="small" variant="ok" onClick={() => update({ membershipId: u.membershipId, status: 'active' })}>
-                      Approve
-                    </Button>
+                    <div className="o-row">
+                      <Button size="small" variant="ok" onClick={() => update({ membershipId: u.membershipId, status: 'active' })}>
+                        Approve
+                      </Button>
+                      <Button size="small" variant="danger" onClick={() => update({ membershipId: u.membershipId, status: 'disabled' })}>
+                        Reject
+                      </Button>
+                    </div>
                   ) : u.status === 'active' ? (
                     <Button size="small" onClick={() => update({ membershipId: u.membershipId, status: 'disabled' })}>
                       Disable

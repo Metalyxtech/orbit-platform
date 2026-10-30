@@ -7,6 +7,7 @@ import {
   projects,
   tsSettings,
   users,
+  workflowDefinitionColumns,
   workflowDefinitions,
   type Queryable,
 } from '@orbit/db';
@@ -144,13 +145,13 @@ export async function boundWorkflow(tx: Tx, companyId: string) {
   const where = binding?.id
     ? eq(workflowDefinitions.id, binding.id)
     : eq(workflowDefinitions.key, timesheetManifest.defaultWorkflowKey);
-  const [def] = await tx.select().from(workflowDefinitions).where(where).orderBy(desc(workflowDefinitions.version)).limit(1);
+  const [def] = await tx.select(workflowDefinitionColumns).from(workflowDefinitions).where(where).orderBy(desc(workflowDefinitions.version)).limit(1);
   if (!def) throw new Error('No approval workflow is set for the Timesheet portal. Ask Orbit support.');
   return { ...def, definition: def.definition as WorkflowDefinition };
 }
 
 export async function loadDefinition(tx: Tx, id: string) {
-  const [def] = await tx.select().from(workflowDefinitions).where(eq(workflowDefinitions.id, id));
+  const [def] = await tx.select(workflowDefinitionColumns).from(workflowDefinitions).where(eq(workflowDefinitions.id, id));
   return def.definition as WorkflowDefinition;
 }
 

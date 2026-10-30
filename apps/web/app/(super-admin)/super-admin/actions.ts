@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { audit, Effects, newEvent, uuidv7 } from '@orbit/core';
 import { getDb, getSession } from '@orbit/core/next';
-import { companies, companyPortals, memberships, withTenant, workflowDefinitions } from '@orbit/db';
+import { companies, companyPortals, memberships, withTenant, workflowDefinitionColumns, workflowDefinitions } from '@orbit/db';
 import { timesheetManifest } from '@orbit/portal-timesheet/manifest';
 
 async function requireSuperAdmin() {
@@ -19,7 +19,7 @@ export async function approveCompanyAction(companyId: string) {
   const userId = await requireSuperAdmin();
   const db = await getDb();
   const [wf] = await db
-    .select()
+    .select(workflowDefinitionColumns)
     .from(workflowDefinitions)
     .where(eq(workflowDefinitions.key, timesheetManifest.defaultWorkflowKey))
     .orderBy(desc(workflowDefinitions.version))

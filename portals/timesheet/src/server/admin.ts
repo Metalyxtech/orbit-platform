@@ -11,6 +11,7 @@ import {
   timesheets,
   tsSettings,
   users,
+  workflowDefinitionColumns,
   workflowDefinitions,
   type Tx,
 } from '@orbit/db';
@@ -52,7 +53,7 @@ export async function listWorkflows(tx: Tx) {
 export async function setWorkflow(tx: Tx, ctx: ActionContext, input: { workflowDefinitionId: string }) {
   assertRole(ctx, 'company_admin');
   const id = z.uuid().parse(input.workflowDefinitionId);
-  const [def] = await tx.select().from(workflowDefinitions).where(eq(workflowDefinitions.id, id));
+  const [def] = await tx.select(workflowDefinitionColumns).from(workflowDefinitions).where(eq(workflowDefinitions.id, id));
   if (!def || !def.key.startsWith('timesheet.')) throw new Error('Choose a Timesheet workflow');
   await tx
     .insert(companyPortals)

@@ -108,6 +108,16 @@ export const workflowDefinitions = pgTable(
   (t) => [uniqueIndex('workflow_definitions_key_version').on(t.key, t.version)],
 );
 
+/** Columns code reads from workflow_definitions (company_id only matters to RLS). */
+export const workflowDefinitionColumns = {
+  id: workflowDefinitions.id,
+  key: workflowDefinitions.key,
+  version: workflowDefinitions.version,
+  name: workflowDefinitions.name,
+  description: workflowDefinitions.description,
+  definition: workflowDefinitions.definition,
+};
+
 export const workflowInstances = pgTable(
   'workflow_instances',
   {

@@ -1,4 +1,5 @@
 'use server';
+import { sql } from 'drizzle-orm';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
@@ -23,6 +24,7 @@ export async function registerCompanyAction(form: FormData) {
   if (s.state !== 'no_company') redirect('/');
   const input = registerSchema.parse(Object.fromEntries(form));
   const db = await getDb();
+  if (await companyByName(input.name)) redirect('/register?error=exists');
   const slug = `${input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${Date.now().toString(36)}`;
   const domain = s.email.split('@')[1];
   const [company] = await db
@@ -36,6 +38,39 @@ export async function registerCompanyAction(form: FormData) {
       role: 'company_admin',
       title: input.title || 'Company admin',
     }),
+  );
+  redirect('/pending');
+}
+
+/** Company names are matched without case or extra spaces, so "Hekur contractors " finds "Hekur Contractors". */
+async function companyByName(name: string) {
+  const db = await getDb();
+  const [row] = await db
+    .select()
+    .from(companies)
+    .where(sql`lower(btrim(${companies.name})) = lower(btrim(${name}))`)
+    .limit(1);
+  return row;
+}
+
+const joinSchema = z.object({
+  company: z.string().trim().min(2).max(120),
+  title: z.string().trim().max(100).optional(),
+});
+
+/** Join request: a pending employee membership that the company admin approves on the Users page. */
+export async function joinCompanyAction(form: FormData) {
+  const s = await getSession();
+  if (s.state !== 'no_company') redirect('/');
+  const input = joinSchema.parse(Object.fromEntries(form));
+  const company = await companyByName(input.company);
+  if (!company || company.status !== 'active') redirect('/register?error=not_found');
+  const db = await getDb();
+  await withTenant(db, { companyId: company.id, userId: s.userId }, (tx) =>
+    tx
+      .insert(memberships)
+      .values({ companyId: company.id, userId: s.userId, role: 'employee', title: input.title || null, status: 'pending' })
+      .onConflictDoNothing(),
   );
   redirect('/pending');
 }

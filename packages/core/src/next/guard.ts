@@ -17,7 +17,7 @@ const NO_COMPANY = '00000000-0000-0000-0000-000000000000';
 export type SessionState =
   | { state: 'signed_out' }
   | { state: 'no_company'; userId: string; email: string; name: string; isSuperAdmin: boolean }
-  | { state: 'pending'; companyName: string; isSuperAdmin: boolean }
+  | { state: 'pending'; companyName: string; isSuperAdmin: boolean; blocked: boolean }
   | { state: 'ok'; ctx: SessionContext; companies: { id: string; name: string }[] };
 
 /** Resolves who is calling and which company they act in. Cached per request. */
@@ -52,8 +52,10 @@ export const getSession = cache(async (): Promise<SessionState> => {
   const active = rows.filter((r) => r.m.status === 'active' && r.c.status === 'active');
   if (active.length === 0) {
     const pending = rows.find((r) => r.m.status === 'pending' || r.c.status === 'pending');
-    return pending
-      ? { state: 'pending', companyName: pending.c.name, isSuperAdmin: user.isSuperAdmin }
+    // A disabled membership or a suspended company must not fall through to "register a new company".
+    const blocked = rows.find((r) => r.m.status === 'disabled' || r.c.status === 'suspended');
+    return pending || blocked
+      ? { state: 'pending', companyName: (pending ?? blocked)!.c.name, isSuperAdmin: user.isSuperAdmin, blocked: !pending }
       : { state: 'no_company', userId: user.id, email: user.email, name: user.name, isSuperAdmin: user.isSuperAdmin };
   }
 

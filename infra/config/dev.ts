@@ -6,8 +6,8 @@ export const dev: StageConfig = {
   region: 'ap-southeast-1',
   githubOwner: 'Metalyxtech',
   githubRepo: 'orbit-platform',
-  appBaseUrl: 'https://main.REPLACE_ME.amplifyapp.com',
-  corsOrigins: ['https://*.amplifyapp.com', 'http://localhost:3000'],
+  appBaseUrl: 'https://main.d2bmw6xnh0jekq.amplifyapp.com',
+  corsOrigins: ['https://main.d2bmw6xnh0jekq.amplifyapp.com', 'http://localhost:3000'],
   mailDomain: undefined, // e.g. 'mail.example.com' once you can add DNS records
   alarmEmail: 'info@example.com',
   budgetUsd: 5,

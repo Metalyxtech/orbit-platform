@@ -19,8 +19,13 @@ export default async function SuperAdmin() {
       <div className="o-main">
         <header className="o-top" style={{ background: 'var(--graphite)', color: '#fff' }}>
           <strong style={{ flex: 1 }}>Orbit / Super Admin</strong>
-          <a href="/" style={{ color: '#c9cfd5' }}>
-            Back to portals
+          {s.state === 'ok' && (
+            <a href="/" style={{ color: '#c9cfd5' }}>
+              Back to portals
+            </a>
+          )}
+          <a href="/auth/sign-out" style={{ color: '#c9cfd5', marginLeft: 20 }}>
+            Sign out
           </a>
         </header>
         <div className="o-page">

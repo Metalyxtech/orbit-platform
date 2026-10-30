@@ -30,6 +30,7 @@ export const timesheetManifest: PortalManifest = {
     { path: 'team', label: 'Team overview', section: 'main', roles: ['supervisor', 'project_manager', 'company_admin'] },
     { path: 'reports', label: 'Reports', section: 'main', roles: ['project_manager', 'company_admin'] },
     { path: 'admin/users', label: 'Users', section: 'admin', roles: ['company_admin'] },
+    { path: 'admin/workflow', label: 'Approval workflow', section: 'admin', roles: ['company_admin'] },
     { path: 'admin/projects', label: 'Projects and cost codes', section: 'admin', roles: ['company_admin'] },
     { path: 'admin/settings', label: 'Timesheet settings', section: 'admin', roles: ['company_admin'] },
   ],

@@ -230,3 +230,16 @@ h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
 .o-table th.num { text-align: right; }
 .o-scroll { overflow-x: auto; }
 .o-shell > .o-main { min-width: 0; }
+
+/* ---------- Approval workflow cards ---------- */
+.o-wf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.o-wf-card { position: relative; display: flex; flex-direction: column; gap: 10px; background: var(--sheet); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; cursor: pointer; }
+.o-wf-card:hover { border-color: var(--steel); }
+.o-wf-card.on { border-color: var(--steel); box-shadow: 0 0 0 1px var(--steel) inset; }
+.o-wf-card input { position: absolute; opacity: 0; pointer-events: none; }
+.o-wf-card:focus-within { outline: 2px solid var(--steel); outline-offset: 1px; }
+.o-wf-steps { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.o-half { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .o-half { grid-template-columns: 1fr; } }
+.o-form-row { display: flex; flex-wrap: wrap; gap: 12px; }
+.o-form-row > .o-field { flex: 1 1 180px; }

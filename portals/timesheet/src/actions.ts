@@ -50,3 +50,9 @@ export async function setWorkflowAction(input: { workflowDefinitionId: string })
 export async function addMemberAction(input: Parameters<typeof admin.addMember>[2]) {
   return runAction((tx, ctx) => admin.addMember(tx, ctx, input));
 }
+export async function saveProjectAction(input: Parameters<typeof admin.saveProject>[2]) {
+  return runAction((tx, ctx) => admin.saveProject(tx, ctx, input));
+}
+export async function saveCostCodeAction(input: Parameters<typeof admin.saveCostCode>[2]) {
+  return runAction((tx, ctx) => admin.saveCostCode(tx, ctx, input));
+}

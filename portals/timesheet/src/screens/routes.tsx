@@ -5,7 +5,7 @@ import { admin, approvals, reports, week } from '../server';
 import { ApprovalsClient } from './ApprovalsClient';
 import { HistoryClient } from './HistoryClient';
 import { MyWeekClient } from './MyWeekClient';
-import { ProjectsClient, ReportFilters, SettingsClient, UsersClient } from './AdminClients';
+import { ProjectsClient, ReportFilters, SettingsClient, UsersClient, WorkflowClient } from './AdminClients';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 type Screen = (props: { searchParams: SearchParams }) => Promise<ReactNode>;
@@ -285,8 +285,13 @@ const Users: Screen = async () => {
 };
 
 const Projects: Screen = async () => {
-  const projects = await query((tx, ctx) => admin.listProjects(tx, ctx));
-  return <ProjectsClient projects={projects} />;
+  const data = await query(async (tx, ctx) => ({ projects: await admin.listProjects(tx, ctx), managers: await admin.listManagers(tx, ctx) }));
+  return <ProjectsClient projects={data.projects} managers={data.managers} />;
+};
+
+const Workflow: Screen = async () => {
+  const data = await query((tx, ctx) => admin.workflowOverview(tx, ctx));
+  return <WorkflowClient {...data} />;
 };
 
 const Settings: Screen = async () => {
@@ -299,7 +304,6 @@ const Settings: Screen = async () => {
     <SettingsClient
       initial={data.s.values as Record<string, unknown>}
       workflow={data.s.workflow}
-      workflows={data.s.workflows}
       timezone={data.s.timezone}
       companyName={data.companyName}
       projects={data.projects}
@@ -317,5 +321,6 @@ export const timesheetRoutes: Record<string, Screen> = {
   reports: Reports,
   'admin/users': Users,
   'admin/projects': Projects,
+  'admin/workflow': Workflow,
   'admin/settings': Settings,
 };

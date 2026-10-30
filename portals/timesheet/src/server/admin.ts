@@ -16,6 +16,7 @@ import {
 } from '@orbit/db';
 import { addDays, weekNumber, weekStartFor } from '../calc';
 import { timesheetManifest } from '../manifest';
+import type { WorkflowDefinition } from '@orbit/core/workflow';
 import { assertRole, boundWorkflow, loadSettings, membersById } from './shared';
 
 // ---------- Timesheet settings (form generated from manifest.settingsSchema) ----------
@@ -42,6 +43,7 @@ export async function listWorkflows(tx: Tx) {
   const latest = rows.filter((r, i) => i === 0 || rows[i - 1].key !== r.key);
   return latest.map(({ definition, ...r }) => ({
     ...r,
+    custom: r.key.startsWith('timesheet.custom.'),
     steps: (definition as { steps: { name: string; reason?: string }[] }).steps.map((st) => (st.reason ? `${st.name} (${st.reason.toLowerCase()})` : st.name)),
   }));
 }
@@ -214,6 +216,72 @@ export async function saveCostCode(tx: Tx, ctx: ActionContext, raw: z.input<type
   return { id: row.id };
 }
 
+const customKey = (companyId: string) => `timesheet.custom.${companyId}`;
+
+const stepInput = z.object({
+  name: z.string().trim().min(2, 'Give every step a name').max(60),
+  approver: z.discriminatedUnion('type', [
+    z.object({ type: z.literal('supervisor') }),
+    z.object({ type: z.literal('project_managers') }),
+    z.object({ type: z.literal('role'), role: z.enum(['supervisor', 'project_manager', 'company_admin']) }),
+    z.object({ type: z.literal('person'), membershipId: z.uuid('Pick the person for every "Specific person" step') }),
+  ]),
+  overtimeAbove: z.number().min(0).max(100).nullable().optional(),
+  slaHours: z.number().int().min(1).max(168),
+});
+const customInput = z.object({
+  name: z.string().trim().min(2, 'Give the workflow a name').max(80),
+  steps: z.array(stepInput).min(1, 'Add at least one step').max(6, 'Six steps at most'),
+});
+export type CustomWorkflowInput = z.input<typeof customInput>;
+
+/**
+ * Saves the company's own workflow as a new version and puts it in use. Earlier versions stay,
+ * so timesheets already in approval finish on the route they started.
+ */
+export async function saveCustomWorkflow(tx: Tx, ctx: ActionContext, raw: CustomWorkflowInput) {
+  assertRole(ctx, 'company_admin');
+  const input = customInput.parse(raw);
+  const people = input.steps.flatMap((st) => (st.approver.type === 'person' ? [st.approver.membershipId] : []));
+  if (people.length) {
+    const found = await tx
+      .select({ id: memberships.id })
+      .from(memberships)
+      .where(and(eq(memberships.companyId, ctx.companyId), eq(memberships.status, 'active'), inArray(memberships.id, people)));
+    if (found.length !== new Set(people).size) throw new Error('A chosen approver is no longer active in this company');
+  }
+  const definition = {
+    steps: input.steps.map((st, i) => ({
+      id: `step${i + 1}`,
+      name: st.name,
+      approver: st.approver,
+      ...(st.overtimeAbove != null
+        ? { when: { field: 'overtimeHours', op: 'gt', value: st.overtimeAbove }, reason: `Because overtime > ${st.overtimeAbove.toFixed(1)} h` }
+        : {}),
+      slaHours: st.slaHours,
+      remindAfterHours: Math.max(1, Math.round(st.slaHours * 0.66)),
+    })),
+  };
+  const key = customKey(ctx.companyId);
+  const [{ v }] = await tx
+    .select({ v: sql<number>`coalesce(max(${workflowDefinitions.version}), 0)::int` })
+    .from(workflowDefinitions)
+    .where(eq(workflowDefinitions.key, key));
+  const [def] = await tx
+    .insert(workflowDefinitions)
+    .values({
+      key,
+      version: v + 1,
+      name: input.name,
+      description: 'Built by your company admin.',
+      definition,
+      companyId: ctx.companyId,
+    })
+    .returning({ id: workflowDefinitions.id });
+  await setWorkflow(tx, ctx, { workflowDefinitionId: def.id });
+  return { id: def.id };
+}
+
 /** Approval workflow page: the chosen flow, the choices, and who approves whom. */
 export async function workflowOverview(tx: Tx, ctx: SessionContext) {
   assertRole(ctx, 'company_admin');
@@ -223,8 +291,18 @@ export async function workflowOverview(tx: Tx, ctx: SessionContext) {
     listUsers(tx, ctx),
     listProjects(tx, ctx),
   ]);
+  const [custom] = await tx
+    .select({ name: workflowDefinitions.name, definition: workflowDefinitions.definition })
+    .from(workflowDefinitions)
+    .where(eq(workflowDefinitions.key, customKey(ctx.companyId)))
+    .orderBy(desc(workflowDefinitions.version))
+    .limit(1);
   return {
-    current: { id: wf.id, name: wf.name },
+    current: { id: wf.id, name: wf.name, definition: wf.definition },
+    custom: custom ? { name: custom.name, definition: custom.definition as WorkflowDefinition } : null,
+    members: people
+      .filter((p) => p.status === 'active')
+      .map((p) => ({ membershipId: p.membershipId, name: p.name, role: p.role })),
     options,
     people: people
       .filter((p) => p.status === 'active')

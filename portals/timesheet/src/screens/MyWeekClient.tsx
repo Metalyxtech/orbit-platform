@@ -438,11 +438,13 @@ export function MyWeekClient({ view, draftKey }: { view: WeekView; draftKey: str
 
             <div className="o-panel">
               <h2>Who will approve</h2>
-              {route.length > 1 && route[1].reason && (
-                <p className="muted" style={{ fontSize: 12, marginTop: -6 }}>
-                  {route[1].reason}, so a project manager also signs off.
-                </p>
-              )}
+              {route
+                .filter((s) => s.reason)
+                .map((s) => (
+                  <p key={s.stepIndex} className="muted" style={{ fontSize: 12, marginTop: -6 }}>
+                    {s.reason}: {s.name} also approves.
+                  </p>
+                ))}
               <ApprovalRoute
                 items={route.flatMap((s) =>
                   s.approvers.map((a) => ({ name: a.name, detail: a.title ?? s.name, state: 'next' as const })),

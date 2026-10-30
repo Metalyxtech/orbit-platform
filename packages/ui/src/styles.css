@@ -243,3 +243,4 @@ h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
 @media (max-width: 900px) { .o-half { grid-template-columns: 1fr; } }
 .o-form-row { display: flex; flex-wrap: wrap; gap: 12px; }
 .o-form-row > .o-field { flex: 1 1 180px; }
+.o-builder td { vertical-align: middle; } .o-builder .o-input, .o-builder .o-select { min-width: 120px; }

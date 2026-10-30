@@ -5,9 +5,11 @@ import { useState } from 'react';
 import type { SettingsField } from '@orbit/core/portals';
 import { Button, DataTable, Field, Segmented, Select, StatusChip, Toggle, TopBar, useToast } from '@orbit/ui';
 import {
+  addMemberAction,
   decideCorrectionAction,
   exportAction,
   importCsvAction,
+  setWorkflowAction,
   updateMemberAction,
   updateSettingsAction,
 } from '../actions';
@@ -21,12 +23,14 @@ type Values = Record<string, unknown>;
 export function SettingsClient({
   initial,
   workflow,
+  workflows,
   timezone,
   companyName,
   projects,
 }: {
   initial: Values;
-  workflow: { name: string; version: number; description: string | null };
+  workflow: { id: string; name: string; version: number; description: string | null };
+  workflows: { id: string; name: string; description: string | null; steps: string[] }[];
   timezone: string;
   companyName: string;
   projects: { id: string; code: string; name: string; pm: string; costCodes: number }[];
@@ -127,18 +131,7 @@ export function SettingsClient({
             ))}
           </div>
           <div className="o-stack">
-            <div className="o-panel">
-              <div className="o-panel-head">
-                <h2>Approval workflow</h2>
-                <span className="o-chip">Set by Orbit</span>
-              </div>
-              <strong>
-                {workflow.name} (v{workflow.version})
-              </strong>
-              <p className="muted" style={{ fontSize: 12 }}>
-                {workflow.description} Ask Orbit support to change it.
-              </p>
-            </div>
+            <WorkflowPicker current={workflow} options={workflows} />
             <div className="o-panel flush">
               <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
                 <h2>Projects and cost codes</h2>
@@ -164,6 +157,66 @@ export function SettingsClient({
 }
 
 // ---------- Projects and cost codes: CSV import with per-row preview ----------
+
+/** Approval flow for the company: a choice from the Orbit library, applied to new submissions. */
+function WorkflowPicker({
+  current,
+  options,
+}: {
+  current: { id: string; name: string };
+  options: { id: string; name: string; description: string | null; steps: string[] }[];
+}) {
+  const toast = useToast();
+  const router = useRouter();
+  const [pick, setPick] = useState(current.id);
+  const [saving, setSaving] = useState(false);
+  const chosen = options.find((o) => o.id === pick);
+
+  async function save() {
+    setSaving(true);
+    const res = await setWorkflowAction({ workflowDefinitionId: pick });
+    setSaving(false);
+    if (!res.ok) return toast(res.error, 'bad');
+    toast('Approval workflow saved. It applies to timesheets submitted from now on.');
+    router.refresh();
+  }
+
+  return (
+    <div className="o-panel">
+      <div className="o-panel-head">
+        <h2>Approval workflow</h2>
+      </div>
+      <label className="o-field">
+        Who approves timesheets
+        <select className="o-select" value={pick} onChange={(e) => setPick(e.target.value)}>
+          {options.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {chosen && (
+        <>
+          <ol style={{ margin: '12px 0 8px', paddingLeft: 20, fontSize: 13 }}>
+            {chosen.steps.map((st) => (
+              <li key={st}>{st}</li>
+            ))}
+            <li>Approved and locked</li>
+          </ol>
+          <p className="muted" style={{ fontSize: 12 }}>{chosen.description}</p>
+        </>
+      )}
+      <p className="faint" style={{ fontSize: 12 }}>
+        Each person's supervisor is set on <Link href="/timesheet/admin/users">Users</Link>. Each project's manager is set on{' '}
+        <Link href="/timesheet/admin/projects">Projects</Link>. If nobody fits a step, a company admin approves.
+      </p>
+      <Button variant="primary" disabled={saving || pick === current.id} onClick={save}>
+        Save workflow
+      </Button>
+    </div>
+  );
+}
 
 export function ProjectsClient({ projects }: { projects: { id: string; code: string; name: string; pm: string; costCodes: number; status: string }[] }) {
   const toast = useToast();
@@ -283,6 +336,8 @@ export function UsersClient({ users, corrections }: { users: UserRow[]; correcti
   const router = useRouter();
   const supervisors = users.filter((u) => u.role !== 'employee' && u.status === 'active');
 
+  const [adding, setAdding] = useState(false);
+
   async function update(input: Parameters<typeof updateMemberAction>[0]) {
     const res = await updateMemberAction(input);
     if (!res.ok) return toast(res.error, 'bad');
@@ -300,7 +355,13 @@ export function UsersClient({ users, corrections }: { users: UserRow[]; correcti
     <>
       <TopBar crumbs={['Timesheet', 'Company admin', 'Users']} />
       <div className="o-page">
-        <h1>Users</h1>
+        <div className="o-row" style={{ justifyContent: 'space-between' }}>
+          <h1>Users</h1>
+          <Button variant="primary" onClick={() => setAdding((a) => !a)}>
+            {adding ? 'Close' : 'Add person'}
+          </Button>
+        </div>
+        {adding && <AddPerson supervisors={supervisors} onDone={() => setAdding(false)} />}
         {users.some((u) => u.status === 'pending') && (
           <p className="o-panel" style={{ padding: '10px 16px' }}>
             {users.filter((u) => u.status === 'pending').length} people asked to join. Set their role and supervisor, then approve
@@ -464,5 +525,76 @@ export function ReportFilters({ month, projectId, projects }: { month: string; p
       </select>
       <Button onClick={doExport}>Export to Excel</Button>
     </TopBar>
+  );
+}
+
+/** Company admin adds a person; they sign in with that email and land straight in the company. */
+function AddPerson({ supervisors, onDone }: { supervisors: UserRow[]; onDone: () => void }) {
+  const toast = useToast();
+  const router = useRouter();
+  const [saving, setSaving] = useState(false);
+
+  async function submit(form: FormData) {
+    setSaving(true);
+    const res = await addMemberAction({
+      email: String(form.get('email') ?? ''),
+      name: String(form.get('name') ?? ''),
+      role: form.get('role') as 'employee',
+      title: String(form.get('title') ?? ''),
+      supervisorId: (form.get('supervisorId') as string) || null,
+    });
+    setSaving(false);
+    if (!res.ok) return toast(res.error, 'bad');
+    toast('Added. They can sign in now with that email.');
+    onDone();
+    router.refresh();
+  }
+
+  return (
+    <form action={submit} className="o-panel o-stack" style={{ gap: 12 }}>
+      <h2 style={{ margin: 0 }}>Add a person</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+        <label className="o-field">
+          Full name
+          <input className="o-input" name="name" required minLength={2} maxLength={120} />
+        </label>
+        <label className="o-field">
+          Work email
+          <input className="o-input" name="email" type="email" required />
+        </label>
+        <label className="o-field">
+          Role
+          <select className="o-select" name="role" defaultValue="employee">
+            <option value="employee">Employee</option>
+            <option value="supervisor">Supervisor</option>
+            <option value="project_manager">Project manager</option>
+            <option value="company_admin">Company admin</option>
+          </select>
+        </label>
+        <label className="o-field">
+          Job title
+          <input className="o-input" name="title" maxLength={100} placeholder="Site engineer" />
+        </label>
+        <label className="o-field">
+          Supervisor
+          <select className="o-select" name="supervisorId" defaultValue="">
+            <option value="">None (company admin approves)</option>
+            {supervisors.map((s) => (
+              <option key={s.membershipId} value={s.membershipId}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="o-row">
+        <Button variant="primary" type="submit" disabled={saving}>
+          Add person
+        </Button>
+        <span className="faint" style={{ fontSize: 12 }}>
+          They sign in at the Orbit address with this email. No invite email is sent yet.
+        </span>
+      </div>
+    </form>
   );
 }

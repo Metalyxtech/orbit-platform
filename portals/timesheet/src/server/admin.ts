@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { audit, settingsValidator, upsertWeeklyReminder, type ActionContext, type SessionContext } from '@orbit/core';
 import {
+  companyPortals,
   correctionRequests,
   costCodes,
   memberships,
@@ -10,6 +11,7 @@ import {
   timesheets,
   tsSettings,
   users,
+  workflowDefinitions,
   type Tx,
 } from '@orbit/db';
 import { addDays, weekNumber, weekStartFor } from '../calc';
@@ -23,9 +25,48 @@ export async function getSettings(tx: Tx, ctx: SessionContext) {
   const [settings, wf] = await Promise.all([loadSettings(tx, ctx.companyId), boundWorkflow(tx, ctx.companyId)]);
   return {
     values: settings,
-    workflow: { name: wf.name, version: wf.version, description: wf.description },
+    workflow: { id: wf.id, name: wf.name, version: wf.version, description: wf.description },
+    workflows: await listWorkflows(tx),
     timezone: ctx.timezone,
   };
+}
+
+// ---------- Approval workflow (chosen from the Orbit library) ----------
+
+/** Latest version of every Timesheet workflow in the library. */
+export async function listWorkflows(tx: Tx) {
+  const rows = await tx
+    .select({ id: workflowDefinitions.id, key: workflowDefinitions.key, version: workflowDefinitions.version, name: workflowDefinitions.name, description: workflowDefinitions.description, definition: workflowDefinitions.definition })
+    .from(workflowDefinitions)
+    .where(sql`${workflowDefinitions.key} like 'timesheet.%'`)
+    .orderBy(asc(workflowDefinitions.key), desc(workflowDefinitions.version));
+  const latest = rows.filter((r, i) => i === 0 || rows[i - 1].key !== r.key);
+  return latest.map(({ definition, ...r }) => ({
+    ...r,
+    steps: (definition as { steps: { name: string; reason?: string }[] }).steps.map((st) => (st.reason ? `${st.name} (${st.reason.toLowerCase()})` : st.name)),
+  }));
+}
+
+/** Binds a library workflow to this company's Timesheet portal. Timesheets already in approval keep their route. */
+export async function setWorkflow(tx: Tx, ctx: ActionContext, input: { workflowDefinitionId: string }) {
+  assertRole(ctx, 'company_admin');
+  const id = z.uuid().parse(input.workflowDefinitionId);
+  const [def] = await tx.select().from(workflowDefinitions).where(eq(workflowDefinitions.id, id));
+  if (!def || !def.key.startsWith('timesheet.')) throw new Error('Choose a Timesheet workflow');
+  await tx
+    .insert(companyPortals)
+    .values({ companyId: ctx.companyId, portal: timesheetManifest.id, enabled: true, workflowDefinitionId: id })
+    .onConflictDoUpdate({ target: [companyPortals.companyId, companyPortals.portal], set: { workflowDefinitionId: id } });
+  await audit(tx, {
+    companyId: ctx.companyId,
+    actorId: ctx.membershipId,
+    action: 'workflow.bind',
+    entity: 'company_portals',
+    entityId: ctx.companyId,
+    data: { key: def.key, version: def.version },
+    requestId: ctx.requestId,
+  });
+  return { ok: true as const };
 }
 
 const validator = settingsValidator(timesheetManifest.settingsSchema);
@@ -222,6 +263,52 @@ export async function updateMember(tx: Tx, ctx: ActionContext, raw: z.input<type
     entity: 'memberships',
     entityId: membershipId,
     data: set,
+    requestId: ctx.requestId,
+  });
+  return { ok: true as const };
+}
+
+const memberAdd = z.object({
+  email: z.string().trim().toLowerCase().pipe(z.email('Enter a valid email')),
+  name: z.string().trim().min(2).max(120),
+  role: z.enum(['employee', 'supervisor', 'project_manager', 'company_admin']),
+  title: z.string().trim().max(100).optional(),
+  supervisorId: z.uuid().nullable().optional(),
+});
+
+/** Adds a person to this company. They sign in with that email and land straight in the company. */
+export async function addMember(tx: Tx, ctx: ActionContext, raw: z.input<typeof memberAdd>) {
+  assertRole(ctx, 'company_admin');
+  const input = memberAdd.parse(raw);
+  // users is identity (no RLS). A placeholder WorkOS id is replaced at first sign-in, matched by email.
+  await tx
+    .insert(users)
+    .values({ workosUserId: `invited|${input.email}`, email: input.email, name: input.name })
+    .onConflictDoNothing({ target: users.email });
+  const [user] = await tx.select().from(users).where(eq(users.email, input.email));
+  const [existing] = await tx
+    .select({ id: memberships.id })
+    .from(memberships)
+    .where(and(eq(memberships.companyId, ctx.companyId), eq(memberships.userId, user.id)));
+  if (existing) throw new Error(`${input.email} is already in this company`);
+  const [m] = await tx
+    .insert(memberships)
+    .values({
+      companyId: ctx.companyId,
+      userId: user.id,
+      role: input.role,
+      title: input.title || null,
+      supervisorId: input.supervisorId ?? null,
+      status: 'active',
+    })
+    .returning({ id: memberships.id });
+  await audit(tx, {
+    companyId: ctx.companyId,
+    actorId: ctx.membershipId,
+    action: 'membership.add',
+    entity: 'memberships',
+    entityId: m.id,
+    data: { email: input.email, role: input.role },
     requestId: ctx.requestId,
   });
   return { ok: true as const };

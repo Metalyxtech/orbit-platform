@@ -62,6 +62,125 @@ const Team: Screen = async ({ searchParams }) => {
   );
 };
 
+/** Manager dashboard: this week's team status, what waits for me and, for PMs and admins, this month's hours. */
+const Dashboard: Screen = async () => {
+  const data = await query(async (tx, ctx) => {
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: ctx.timezone });
+    const month = today.slice(0, 7);
+    const manager = ctx.role === 'project_manager' || ctx.role === 'company_admin';
+    return {
+      name: ctx.name.split(' ')[0],
+      month,
+      waiting: await approvals.mine(tx, ctx),
+      team: await admin.teamOverview(tx, ctx, { weekStart: today }),
+      kpis: manager ? await reports.kpis(tx, ctx, { month }) : null,
+      byProject: manager ? await reports.hoursByProject(tx, ctx, { month }) : [],
+    };
+  });
+  const rows = data.team.rows;
+  const count = (...st: string[]) => rows.filter((r) => st.includes(r.status)).length;
+  const missing = rows.filter((r) => ['not_started', 'draft', 'returned'].includes(r.status));
+  const monthLabel = new Date(`${data.month}-01T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' });
+  const k = data.kpis;
+  return (
+    <>
+      <TopBar crumbs={['Timesheet', 'Dashboard']} />
+      <div className="o-page">
+        <div>
+          <h1>Hello, {data.name}</h1>
+          <p className="muted" style={{ fontSize: 12, margin: '4px 0 0' }}>
+            Week {data.team.week} at a glance{k ? `, and approved hours for ${monthLabel}` : ''}.
+          </p>
+        </div>
+        <KpiStrip
+          items={[
+            { value: String(data.waiting.length), label: 'Waiting for your approval', tone: data.waiting.length ? 'hivis' : undefined },
+            { value: `${count('in_approval', 'locked')} / ${rows.length}`, label: 'Team submitted this week' },
+            { value: String(count('locked')), label: 'Approved this week' },
+            { value: String(missing.length), label: 'Not submitted yet' },
+          ]}
+        />
+        {k && (
+          <KpiStrip
+            items={[
+              { value: k.approvedHours.toLocaleString('en-GB', { minimumFractionDigits: 1 }), label: `Approved hours, ${monthLabel}` },
+              { value: k.overtimeHours.toLocaleString('en-GB', { minimumFractionDigits: 1 }), label: `Overtime hours (${k.overtimePct}%)`, tone: 'hivis' },
+              { value: `${k.onTimePct}%`, label: 'Weeks submitted on time' },
+              { value: String(k.waiting), label: 'Timesheets in approval, company' },
+            ]}
+          />
+        )}
+        <div className="o-cols-wide">
+          <div className="o-stack">
+            <div className="o-panel flush">
+              <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
+                <h2>Waiting for you</h2>
+                <a className="o-btn small" href="/timesheet/approvals">
+                  Open approvals
+                </a>
+              </div>
+              <DataTable
+                rows={data.waiting.slice(0, 6)}
+                rowKey={(r) => r.taskId}
+                empty={<span className="faint">Nothing waiting. You are up to date.</span>}
+                columns={[
+                  { key: 'e', header: 'Employee', render: (r) => r.employee },
+                  { key: 'w', header: 'Week', num: true, render: (r) => r.week },
+                  { key: 't', header: 'Hours', num: true, render: (r) => r.total.toFixed(1) },
+                  { key: 'o', header: 'Overtime', num: true, render: (r) => (r.overtime ? r.overtime.toFixed(1) : '-') },
+                  { key: 'd', header: '', render: (r) => (r.overdue ? <span className="o-chip bad">Overdue</span> : null) },
+                ]}
+              />
+            </div>
+            {k && (
+              <div className="o-panel">
+                <div className="o-panel-head">
+                  <h2>Hours by project, {monthLabel}</h2>
+                  <a className="o-btn small" href="/timesheet/reports">
+                    Reports
+                  </a>
+                </div>
+                {data.byProject.length ? (
+                  <HBarChart rows={data.byProject.map((p) => ({ label: p.label, regular: p.regular, overtime: p.overtime }))} />
+                ) : (
+                  <EmptyState title="No approved hours this month yet." />
+                )}
+              </div>
+            )}
+          </div>
+          <div className="o-panel flush">
+            <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
+              <h2>Team this week</h2>
+              <a className="o-btn small" href="/timesheet/team">
+                Team overview
+              </a>
+            </div>
+            <DataTable
+              rows={rows}
+              rowKey={(r) => r.membershipId}
+              empty={<span className="faint">Nobody reports to you yet. Set supervisors on the Users page.</span>}
+              columns={[
+                {
+                  key: 'n',
+                  header: 'Name',
+                  render: (r) => (
+                    <div>
+                      {r.name}
+                      <div className="faint" style={{ fontSize: 11 }}>{r.title}</div>
+                    </div>
+                  ),
+                },
+                { key: 'h', header: 'Hours', num: true, render: (r) => (r.total ? r.total.toFixed(1) : '-') },
+                { key: 's', header: 'Status', render: (r) => <StatusChip status={r.status} /> },
+              ]}
+            />
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
 const Reports: Screen = async ({ searchParams }) => {
   const month = one(searchParams.month) ?? new Date().toISOString().slice(0, 7);
   const projectId = one(searchParams.project) ?? '';
@@ -180,6 +299,7 @@ const Settings: Screen = async () => {
     <SettingsClient
       initial={data.s.values as Record<string, unknown>}
       workflow={data.s.workflow}
+      workflows={data.s.workflows}
       timezone={data.s.timezone}
       companyName={data.companyName}
       projects={data.projects}
@@ -189,6 +309,7 @@ const Settings: Screen = async () => {
 
 /** Path (after /timesheet) -> screen. Keys match manifest.nav paths. */
 export const timesheetRoutes: Record<string, Screen> = {
+  dashboard: Dashboard,
   '': MyWeek,
   history: History,
   approvals: Approvals,

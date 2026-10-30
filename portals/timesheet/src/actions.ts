@@ -44,3 +44,9 @@ export async function updateMemberAction(input: Parameters<typeof admin.updateMe
 export async function decideCorrectionAction(input: { id: string; approve: boolean }) {
   return runAction((tx, ctx) => admin.decideCorrection(tx, ctx, input));
 }
+export async function setWorkflowAction(input: { workflowDefinitionId: string }) {
+  return runAction((tx, ctx) => admin.setWorkflow(tx, ctx, input));
+}
+export async function addMemberAction(input: Parameters<typeof admin.addMember>[2]) {
+  return runAction((tx, ctx) => admin.addMember(tx, ctx, input));
+}

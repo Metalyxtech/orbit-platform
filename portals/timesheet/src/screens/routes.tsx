@@ -62,19 +62,31 @@ const Team: Screen = async ({ searchParams }) => {
   );
 };
 
-/** Manager dashboard: this week's team status, what waits for me and, for PMs and admins, this month's hours. */
+const fmtH = (n: number) => n.toLocaleString('en-GB', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+/**
+ * Dashboard, by role. Management and admins: the whole company. Project managers: their projects
+ * and the people on them. Supervisors: their team. Everyone: what waits for their approval.
+ */
 const Dashboard: Screen = async () => {
   const data = await query(async (tx, ctx) => {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: ctx.timezone });
     const month = today.slice(0, 7);
-    const manager = ctx.role === 'project_manager' || ctx.role === 'company_admin';
+    const company = ctx.role === 'company_admin' || ctx.role === 'management';
+    const pm = ctx.role === 'project_manager';
     return {
       name: ctx.name.split(' ')[0],
+      companyName: ctx.companyName,
+      view: company ? ('company' as const) : pm ? ('pm' as const) : ('team' as const),
       month,
       waiting: await approvals.mine(tx, ctx),
       team: await admin.teamOverview(tx, ctx, { weekStart: today }),
-      kpis: manager ? await reports.kpis(tx, ctx, { month }) : null,
-      byProject: manager ? await reports.hoursByProject(tx, ctx, { month }) : [],
+      kpis: company || pm ? await reports.kpis(tx, ctx, { month }) : null,
+      byProject: company || pm ? await reports.hoursByProject(tx, ctx, { month }) : [],
+      byPerson: company || pm ? await reports.hoursByPerson(tx, ctx, { month }) : [],
+      levels: company ? await reports.approvalsByLevel(tx, ctx) : [],
+      byApprover: company ? await reports.waitingByApprover(tx, ctx) : [],
+      top: company || pm ? await reports.topOvertime(tx, ctx, { month }) : [],
     };
   });
   const rows = data.team.rows;
@@ -82,6 +94,36 @@ const Dashboard: Screen = async () => {
   const missing = rows.filter((r) => ['not_started', 'draft', 'returned'].includes(r.status));
   const monthLabel = new Date(`${data.month}-01T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' });
   const k = data.kpis;
+  const overdueLevels = data.levels.reduce((n, l) => n + l.overdue, 0);
+  const subtitle =
+    data.view === 'company'
+      ? `${data.companyName} at a glance: week ${data.team.week} and ${monthLabel}.`
+      : data.view === 'pm'
+        ? `Your projects and the people on them, week ${data.team.week} and ${monthLabel}.`
+        : `Your team, week ${data.team.week}.`;
+
+  const waitingPanel = (
+    <div className="o-panel flush">
+      <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
+        <h2>Waiting for you</h2>
+        <a className="o-btn small" href="/timesheet/approvals">
+          Open approvals
+        </a>
+      </div>
+      <DataTable
+        rows={data.waiting.slice(0, 6)}
+        rowKey={(r) => r.taskId}
+        empty={<span className="faint">Nothing waiting. You are up to date.</span>}
+        columns={[
+          { key: 'e', header: 'Employee', render: (r) => r.employee },
+          { key: 'w', header: 'Week', num: true, render: (r) => r.week },
+          { key: 't', header: 'Hours', num: true, render: (r) => fmtH(r.total) },
+          { key: 'd', header: '', render: (r) => (r.overdue ? <span className="o-chip bad">Overdue</span> : <span className="faint">{r.stepLabel}</span>) },
+        ]}
+      />
+    </div>
+  );
+
   return (
     <>
       <TopBar crumbs={['Timesheet', 'Dashboard']} />
@@ -89,49 +131,32 @@ const Dashboard: Screen = async () => {
         <div>
           <h1>Hello, {data.name}</h1>
           <p className="muted" style={{ fontSize: 12, margin: '4px 0 0' }}>
-            Week {data.team.week} at a glance{k ? `, and approved hours for ${monthLabel}` : ''}.
+            {subtitle}
           </p>
         </div>
         <KpiStrip
           items={[
             { value: String(data.waiting.length), label: 'Waiting for your approval', tone: data.waiting.length ? 'hivis' : undefined },
-            { value: `${count('in_approval', 'locked')} / ${rows.length}`, label: 'Team submitted this week' },
+            { value: `${count('in_approval', 'locked')} / ${rows.length}`, label: data.view === 'company' ? 'Submitted this week, company' : 'Team submitted this week' },
             { value: String(count('locked')), label: 'Approved this week' },
-            { value: String(missing.length), label: 'Not submitted yet' },
+            data.view === 'company'
+              ? { value: String(overdueLevels), label: 'Approvals overdue, company', tone: overdueLevels ? 'hivis' : undefined }
+              : { value: String(missing.length), label: 'Not submitted yet' },
           ]}
         />
         {k && (
           <KpiStrip
             items={[
-              { value: k.approvedHours.toLocaleString('en-GB', { minimumFractionDigits: 1 }), label: `Approved hours, ${monthLabel}` },
-              { value: k.overtimeHours.toLocaleString('en-GB', { minimumFractionDigits: 1 }), label: `Overtime hours (${k.overtimePct}%)`, tone: 'hivis' },
+              { value: fmtH(k.approvedHours), label: `Approved hours, ${monthLabel}${data.view === 'pm' ? ', your projects' : ''}` },
+              { value: fmtH(k.overtimeHours), label: `Overtime hours (${k.overtimePct}%)`, tone: 'hivis' },
               { value: `${k.onTimePct}%`, label: 'Weeks submitted on time' },
               { value: String(k.waiting), label: 'Timesheets in approval, company' },
             ]}
           />
         )}
+
         <div className="o-cols-wide">
           <div className="o-stack">
-            <div className="o-panel flush">
-              <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
-                <h2>Waiting for you</h2>
-                <a className="o-btn small" href="/timesheet/approvals">
-                  Open approvals
-                </a>
-              </div>
-              <DataTable
-                rows={data.waiting.slice(0, 6)}
-                rowKey={(r) => r.taskId}
-                empty={<span className="faint">Nothing waiting. You are up to date.</span>}
-                columns={[
-                  { key: 'e', header: 'Employee', render: (r) => r.employee },
-                  { key: 'w', header: 'Week', num: true, render: (r) => r.week },
-                  { key: 't', header: 'Hours', num: true, render: (r) => r.total.toFixed(1) },
-                  { key: 'o', header: 'Overtime', num: true, render: (r) => (r.overtime ? r.overtime.toFixed(1) : '-') },
-                  { key: 'd', header: '', render: (r) => (r.overdue ? <span className="o-chip bad">Overdue</span> : null) },
-                ]}
-              />
-            </div>
             {k && (
               <div className="o-panel">
                 <div className="o-panel-head">
@@ -147,33 +172,128 @@ const Dashboard: Screen = async () => {
                 )}
               </div>
             )}
+            {data.view === 'company' && (
+              <div className="o-panel flush">
+                <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
+                  <h2>Approvals by level</h2>
+                </div>
+                <DataTable
+                  rows={data.levels}
+                  rowKey={(r) => r.level}
+                  empty={<span className="faint">Nothing is waiting for approval.</span>}
+                  columns={[
+                    { key: 'l', header: 'Level', render: (r) => r.level },
+                    { key: 'w', header: 'Waiting', num: true, render: (r) => r.waiting },
+                    { key: 'o', header: 'Overdue', num: true, render: (r) => (r.overdue ? <span className="o-chip bad">{r.overdue}</span> : '-') },
+                    { key: 'a', header: 'Oldest', num: true, render: (r) => `${r.oldestHours} h` },
+                  ]}
+                />
+              </div>
+            )}
+            {k && (
+              <div className="o-panel flush">
+                <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
+                  <h2>{data.view === 'pm' ? `People on your projects, ${monthLabel}` : `Hours by person, ${monthLabel}`}</h2>
+                </div>
+                <DataTable
+                  rows={data.byPerson.slice(0, 15)}
+                  rowKey={(r) => r.name}
+                  empty={<span className="faint">No hours submitted on these projects this month yet.</span>}
+                  columns={[
+                    {
+                      key: 'n',
+                      header: 'Name',
+                      render: (r) => (
+                        <div>
+                          {r.name}
+                          <div className="faint" style={{ fontSize: 11 }}>{r.title}</div>
+                        </div>
+                      ),
+                    },
+                    { key: 'p', header: 'Projects', num: true, render: (r) => r.projects },
+                    { key: 'h', header: 'Submitted h', num: true, render: (r) => fmtH(r.hours) },
+                    { key: 'a', header: 'Approved h', num: true, render: (r) => fmtH(r.approved) },
+                  ]}
+                />
+              </div>
+            )}
           </div>
-          <div className="o-panel flush">
-            <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
-              <h2>Team this week</h2>
-              <a className="o-btn small" href="/timesheet/team">
-                Team overview
-              </a>
+
+          <div className="o-stack">
+            {waitingPanel}
+            {data.view === 'company' && (
+              <div className="o-panel flush">
+                <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
+                  <h2>Waiting by approver</h2>
+                </div>
+                <DataTable
+                  rows={data.byApprover}
+                  rowKey={(r) => r.name}
+                  empty={<span className="faint">Nothing waiting.</span>}
+                  columns={[
+                    {
+                      key: 'a',
+                      header: 'Approver',
+                      render: (r) => (
+                        <div>
+                          {r.name}
+                          <div className="faint" style={{ fontSize: 11 }}>{r.title}</div>
+                        </div>
+                      ),
+                    },
+                    { key: 'w', header: 'Waiting', num: true, render: (r) => r.waiting },
+                    { key: 'o', header: 'Oldest', num: true, render: (r) => (r.oldestHours >= 24 ? <span className="o-chip bad">{r.oldestHours} h</span> : `${r.oldestHours} h`) },
+                  ]}
+                />
+              </div>
+            )}
+            {k && (
+              <div className="o-panel flush">
+                <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
+                  <h2>{data.view === 'pm' ? `Highest overtime on your projects, ${monthLabel}` : `Highest overtime, ${monthLabel}`}</h2>
+                </div>
+                <DataTable
+                  rows={data.view === 'pm' ? data.top.filter((t) => data.byPerson.some((p) => p.name === t.name)) : data.top}
+                  rowKey={(r) => r.name}
+                  empty={<span className="faint">No approved overtime this month.</span>}
+                  columns={[
+                    { key: 'n', header: 'Name', render: (r) => r.name },
+                    { key: 'o', header: 'Overtime', num: true, render: (r) => `${fmtH(r.overtime)} h` },
+                  ]}
+                />
+              </div>
+            )}
+            <div className="o-panel flush">
+              <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
+                <h2>{data.view === 'company' ? `Not submitted, week ${data.team.week}` : 'Team this week'}</h2>
+                <a className="o-btn small" href="/timesheet/team">
+                  Team overview
+                </a>
+              </div>
+              <DataTable
+                rows={data.view === 'company' ? missing : rows}
+                rowKey={(r) => r.membershipId}
+                empty={
+                  <span className="faint">
+                    {data.view === 'company' ? 'Everyone has submitted.' : 'Nobody reports to you yet. Supervisors are set on the Users page.'}
+                  </span>
+                }
+                columns={[
+                  {
+                    key: 'n',
+                    header: 'Name',
+                    render: (r) => (
+                      <div>
+                        {r.name}
+                        <div className="faint" style={{ fontSize: 11 }}>{r.title}</div>
+                      </div>
+                    ),
+                  },
+                  { key: 'h', header: 'Hours', num: true, render: (r) => (r.total ? fmtH(r.total) : '-') },
+                  { key: 's', header: 'Status', render: (r) => <StatusChip status={r.status} /> },
+                ]}
+              />
             </div>
-            <DataTable
-              rows={rows}
-              rowKey={(r) => r.membershipId}
-              empty={<span className="faint">Nobody reports to you yet. Set supervisors on the Users page.</span>}
-              columns={[
-                {
-                  key: 'n',
-                  header: 'Name',
-                  render: (r) => (
-                    <div>
-                      {r.name}
-                      <div className="faint" style={{ fontSize: 11 }}>{r.title}</div>
-                    </div>
-                  ),
-                },
-                { key: 'h', header: 'Hours', num: true, render: (r) => (r.total ? r.total.toFixed(1) : '-') },
-                { key: 's', header: 'Status', render: (r) => <StatusChip status={r.status} /> },
-              ]}
-            />
           </div>
         </div>
       </div>

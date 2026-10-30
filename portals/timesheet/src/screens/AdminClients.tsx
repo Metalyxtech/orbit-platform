@@ -328,8 +328,9 @@ type Manager = { membershipId: string; name: string; role: string };
 /** Company admin > Projects and cost codes: add and edit by hand, or import many from CSV. */
 // ---------- Approval matrix builder ----------
 
-type Mode = 'default' | 'skip' | 'supervisor' | 'project_managers' | 'role';
-type Cell = { mode: Mode; role: 'supervisor' | 'project_manager' | 'company_admin'; membershipId: string };
+type Mode = 'default' | 'skip' | 'supervisor' | 'project_managers' | 'role' | 'person';
+type CellRole = 'supervisor' | 'project_manager' | 'company_admin' | 'management';
+type Cell = { mode: Mode; role: CellRole; membershipId: string };
 type Level = { key: number; name: string; conditional: boolean; overtimeAbove: number; slaHours: number };
 type MatrixRow = { key: number; membershipId: string; cells: Cell[] };
 
@@ -337,6 +338,7 @@ const ROLE_NAME: Record<string, string> = {
   supervisor: 'Supervisor',
   project_manager: 'Project manager',
   company_admin: 'Company admin',
+  management: 'Management',
   employee: 'Employee',
 };
 const SLA = [8, 24, 48, 72, 120];
@@ -348,14 +350,13 @@ function cellFromRule(rule: CellRule | undefined, members: Member[]): Cell {
   if (!rule) return cell('skip');
   if (rule.type === 'supervisor' || rule.type === 'project_managers') return cell(rule.type);
   if (rule.type === 'role') return cell('role', { role: rule.role === 'employee' ? 'company_admin' : rule.role });
-  const m = members.find((x) => x.membershipId === rule.membershipId);
-  const role = m && m.role !== 'employee' ? (m.role as Cell['role']) : 'company_admin';
-  return cell('role', { role, membershipId: rule.membershipId });
+  return cell('person', { membershipId: rule.membershipId });
 }
 
 function ruleFromCell(c: Cell): CustomWorkflowInput['rows'][number]['cells'][number] {
   if (c.mode === 'skip' || c.mode === 'default') return null;
   if (c.mode === 'supervisor' || c.mode === 'project_managers') return { type: c.mode };
+  if (c.mode === 'person') return c.membershipId ? { type: 'person', membershipId: c.membershipId } : null;
   return c.membershipId ? { type: 'person', membershipId: c.membershipId } : { type: 'role', role: c.role };
 }
 
@@ -398,6 +399,9 @@ function matrixFrom(def: WorkflowDefinition, members: Member[]): { levels: Level
 function CellEditor({ value, isDefault, members, onChange, label }: { value: Cell; isDefault: boolean; members: Member[]; onChange: (c: Cell) => void; label: string }) {
   const holders = members.filter((m) => m.role === value.role);
   const modeValue = value.mode === 'role' ? `role:${value.role}` : value.mode;
+  const byRole = Object.keys(ROLE_NAME)
+    .map((r) => ({ role: r, people: members.filter((m) => m.role === r) }))
+    .filter((g) => g.people.length);
   return (
     <div className="o-cell">
       <select
@@ -406,15 +410,21 @@ function CellEditor({ value, isDefault, members, onChange, label }: { value: Cel
         value={modeValue}
         onChange={(e) => {
           const v = e.target.value;
-          onChange(v.startsWith('role:') ? cell('role', { role: v.slice(5) as Cell['role'] }) : cell(v as Mode));
+          onChange(v.startsWith('role:') ? cell('role', { role: v.slice(5) as CellRole }) : cell(v as Mode));
         }}
       >
         {!isDefault && <option value="default">Same as everyone else</option>}
-        <option value="supervisor">Their supervisor</option>
-        <option value="project_managers">Project's managers</option>
-        <option value="role:supervisor">Supervisor</option>
-        <option value="role:project_manager">Project manager</option>
-        <option value="role:company_admin">Company admin</option>
+        <option value="person">A specific person</option>
+        <optgroup label="Linked to the employee">
+          <option value="supervisor">Their supervisor</option>
+          <option value="project_managers">Project's managers</option>
+        </optgroup>
+        <optgroup label="Anyone with a role">
+          <option value="role:supervisor">Supervisor</option>
+          <option value="role:project_manager">Project manager</option>
+          <option value="role:company_admin">Company admin</option>
+          <option value="role:management">Management (GM / CEO)</option>
+        </optgroup>
         <option value="skip">Skip this level</option>
       </select>
       {value.mode === 'role' && (
@@ -424,6 +434,27 @@ function CellEditor({ value, isDefault, members, onChange, label }: { value: Cel
             <option key={m.membershipId} value={m.membershipId}>
               {m.name}
             </option>
+          ))}
+        </select>
+      )}
+      {value.mode === 'person' && (
+        <select
+          className="o-select"
+          aria-label={`${label} person`}
+          value={value.membershipId}
+          onChange={(e) => onChange({ ...value, membershipId: e.target.value })}
+          style={value.membershipId ? undefined : { borderColor: 'var(--warn)' }}
+        >
+          <option value="">Choose a person</option>
+          {byRole.map((g) => (
+            <optgroup key={g.role} label={ROLE_NAME[g.role]}>
+              {g.people.map((m) => (
+                <option key={m.membershipId} value={m.membershipId}>
+                  {m.name}
+                  {m.title ? ` (${m.title})` : ''}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
       )}
@@ -486,6 +517,9 @@ function WorkflowBuilder({
 
   async function save() {
     const def = rows[0].cells;
+    if (rows.some((r) => r.cells.some((c) => c.mode === 'person' && !c.membershipId))) {
+      return toast('Choose the person in every "A specific person" cell.', 'bad');
+    }
     const input: CustomWorkflowInput = {
       name,
       levels: levels.map((l) => ({ name: l.name, overtimeAbove: l.conditional ? l.overtimeAbove : null, slaHours: l.slaHours })),
@@ -982,6 +1016,7 @@ const ROLES = [
   { value: 'supervisor', label: 'Supervisor' },
   { value: 'project_manager', label: 'Project manager' },
   { value: 'company_admin', label: 'Company admin' },
+  { value: 'management', label: 'Management (GM / CEO)' },
 ] as const;
 
 export function UsersClient({ users, corrections }: { users: UserRow[]; corrections: CorrectionRow[] }) {
@@ -1222,6 +1257,7 @@ function AddPerson({ supervisors, onDone }: { supervisors: UserRow[]; onDone: ()
             <option value="supervisor">Supervisor</option>
             <option value="project_manager">Project manager</option>
             <option value="company_admin">Company admin</option>
+            <option value="management">Management (GM / CEO)</option>
           </select>
         </label>
         <label className="o-field">

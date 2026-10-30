@@ -1,4 +1,4 @@
-export type MemberRole = 'employee' | 'supervisor' | 'project_manager' | 'company_admin';
+export type MemberRole = 'employee' | 'supervisor' | 'project_manager' | 'company_admin' | 'management';
 
 export type Condition =
   | { all: Condition[] }

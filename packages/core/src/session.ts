@@ -22,7 +22,8 @@ export interface ActionContext extends SessionContext {
   effects: Effects;
 }
 
-const RANK: Record<MemberRole, number> = { employee: 0, supervisor: 1, project_manager: 2, company_admin: 3 };
+// Management sees company-wide reports like a PM sees their projects, without admin rights.
+const RANK: Record<MemberRole, number> = { employee: 0, supervisor: 1, project_manager: 2, management: 2, company_admin: 3 };
 
 export function hasRole(ctx: Pick<SessionContext, 'role'>, ...roles: MemberRole[]) {
   return roles.includes(ctx.role) || ctx.role === 'company_admin';

@@ -223,7 +223,7 @@ const cellInput = z
   .discriminatedUnion('type', [
     z.object({ type: z.literal('supervisor') }),
     z.object({ type: z.literal('project_managers') }),
-    z.object({ type: z.literal('role'), role: z.enum(['supervisor', 'project_manager', 'company_admin']) }),
+    z.object({ type: z.literal('role'), role: z.enum(['supervisor', 'project_manager', 'company_admin', 'management']) }),
     z.object({ type: z.literal('person'), membershipId: z.uuid() }),
   ])
   .nullable(); // null = this level does not apply to the row
@@ -479,7 +479,7 @@ export async function listUsers(tx: Tx, ctx: SessionContext) {
 
 const memberUpdate = z.object({
   membershipId: z.uuid(),
-  role: z.enum(['employee', 'supervisor', 'project_manager', 'company_admin']).optional(),
+  role: z.enum(['employee', 'supervisor', 'project_manager', 'company_admin', 'management']).optional(),
   status: z.enum(['pending', 'active', 'disabled']).optional(),
   title: z.string().max(100).nullable().optional(),
   supervisorId: z.uuid().nullable().optional(),
@@ -505,7 +505,7 @@ export async function updateMember(tx: Tx, ctx: ActionContext, raw: z.input<type
 const memberAdd = z.object({
   email: z.string().trim().toLowerCase().pipe(z.email('Enter a valid email')),
   name: z.string().trim().min(2).max(120),
-  role: z.enum(['employee', 'supervisor', 'project_manager', 'company_admin']),
+  role: z.enum(['employee', 'supervisor', 'project_manager', 'company_admin', 'management']),
   title: z.string().trim().max(100).optional(),
   supervisorId: z.uuid().nullable().optional(),
 });
@@ -614,7 +614,7 @@ export async function decideCorrection(tx: Tx, ctx: ActionContext, input: { id: 
 // ---------- Team overview ----------
 
 export async function teamOverview(tx: Tx, ctx: SessionContext, input: { weekStart?: string }) {
-  assertRole(ctx, 'supervisor', 'project_manager');
+  assertRole(ctx, 'supervisor', 'project_manager', 'management');
   const settings = await loadSettings(tx, ctx.companyId);
   const today = new Date().toLocaleDateString('en-CA', { timeZone: ctx.timezone });
   const weekStart = weekStartFor(input.weekStart ?? addDays(today, -7), settings.weekStart);
@@ -626,7 +626,7 @@ export async function teamOverview(tx: Tx, ctx: SessionContext, input: { weekSta
       and(
         eq(memberships.companyId, ctx.companyId),
         eq(memberships.status, 'active'),
-        ctx.role === 'company_admin' ? undefined : eq(memberships.supervisorId, ctx.membershipId),
+        ctx.role === 'company_admin' || ctx.role === 'management' ? undefined : eq(memberships.supervisorId, ctx.membershipId),
       ),
     )
     .orderBy(asc(users.name));

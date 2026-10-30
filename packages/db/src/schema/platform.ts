@@ -20,6 +20,7 @@ export const memberRole = pgEnum('member_role', [
   'supervisor',
   'project_manager',
   'company_admin',
+  'management',
 ]);
 export const memberStatus = pgEnum('member_status', ['pending', 'active', 'disabled']);
 export const workflowStatus = pgEnum('workflow_status', [

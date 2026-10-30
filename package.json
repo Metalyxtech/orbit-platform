@@ -17,6 +17,7 @@
     "cdk": "pnpm --filter @orbit/infra cdk"
   },
   "devDependencies": {
+    "next": "15.5.28",
     "typescript": "5.9.3"
   },
   "pnpm": {

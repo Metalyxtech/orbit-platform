@@ -219,50 +219,87 @@ export async function saveCostCode(tx: Tx, ctx: ActionContext, raw: z.input<type
 
 const customKey = (companyId: string) => `timesheet.custom.${companyId}`;
 
-const stepInput = z.object({
-  name: z.string().trim().min(2, 'Give every step a name').max(60),
-  approver: z.discriminatedUnion('type', [
+const cellInput = z
+  .discriminatedUnion('type', [
     z.object({ type: z.literal('supervisor') }),
     z.object({ type: z.literal('project_managers') }),
     z.object({ type: z.literal('role'), role: z.enum(['supervisor', 'project_manager', 'company_admin']) }),
-    z.object({ type: z.literal('person'), membershipId: z.uuid('Pick the person for every "Specific person" step') }),
-  ]),
-  overtimeAbove: z.number().min(0).max(100).nullable().optional(),
-  slaHours: z.number().int().min(1).max(168),
-});
-const customInput = z.object({
+    z.object({ type: z.literal('person'), membershipId: z.uuid() }),
+  ])
+  .nullable(); // null = this level does not apply to the row
+const matrixInput = z.object({
   name: z.string().trim().min(2, 'Give the workflow a name').max(80),
-  steps: z.array(stepInput).min(1, 'Add at least one step').max(6, 'Six steps at most'),
+  levels: z
+    .array(
+      z.object({
+        name: z.string().trim().min(2, 'Give every approval level a name').max(60),
+        overtimeAbove: z.number().min(0).max(100).nullable().optional(),
+        slaHours: z.number().int().min(1).max(168),
+      }),
+    )
+    .min(1, 'Add at least one approval level')
+    .max(6, 'Six approval levels at most'),
+  /** First row is everyone else ('*'); then one row per employee with their own approvers. */
+  rows: z
+    .array(z.object({ membershipId: z.union([z.literal('*'), z.uuid()]), cells: z.array(cellInput) }))
+    .min(1)
+    .max(500),
 });
-export type CustomWorkflowInput = z.input<typeof customInput>;
+export type CustomWorkflowInput = z.input<typeof matrixInput>;
 
 /**
- * Saves the company's own workflow as a new version and puts it in use. Earlier versions stay,
- * so timesheets already in approval finish on the route they started.
+ * Saves the company's approval matrix as a new workflow version and puts it in use. Each level
+ * becomes one step whose approver depends on who submitted; an empty cell skips that level for
+ * that person. Earlier versions stay, so timesheets in approval keep their route.
  */
 export async function saveCustomWorkflow(tx: Tx, ctx: ActionContext, raw: CustomWorkflowInput) {
   assertRole(ctx, 'company_admin');
-  const input = customInput.parse(raw);
-  const people = input.steps.flatMap((st) => (st.approver.type === 'person' ? [st.approver.membershipId] : []));
-  if (people.length) {
+  const input = matrixInput.parse(raw);
+  const ids = input.rows.map((r) => r.membershipId);
+  if (ids[0] !== '*') throw new Error('The first row must be "Everyone else"');
+  if (new Set(ids).size !== ids.length) throw new Error('Each employee can have only one row');
+  if (input.rows.some((r) => r.cells.length !== input.levels.length)) throw new Error('Every row needs a cell for each level');
+
+  const named = new Set<string>(ids.filter((i) => i !== '*'));
+  for (const r of input.rows) for (const c of r.cells) if (c?.type === 'person') named.add(c.membershipId);
+  if (named.size) {
     const found = await tx
       .select({ id: memberships.id })
       .from(memberships)
-      .where(and(eq(memberships.companyId, ctx.companyId), eq(memberships.status, 'active'), inArray(memberships.id, people)));
-    if (found.length !== new Set(people).size) throw new Error('A chosen approver is no longer active in this company');
+      .where(and(eq(memberships.companyId, ctx.companyId), eq(memberships.status, 'active'), inArray(memberships.id, [...named])));
+    if (found.length !== named.size) throw new Error('Someone in the matrix is no longer active in this company');
   }
-  const definition = {
-    steps: input.steps.map((st, i) => ({
-      id: `step${i + 1}`,
-      name: st.name,
-      approver: st.approver,
-      ...(st.overtimeAbove != null
-        ? { when: { field: 'overtimeHours', op: 'gt', value: st.overtimeAbove }, reason: `Because overtime > ${st.overtimeAbove.toFixed(1)} h` }
-        : {}),
-      slaHours: st.slaHours,
-      remindAfterHours: Math.max(1, Math.round(st.slaHours * 0.66)),
-    })),
-  };
+
+  const steps = input.levels.map((lv, j) => {
+    const cells: Record<string, NonNullable<z.infer<typeof cellInput>>> = {};
+    const skipped: string[] = [];
+    const applies: string[] = [];
+    for (const r of input.rows) {
+      const c = r.cells[j];
+      if (c) cells[r.membershipId] = c;
+      if (r.membershipId === '*') continue;
+      (c ? applies : skipped).push(r.membershipId);
+    }
+    const everyone = !!cells['*'];
+    if (!everyone && applies.length === 0) throw new Error(`Nobody is approved at level "${lv.name}". Fill a cell or remove the level.`);
+    const who = everyone
+      ? skipped.length
+        ? { submitter: 'notIn' as const, ids: skipped }
+        : null
+      : { submitter: 'in' as const, ids: applies };
+    const ot = lv.overtimeAbove != null ? { field: 'overtimeHours', op: 'gt' as const, value: lv.overtimeAbove } : null;
+    const conds = [who, ot].filter((c) => c !== null);
+    return {
+      id: `level${j + 1}`,
+      name: lv.name,
+      approver: { type: 'matrix' as const, cells },
+      ...(conds.length ? { when: conds.length === 1 ? conds[0] : { all: conds } } : {}),
+      ...(ot ? { reason: `Because overtime > ${lv.overtimeAbove!.toFixed(1)} h` } : {}),
+      slaHours: lv.slaHours,
+      remindAfterHours: Math.max(1, Math.round(lv.slaHours * 0.66)),
+    };
+  });
+
   const key = customKey(ctx.companyId);
   const [{ v }] = await tx
     .select({ v: sql<number>`coalesce(max(${workflowDefinitions.version}), 0)::int` })
@@ -274,8 +311,8 @@ export async function saveCustomWorkflow(tx: Tx, ctx: ActionContext, raw: Custom
       key,
       version: v + 1,
       name: input.name,
-      description: 'Built by your company admin.',
-      definition,
+      description: `Approval matrix built by your company admin: ${input.levels.length} level${input.levels.length > 1 ? 's' : ''}, ${input.rows.length - 1} employee-specific row${input.rows.length === 2 ? '' : 's'}.`,
+      definition: { steps },
       companyId: ctx.companyId,
     })
     .returning({ id: workflowDefinitions.id });
@@ -303,7 +340,7 @@ export async function workflowOverview(tx: Tx, ctx: SessionContext) {
     custom: custom ? { name: custom.name, definition: custom.definition as WorkflowDefinition } : null,
     members: people
       .filter((p) => p.status === 'active')
-      .map((p) => ({ membershipId: p.membershipId, name: p.name, role: p.role })),
+      .map((p) => ({ membershipId: p.membershipId, name: p.name, role: p.role, title: p.title })),
     options,
     people: people
       .filter((p) => p.status === 'active')

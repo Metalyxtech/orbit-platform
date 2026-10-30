@@ -18,7 +18,7 @@ import {
 } from '../actions';
 import { timesheetManifest } from '../manifest';
 import type { CsvPreviewRow, CustomWorkflowInput } from '../server/admin';
-import type { StepDef, WorkflowDefinition } from '@orbit/core/workflow';
+import type { ApproverRule, CellRule, Condition, WorkflowDefinition } from '@orbit/core/workflow';
 
 // ---------- Timesheet settings: generated from manifest.settingsSchema ----------
 
@@ -172,7 +172,7 @@ export function SettingsClient({
 // ---------- Projects and cost codes: CSV import with per-row preview ----------
 
 type WorkflowOption = { id: string; name: string; description: string | null; steps: string[]; custom: boolean };
-type Member = { membershipId: string; name: string; role: string };
+type Member = { membershipId: string; name: string; role: string; title: string | null };
 
 /** Company admin > Approval workflow: pick a flow from the Orbit library and see who approves whom. */
 export function WorkflowClient({
@@ -195,8 +195,9 @@ export function WorkflowClient({
   const [pick, setPick] = useState(current.id);
   const [saving, setSaving] = useState(false);
   const chosen = options.find((o) => o.id === pick);
-  const usesPm = chosen?.steps.some((st) => st.startsWith('Project managers')) ?? false;
-  const usesSupervisor = chosen?.steps.some((st) => st.startsWith('Supervisor')) ?? false;
+  // A company matrix can use either per person, so both tables stay active for it.
+  const usesPm = !!chosen?.custom || (chosen?.steps.some((st) => st.startsWith('Project managers')) ?? false);
+  const usesSupervisor = !!chosen?.custom || (chosen?.steps.some((st) => st.startsWith('Supervisor')) ?? false);
   const noSupervisor = people.filter((p) => p.role !== 'company_admin' && !p.supervisor);
   const noPm = projects.filter((p) => !p.pm);
 
@@ -325,61 +326,109 @@ type ProjectRow = { id: string; code: string; name: string; pm: string; pmId: st
 type Manager = { membershipId: string; name: string; role: string };
 
 /** Company admin > Projects and cost codes: add and edit by hand, or import many from CSV. */
-// ---------- Custom workflow builder ----------
+// ---------- Approval matrix builder ----------
 
-type StepRow = {
-  key: number;
-  name: string;
-  kind: 'supervisor' | 'project_managers' | 'role' | 'person';
-  role: 'supervisor' | 'project_manager' | 'company_admin';
-  membershipId: string;
-  conditional: boolean;
-  overtimeAbove: number;
-  slaHours: number;
-};
+type Mode = 'default' | 'skip' | 'supervisor' | 'project_managers' | 'role';
+type Cell = { mode: Mode; role: 'supervisor' | 'project_manager' | 'company_admin'; membershipId: string };
+type Level = { key: number; name: string; conditional: boolean; overtimeAbove: number; slaHours: number };
+type MatrixRow = { key: number; membershipId: string; cells: Cell[] };
 
-const KIND_LABEL: Record<StepRow['kind'], string> = {
-  supervisor: "Employee's supervisor",
-  project_managers: 'Project managers of the project',
-  role: 'Anyone with a role',
-  person: 'A specific person',
-};
 const ROLE_NAME: Record<string, string> = {
   supervisor: 'Supervisor',
   project_manager: 'Project manager',
   company_admin: 'Company admin',
   employee: 'Employee',
 };
+const SLA = [8, 24, 48, 72, 120];
+let uid = 0;
+const cell = (mode: Mode, extra: Partial<Cell> = {}): Cell => ({ mode, role: 'company_admin', membershipId: '', ...extra });
+const level = (name: string, extra: Partial<Level> = {}): Level => ({ key: ++uid, name, conditional: false, overtimeAbove: 6, slaHours: 24, ...extra });
 
-let rowKey = 0;
-const blankStep = (): StepRow => ({
-  key: ++rowKey,
-  name: 'Supervisor',
-  kind: 'supervisor',
-  role: 'company_admin',
-  membershipId: '',
-  conditional: false,
-  overtimeAbove: 6,
-  slaHours: 24,
-});
+function cellFromRule(rule: CellRule | undefined, members: Member[]): Cell {
+  if (!rule) return cell('skip');
+  if (rule.type === 'supervisor' || rule.type === 'project_managers') return cell(rule.type);
+  if (rule.type === 'role') return cell('role', { role: rule.role === 'employee' ? 'company_admin' : rule.role });
+  const m = members.find((x) => x.membershipId === rule.membershipId);
+  const role = m && m.role !== 'employee' ? (m.role as Cell['role']) : 'company_admin';
+  return cell('role', { role, membershipId: rule.membershipId });
+}
 
-/** Turns a stored definition into editable rows (an "any of" overtime condition keeps its first threshold). */
-function rowsFrom(def: WorkflowDefinition): StepRow[] {
-  return def.steps.map((st: StepDef) => {
-    const a = st.approver;
-    const conds = st.when ? ('any' in st.when ? st.when.any : 'all' in st.when ? st.when.all : [st.when]) : [];
-    const ot = conds.find((c) => 'field' in c && c.field === 'overtimeHours') as { value: number } | undefined;
-    return {
-      ...blankStep(),
-      name: st.name,
-      kind: a.type,
-      role: a.type === 'role' && a.role !== 'employee' ? a.role : 'company_admin',
-      membershipId: a.type === 'person' ? a.membershipId : '',
-      conditional: !!ot,
-      overtimeAbove: ot?.value ?? 6,
-      slaHours: st.slaHours,
-    };
+function ruleFromCell(c: Cell): CustomWorkflowInput['rows'][number]['cells'][number] {
+  if (c.mode === 'skip' || c.mode === 'default') return null;
+  if (c.mode === 'supervisor' || c.mode === 'project_managers') return { type: c.mode };
+  return c.membershipId ? { type: 'person', membershipId: c.membershipId } : { type: 'role', role: c.role };
+}
+
+/** Conditions on a stored step: the overtime threshold and the submitters it skips or targets. */
+function readWhen(when: Condition | undefined) {
+  const list = !when ? [] : 'all' in when ? when.all : 'any' in when ? when.any : [when];
+  const ot = list.find((c) => 'field' in c && c.field === 'overtimeHours') as { value: number } | undefined;
+  const who = list.find((c) => 'submitter' in c) as { submitter: 'in' | 'notIn'; ids: string[] } | undefined;
+  return { ot, who };
+}
+
+/** Rebuilds the editable matrix from a stored definition (library flows become an "everyone" row). */
+function matrixFrom(def: WorkflowDefinition, members: Member[]): { levels: Level[]; rows: MatrixRow[] } {
+  const levels = def.steps.map((st) => {
+    const { ot } = readWhen(st.when);
+    return level(st.name, { conditional: !!ot, overtimeAbove: ot?.value ?? 6, slaHours: st.slaHours });
   });
+  const ids = new Set<string>();
+  for (const st of def.steps) {
+    if (st.approver.type === 'matrix') Object.keys(st.approver.cells).forEach((k) => k !== '*' && ids.add(k));
+    readWhen(st.when).who?.ids.forEach((i) => ids.add(i));
+  }
+  const cellsFor = (id: string) =>
+    def.steps.map((st) => {
+      const a: ApproverRule = st.approver;
+      const { who } = readWhen(st.when);
+      if (id === '*') {
+        if (who?.submitter === 'in') return cell('skip');
+        return cellFromRule(a.type === 'matrix' ? a.cells['*'] : a, members);
+      }
+      if (who && (who.submitter === 'notIn' ? who.ids.includes(id) : !who.ids.includes(id))) return cell('skip');
+      return a.type === 'matrix' && a.cells[id] ? cellFromRule(a.cells[id], members) : cell('default');
+    });
+  return {
+    levels,
+    rows: [{ key: ++uid, membershipId: '*', cells: cellsFor('*') }, ...[...ids].filter((id) => members.some((m) => m.membershipId === id)).map((id) => ({ key: ++uid, membershipId: id, cells: cellsFor(id) }))],
+  };
+}
+
+function CellEditor({ value, isDefault, members, onChange, label }: { value: Cell; isDefault: boolean; members: Member[]; onChange: (c: Cell) => void; label: string }) {
+  const holders = members.filter((m) => m.role === value.role);
+  const modeValue = value.mode === 'role' ? `role:${value.role}` : value.mode;
+  return (
+    <div className="o-cell">
+      <select
+        className="o-select"
+        aria-label={`${label} approver`}
+        value={modeValue}
+        onChange={(e) => {
+          const v = e.target.value;
+          onChange(v.startsWith('role:') ? cell('role', { role: v.slice(5) as Cell['role'] }) : cell(v as Mode));
+        }}
+      >
+        {!isDefault && <option value="default">Same as everyone else</option>}
+        <option value="supervisor">Their supervisor</option>
+        <option value="project_managers">Project's managers</option>
+        <option value="role:supervisor">Supervisor</option>
+        <option value="role:project_manager">Project manager</option>
+        <option value="role:company_admin">Company admin</option>
+        <option value="skip">Skip this level</option>
+      </select>
+      {value.mode === 'role' && (
+        <select className="o-select" aria-label={`${label} person`} value={value.membershipId} onChange={(e) => onChange({ ...value, membershipId: e.target.value })}>
+          <option value="">Any {ROLE_NAME[value.role].toLowerCase()}</option>
+          {holders.map((m) => (
+            <option key={m.membershipId} value={m.membershipId}>
+              {m.name}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
+  );
 }
 
 function WorkflowBuilder({
@@ -393,44 +442,63 @@ function WorkflowBuilder({
 }) {
   const toast = useToast();
   const router = useRouter();
+  const start = () =>
+    custom ? matrixFrom(custom.definition, members) : { levels: [level('1st approval')], rows: [{ key: ++uid, membershipId: '*', cells: [cell('supervisor')] }] };
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState(custom?.name ?? 'Our approval workflow');
-  const [rows, setRows] = useState<StepRow[]>(() => (custom ? rowsFrom(custom.definition) : [blankStep()]));
+  const [name, setName] = useState(custom?.name ?? 'Our approval matrix');
+  const [levels, setLevels] = useState<Level[]>(() => start().levels);
+  const [rows, setRows] = useState<MatrixRow[]>(() => start().rows);
+  const [adding, setAdding] = useState('');
   const [saving, setSaving] = useState(false);
-  const approvers = members.filter((m) => m.role !== 'employee');
+  const byId = new Map(members.map((m) => [m.membershipId, m]));
+  const free = members.filter((m) => !rows.some((r) => r.membershipId === m.membershipId));
 
-  const update = (i: number, patch: Partial<StepRow>) => setRows((r) => r.map((x, j) => (j === i ? { ...x, ...patch } : x)));
-  const move = (i: number, d: -1 | 1) =>
-    setRows((r) => {
-      const n = [...r];
-      [n[i], n[i + d]] = [n[i + d], n[i]];
+  const setLevel = (j: number, patch: Partial<Level>) => setLevels((l) => l.map((x, i) => (i === j ? { ...x, ...patch } : x)));
+  const setCell = (ri: number, j: number, c: Cell) =>
+    setRows((r) => r.map((row, i) => (i === ri ? { ...row, cells: row.cells.map((x, k) => (k === j ? c : x)) } : row)));
+  function addLevel() {
+    setLevels((l) => [...l, level(l.length === 0 ? '1st approval' : l.length === 1 ? '2nd approval' : `Approval ${l.length + 1}`)]);
+    setRows((r) => r.map((row) => ({ ...row, cells: [...row.cells, row.membershipId === '*' ? cell('role', { role: 'company_admin' }) : cell('default')] })));
+  }
+  function removeLevel(j: number) {
+    setLevels((l) => l.filter((_, i) => i !== j));
+    setRows((r) => r.map((row) => ({ ...row, cells: row.cells.filter((_, k) => k !== j) })));
+  }
+  function moveLevel(j: number, d: -1 | 1) {
+    const swap = <T,>(a: T[]) => {
+      const n = [...a];
+      [n[j], n[j + d]] = [n[j + d], n[j]];
       return n;
-    });
-  function setKind(i: number, kind: StepRow['kind']) {
-    const auto: Record<StepRow['kind'], string> = { supervisor: 'Supervisor', project_managers: 'Project managers', role: 'Company admin', person: 'Approver' };
-    update(i, { kind, name: auto[kind] });
+    };
+    setLevels((l) => swap(l));
+    setRows((r) => r.map((row) => ({ ...row, cells: swap(row.cells) })));
+  }
+  function addRow() {
+    if (!adding) return;
+    setRows((r) => [...r, { key: ++uid, membershipId: adding, cells: levels.map(() => cell('default')) }]);
+    setAdding('');
+  }
+  function reset(from: WorkflowDefinition) {
+    const m = matrixFrom(from, members);
+    setLevels(m.levels);
+    setRows(m.rows);
   }
 
   async function save() {
+    const def = rows[0].cells;
     const input: CustomWorkflowInput = {
       name,
-      steps: rows.map((r) => ({
-        name: r.name,
-        approver:
-          r.kind === 'role'
-            ? { type: 'role', role: r.role }
-            : r.kind === 'person'
-              ? { type: 'person', membershipId: r.membershipId }
-              : { type: r.kind },
-        overtimeAbove: r.conditional ? r.overtimeAbove : null,
-        slaHours: r.slaHours,
+      levels: levels.map((l) => ({ name: l.name, overtimeAbove: l.conditional ? l.overtimeAbove : null, slaHours: l.slaHours })),
+      rows: rows.map((r) => ({
+        membershipId: r.membershipId,
+        cells: r.cells.map((c, j) => ruleFromCell(c.mode === 'default' ? def[j] : c)),
       })),
     };
     setSaving(true);
     const res = await saveCustomWorkflowAction(input);
     setSaving(false);
     if (!res.ok) return toast(res.error, 'bad');
-    toast('Your workflow is saved and in use for new submissions.');
+    toast('Approval matrix saved and in use for new submissions.');
     setOpen(false);
     router.refresh();
   }
@@ -439,13 +507,13 @@ function WorkflowBuilder({
     return (
       <div className="o-panel o-row" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <div>
-          <h2 style={{ margin: 0 }}>Build your own workflow</h2>
+          <h2 style={{ margin: 0 }}>Approval matrix</h2>
           <p className="muted" style={{ fontSize: 12, margin: '4px 0 0' }}>
-            Add steps one by one and choose who approves each step: a role or a named person from your company.
+            Set approval levels as columns and employees as rows. Choose a role and the exact person for each approval.
           </p>
         </div>
         <Button variant="primary" onClick={() => setOpen(true)}>
-          {custom ? 'Edit your workflow' : 'Build a workflow'}
+          {custom ? 'Edit approval matrix' : 'Build approval matrix'}
         </Button>
       </div>
     );
@@ -454,9 +522,9 @@ function WorkflowBuilder({
   return (
     <div className="o-panel flush">
       <div className="o-panel-head" style={{ padding: '12px 16px 0', flexWrap: 'wrap', gap: 8 }}>
-        <h2 style={{ margin: 0 }}>Build your own workflow</h2>
+        <h2 style={{ margin: 0 }}>Approval matrix</h2>
         <div className="o-row">
-          <Button size="small" onClick={() => setRows(rowsFrom(current.definition))}>
+          <Button size="small" onClick={() => reset(current.definition)}>
             Start from {current.name}
           </Button>
           <Button size="small" onClick={() => setOpen(false)}>
@@ -464,150 +532,136 @@ function WorkflowBuilder({
           </Button>
         </div>
       </div>
-      <div style={{ padding: '0 16px 12px' }}>
-        <label className="o-field" style={{ maxWidth: 360 }}>
-          Workflow name
+      <div className="o-row" style={{ padding: '0 16px 12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <label className="o-field" style={{ minWidth: 260 }}>
+          Matrix name
           <input className="o-input" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
         </label>
+        <p className="faint" style={{ fontSize: 12, margin: 0, flex: 1, minWidth: 240 }}>
+          Approvals run left to right. "Everyone else" covers people without their own row. A skipped cell means that person
+          goes straight to the next level.
+        </p>
       </div>
       <div className="o-scroll">
-        <table className="o-table o-builder">
+        <table className="o-table o-matrix">
           <thead>
             <tr>
-              <th style={{ width: 36 }}>#</th>
-              <th>Step name</th>
-              <th>Who approves</th>
-              <th>Role or person</th>
-              <th>When</th>
-              <th style={{ width: 110 }}>Reply within</th>
-              <th style={{ width: 120 }} />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={r.key}>
-                <td className="faint">{i + 1}</td>
-                <td>
-                  <input className="o-input" aria-label={`Step ${i + 1} name`} value={r.name} maxLength={60} onChange={(e) => update(i, { name: e.target.value })} />
-                </td>
-                <td>
-                  <select className="o-select" aria-label={`Step ${i + 1} approver type`} value={r.kind} onChange={(e) => setKind(i, e.target.value as StepRow['kind'])}>
-                    {(Object.keys(KIND_LABEL) as StepRow['kind'][]).map((k) => (
-                      <option key={k} value={k}>
-                        {KIND_LABEL[k]}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td>
-                  {r.kind === 'role' ? (
-                    <select className="o-select" aria-label={`Step ${i + 1} role`} value={r.role} onChange={(e) => update(i, { role: e.target.value as StepRow['role'] })}>
-                      <option value="supervisor">Supervisor</option>
-                      <option value="project_manager">Project manager</option>
-                      <option value="company_admin">Company admin</option>
-                    </select>
-                  ) : r.kind === 'person' ? (
-                    <select
-                      className="o-select"
-                      aria-label={`Step ${i + 1} person`}
-                      value={r.membershipId}
-                      onChange={(e) => {
-                        const m = approvers.find((x) => x.membershipId === e.target.value);
-                        update(i, { membershipId: e.target.value, name: m ? m.name : r.name });
-                      }}
-                    >
-                      <option value="">Choose a person</option>
-                      {approvers.map((m) => (
-                        <option key={m.membershipId} value={m.membershipId}>
-                          {m.name} ({ROLE_NAME[m.role]})
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span className="faint" style={{ fontSize: 12 }}>
-                      {r.kind === 'supervisor' ? 'Set per person on Users' : 'Set per project on Projects'}
-                    </span>
-                  )}
-                </td>
-                <td>
-                  <div className="o-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
-                    <select
-                      className="o-select"
-                      aria-label={`Step ${i + 1} condition`}
-                      value={r.conditional ? 'ot' : 'always'}
-                      onChange={(e) => update(i, { conditional: e.target.value === 'ot' })}
-                      style={{ width: 'auto' }}
-                    >
-                      <option value="always">Always</option>
-                      <option value="ot">Overtime above</option>
-                    </select>
-                    {r.conditional && (
-                      <>
+              <th style={{ minWidth: 220 }}>Employee</th>
+              {levels.map((l, j) => (
+                <th key={l.key} style={{ minWidth: 230 }}>
+                  <div className="o-stack" style={{ gap: 6 }}>
+                    <div className="o-row" style={{ gap: 4 }}>
+                      <span className="o-chip">{j + 1}</span>
+                      <input className="o-input" aria-label={`Level ${j + 1} name`} value={l.name} maxLength={60} onChange={(e) => setLevel(j, { name: e.target.value })} />
+                    </div>
+                    <div className="o-row" style={{ gap: 4 }}>
+                      <select className="o-select" aria-label={`Level ${j + 1} condition`} value={l.conditional ? 'ot' : 'always'} onChange={(e) => setLevel(j, { conditional: e.target.value === 'ot' })}>
+                        <option value="always">Always</option>
+                        <option value="ot">If overtime above</option>
+                      </select>
+                      {l.conditional && (
                         <input
                           className="o-input"
                           type="number"
                           min={0}
                           max={100}
                           step={0.5}
-                          aria-label={`Step ${i + 1} overtime hours`}
-                          value={r.overtimeAbove}
-                          onChange={(e) => update(i, { overtimeAbove: Number(e.target.value) })}
-                          style={{ width: 70 }}
+                          aria-label={`Level ${j + 1} overtime hours`}
+                          value={l.overtimeAbove}
+                          onChange={(e) => setLevel(j, { overtimeAbove: Number(e.target.value) })}
+                          style={{ width: 64 }}
                         />
-                        <span className="faint">h</span>
-                      </>
-                    )}
+                      )}
+                    </div>
+                    <div className="o-row" style={{ gap: 4 }}>
+                      <select className="o-select" aria-label={`Level ${j + 1} reply within`} value={l.slaHours} onChange={(e) => setLevel(j, { slaHours: Number(e.target.value) })}>
+                        {SLA.map((h) => (
+                          <option key={h} value={h}>
+                            Reply within {h < 24 ? `${h} h` : `${h / 24} day${h > 24 ? 's' : ''}`}
+                          </option>
+                        ))}
+                      </select>
+                      <Button size="small" aria-label="Move level left" disabled={j === 0} onClick={() => moveLevel(j, -1)}>
+                        ←
+                      </Button>
+                      <Button size="small" aria-label="Move level right" disabled={j === levels.length - 1} onClick={() => moveLevel(j, 1)}>
+                        →
+                      </Button>
+                      <Button size="small" variant="danger" aria-label="Remove level" disabled={levels.length === 1} onClick={() => removeLevel(j)}>
+                        ×
+                      </Button>
+                    </div>
                   </div>
-                </td>
-                <td>
-                  <select className="o-select" aria-label={`Step ${i + 1} reply within`} value={r.slaHours} onChange={(e) => update(i, { slaHours: Number(e.target.value) })}>
-                    {[8, 24, 48, 72, 120].map((h) => (
-                      <option key={h} value={h}>
-                        {h < 24 ? `${h} hours` : `${h / 24} day${h > 24 ? 's' : ''}`}
+                </th>
+              ))}
+              <th style={{ width: 150, verticalAlign: 'middle' }}>
+                <Button size="small" disabled={levels.length >= 6} onClick={addLevel}>
+                  + Add level
+                </Button>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, ri) => {
+              const m = byId.get(r.membershipId);
+              const who = r.membershipId === '*' ? 'Everyone else' : (m?.name ?? 'Former member');
+              return (
+                <tr key={r.key} className={r.membershipId === '*' ? 'o-matrix-default' : ''}>
+                  <td>
+                    <strong>{who}</strong>
+                    <div className="faint" style={{ fontSize: 11 }}>
+                      {r.membershipId === '*' ? 'Default for people without their own row' : `${ROLE_NAME[m?.role ?? 'employee']}${m?.title ? `, ${m.title}` : ''}`}
+                    </div>
+                  </td>
+                  {r.cells.map((c, j) => (
+                    <td key={levels[j]?.key ?? j}>
+                      <CellEditor value={c} isDefault={r.membershipId === '*'} members={members} label={`${who}, level ${j + 1}`} onChange={(v) => setCell(ri, j, v)} />
+                    </td>
+                  ))}
+                  <td>
+                    {r.membershipId !== '*' && (
+                      <Button size="small" variant="danger" aria-label={`Remove ${who}`} onClick={() => setRows((x) => x.filter((_, i) => i !== ri))}>
+                        Remove
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            <tr>
+              <td colSpan={levels.length + 2}>
+                <div className="o-row" style={{ flexWrap: 'wrap' }}>
+                  <select className="o-select" aria-label="Employee to add" value={adding} onChange={(e) => setAdding(e.target.value)} style={{ maxWidth: 320 }}>
+                    <option value="">Choose an employee to add a row</option>
+                    {free.map((m) => (
+                      <option key={m.membershipId} value={m.membershipId}>
+                        {m.name} ({ROLE_NAME[m.role]})
                       </option>
                     ))}
                   </select>
-                </td>
-                <td>
-                  <div className="o-row" style={{ gap: 4, justifyContent: 'flex-end' }}>
-                    <Button size="small" aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}>
-                      ↑
+                  <Button disabled={!adding} onClick={addRow}>
+                    + Add employee row
+                  </Button>
+                  {free.length > 0 && (
+                    <Button
+                      onClick={() =>
+                        setRows((r) => [...r, ...free.map((m) => ({ key: ++uid, membershipId: m.membershipId, cells: levels.map(() => cell('default')) }))])
+                      }
+                    >
+                      Add all {free.length}
                     </Button>
-                    <Button size="small" aria-label="Move down" disabled={i === rows.length - 1} onClick={() => move(i, 1)}>
-                      ↓
-                    </Button>
-                    <Button size="small" variant="danger" aria-label="Remove step" disabled={rows.length === 1} onClick={() => setRows((x) => x.filter((_, j) => j !== i))}>
-                      ×
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                  )}
+                </div>
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
-      <div className="o-row" style={{ padding: 16, justifyContent: 'space-between', flexWrap: 'wrap' }}>
-        <div className="o-wf-steps">
-          {rows.map((r, i) => (
-            <span key={r.key} className="o-row" style={{ gap: 6 }}>
-              {i > 0 && <span className="faint">→</span>}
-              <span className="o-chip">
-                {r.name || 'Step'}
-                {r.conditional ? ` (overtime > ${r.overtimeAbove} h)` : ''}
-              </span>
-            </span>
-          ))}
-          <span className="faint">→</span>
-          <span className="o-chip ok">Approved</span>
-        </div>
-        <div className="o-row">
-          <Button disabled={rows.length >= 6} onClick={() => setRows((x) => [...x, { ...blankStep(), name: 'Company admin', kind: 'role' }])}>
-            Add step
-          </Button>
-          <Button variant="primary" disabled={saving} onClick={save}>
-            Save and use this workflow
-          </Button>
-        </div>
+      <div className="o-row" style={{ padding: 16, justifyContent: 'flex-end' }}>
+        <Button onClick={() => setOpen(false)}>Cancel</Button>
+        <Button variant="primary" disabled={saving} onClick={save}>
+          Save and use this matrix
+        </Button>
       </div>
     </div>
   );

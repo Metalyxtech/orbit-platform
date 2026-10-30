@@ -17,6 +17,7 @@ export const timesheetManifest: PortalManifest = {
   workflowKind: 'timesheet.submit',
   defaultWorkflowKey: 'timesheet.two_level_overtime',
   nav: [
+    { path: 'dashboard', label: 'Dashboard', section: 'main', roles: ['supervisor', 'project_manager', 'company_admin'] },
     { path: '', label: 'My week', section: 'main' },
     { path: 'history', label: 'My history', section: 'main' },
     {

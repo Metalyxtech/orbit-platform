@@ -17,11 +17,12 @@ export async function requireSuperAdminPage() {
 
 export const ROLE_LABEL: Record<string, string> = {
   company_admin: 'Company admin',
+  management: 'Management',
   project_manager: 'Project manager',
   supervisor: 'Supervisor',
   employee: 'Employee',
 };
-const ROLE_ORDER = ['company_admin', 'project_manager', 'supervisor', 'employee'];
+const ROLE_ORDER = ['company_admin', 'management', 'project_manager', 'supervisor', 'employee'];
 const STATUS_ORDER = ['pending', 'active', 'disabled'];
 
 export type Person = Awaited<ReturnType<typeof loadPeople>>[number];

@@ -26,7 +26,6 @@ export async function getSettings(tx: Tx, ctx: SessionContext) {
   return {
     values: settings,
     workflow: { id: wf.id, name: wf.name, version: wf.version, description: wf.description },
-    workflows: await listWorkflows(tx),
     timezone: ctx.timezone,
   };
 }
@@ -103,16 +102,135 @@ export async function listProjects(tx: Tx, ctx: SessionContext) {
     .select({ id: projects.id, code: projects.code, name: projects.name, status: projects.status, pmId: projects.pmId })
     .from(projects)
     .orderBy(asc(projects.code));
-  const counts = await tx
-    .select({ projectId: costCodes.projectId, n: sql<number>`count(*)::int` })
+  const codes = await tx
+    .select({ id: costCodes.id, projectId: costCodes.projectId, code: costCodes.code, name: costCodes.name, active: costCodes.active })
     .from(costCodes)
-    .groupBy(costCodes.projectId);
+    .orderBy(asc(costCodes.code));
   const pms = await membersById(tx, rows.map((r) => r.pmId).filter((x): x is string => !!x));
-  return rows.map((r) => ({
-    ...r,
-    costCodes: counts.find((c) => c.projectId === r.id)?.n ?? 0,
-    pm: r.pmId ? (pms.get(r.pmId)?.name ?? '') : 'Company admin',
-  }));
+  return rows.map((r) => {
+    const list = codes.filter((c) => c.projectId === r.id);
+    return {
+      ...r,
+      codes: list,
+      costCodes: list.filter((c) => c.active).length,
+      pm: r.pmId ? (pms.get(r.pmId)?.name ?? '') : 'Company admin',
+    };
+  });
+}
+
+/** People who can manage a project: active project managers and company admins. */
+export async function listManagers(tx: Tx, ctx: SessionContext) {
+  assertRole(ctx, 'company_admin');
+  return tx
+    .select({ membershipId: memberships.id, name: users.name, role: memberships.role })
+    .from(memberships)
+    .innerJoin(users, eq(users.id, memberships.userId))
+    .where(
+      and(
+        eq(memberships.companyId, ctx.companyId),
+        eq(memberships.status, 'active'),
+        inArray(memberships.role, ['project_manager', 'company_admin']),
+      ),
+    )
+    .orderBy(asc(users.name));
+}
+
+const projectInput = z.object({
+  id: z.uuid().optional(),
+  code: z.string().trim().min(1, 'Enter a project code').max(40),
+  name: z.string().trim().min(2, 'Enter a project name').max(160),
+  pmId: z.uuid().nullable().optional(),
+  status: z.enum(['active', 'closed']).optional(),
+});
+
+/** Adds or edits a project. Codes are unique within the company. */
+export async function saveProject(tx: Tx, ctx: ActionContext, raw: z.input<typeof projectInput>) {
+  assertRole(ctx, 'company_admin');
+  const input = projectInput.parse(raw);
+  const [clash] = await tx
+    .select({ id: projects.id })
+    .from(projects)
+    .where(and(eq(projects.companyId, ctx.companyId), sql`lower(${projects.code}) = lower(${input.code})`));
+  if (clash && clash.id !== input.id) throw new Error(`Project code ${input.code} is already used`);
+  const values = { code: input.code, name: input.name, pmId: input.pmId ?? null, ...(input.status ? { status: input.status } : {}) };
+  const [row] = input.id
+    ? await tx
+        .update(projects)
+        .set(values)
+        .where(and(eq(projects.id, input.id), eq(projects.companyId, ctx.companyId)))
+        .returning({ id: projects.id })
+    : await tx.insert(projects).values({ ...values, companyId: ctx.companyId }).returning({ id: projects.id });
+  if (!row) throw new Error('Project not found');
+  await audit(tx, {
+    companyId: ctx.companyId,
+    actorId: ctx.membershipId,
+    action: input.id ? 'project.update' : 'project.create',
+    entity: 'projects',
+    entityId: row.id,
+    data: values,
+    requestId: ctx.requestId,
+  });
+  return { id: row.id };
+}
+
+const costCodeInput = z.object({
+  id: z.uuid().optional(),
+  projectId: z.uuid(),
+  code: z.string().trim().min(1, 'Enter a cost code').max(40),
+  name: z.string().trim().min(2, 'Enter a cost code name').max(160),
+  active: z.boolean().optional(),
+});
+
+/** Adds or edits a cost code under a project. Turning one off hides it from new entries only. */
+export async function saveCostCode(tx: Tx, ctx: ActionContext, raw: z.input<typeof costCodeInput>) {
+  assertRole(ctx, 'company_admin');
+  const input = costCodeInput.parse(raw);
+  const [clash] = await tx
+    .select({ id: costCodes.id })
+    .from(costCodes)
+    .where(and(eq(costCodes.projectId, input.projectId), sql`lower(${costCodes.code}) = lower(${input.code})`));
+  if (clash && clash.id !== input.id) throw new Error(`Cost code ${input.code} already exists on this project`);
+  const values = { code: input.code, name: input.name, ...(input.active === undefined ? {} : { active: input.active }) };
+  const [row] = input.id
+    ? await tx
+        .update(costCodes)
+        .set(values)
+        .where(and(eq(costCodes.id, input.id), eq(costCodes.companyId, ctx.companyId)))
+        .returning({ id: costCodes.id })
+    : await tx
+        .insert(costCodes)
+        .values({ ...values, companyId: ctx.companyId, projectId: input.projectId })
+        .returning({ id: costCodes.id });
+  if (!row) throw new Error('Cost code not found');
+  await audit(tx, {
+    companyId: ctx.companyId,
+    actorId: ctx.membershipId,
+    action: input.id ? 'cost_code.update' : 'cost_code.create',
+    entity: 'cost_codes',
+    entityId: row.id,
+    data: values,
+    requestId: ctx.requestId,
+  });
+  return { id: row.id };
+}
+
+/** Approval workflow page: the chosen flow, the choices, and who approves whom. */
+export async function workflowOverview(tx: Tx, ctx: SessionContext) {
+  assertRole(ctx, 'company_admin');
+  const [wf, options, people, projs] = await Promise.all([
+    boundWorkflow(tx, ctx.companyId),
+    listWorkflows(tx),
+    listUsers(tx, ctx),
+    listProjects(tx, ctx),
+  ]);
+  return {
+    current: { id: wf.id, name: wf.name },
+    options,
+    people: people
+      .filter((p) => p.status === 'active')
+      .map((p) => ({ name: p.name, role: p.role, supervisor: p.supervisor || null })),
+    projects: projs.filter((p) => p.status === 'active').map((p) => ({ code: p.code, name: p.name, pm: p.pmId ? p.pm : null })),
+  };
 }
 
 export interface CsvPreviewRow {

@@ -3,13 +3,26 @@ export type MemberRole = 'employee' | 'supervisor' | 'project_manager' | 'compan
 export type Condition =
   | { all: Condition[] }
   | { any: Condition[] }
-  | { field: string; op: 'gt' | 'gte' | 'lt' | 'lte' | 'eq'; value: number };
+  | { field: string; op: 'gt' | 'gte' | 'lt' | 'lte' | 'eq'; value: number }
+  /** Who submitted: lets a matrix level apply only to some employees. Ids are membership ids. */
+  | { submitter: 'in' | 'notIn'; ids: string[] };
 
 export type ApproverRule =
   | { type: 'supervisor' } // the submitter's supervisor
   | { type: 'project_managers' } // every PM of the projects in the context (all must approve)
   | { type: 'role'; role: MemberRole } // any one member with the role
-  | { type: 'person'; membershipId: string }; // one named member of the company
+  | { type: 'person'; membershipId: string } // one named member of the company
+  /** Approval matrix level: a rule per submitting employee (membership id), '*' for everyone else. */
+  | { type: 'matrix'; cells: Record<string, CellRule> };
+
+/** A matrix cell: any rule except another matrix. */
+export type CellRule = Exclude<ApproverRule, { type: 'matrix' }>;
+
+/** The rule that applies to this submitter: a matrix level resolves to the submitter's cell. */
+export function effectiveRule(rule: ApproverRule, ctx: Pick<WorkflowContext, 'submitterId'>): CellRule | null {
+  if (rule.type !== 'matrix') return rule;
+  return rule.cells[ctx.submitterId] ?? rule.cells['*'] ?? null;
+}
 
 export interface StepDef {
   id: string;

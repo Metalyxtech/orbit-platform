@@ -244,3 +244,8 @@ h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
 .o-form-row { display: flex; flex-wrap: wrap; gap: 12px; }
 .o-form-row > .o-field { flex: 1 1 180px; }
 .o-builder td { vertical-align: middle; } .o-builder .o-input, .o-builder .o-select { min-width: 120px; }
+.o-matrix th { vertical-align: top; background: var(--line-2); }
+.o-matrix td { vertical-align: top; }
+.o-matrix .o-input, .o-matrix .o-select { font-size: 12px; padding: 5px 8px; }
+.o-matrix-default td { background: var(--steel-tint); }
+.o-cell { display: flex; flex-direction: column; gap: 4px; }

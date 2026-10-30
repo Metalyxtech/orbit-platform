@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { newEvent, type ActionContext, type EmailIntent, type EventMap, type EventType } from '@orbit/core';
-import type { Approver, ApproverResolver, MemberRole, WorkflowDefinition } from '@orbit/core/workflow';
+import { effectiveRule, type Approver, type ApproverResolver, type MemberRole, type WorkflowDefinition } from '@orbit/core/workflow';
 import {
   companyPortals,
   memberships,
@@ -91,7 +91,11 @@ const toApprover = (m: { membershipId: string; name: string; email: string; titl
 /** Turns workflow approver rules into people. Nobody approves their own timesheet. */
 export function approverResolver(tx: Tx, companyId: string): ApproverResolver {
   return {
-    async resolve(rule, ctx) {
+    async resolve(rule, ctx): Promise<Approver[]> {
+      if (rule.type === 'matrix') {
+        const cell = effectiveRule(rule, ctx);
+        return cell ? this.resolve(cell, ctx) : [];
+      }
       const submitter = (await membersById(tx, [ctx.submitterId])).get(ctx.submitterId);
       const admins = async () =>
         (await membersWithRole(tx, companyId, 'company_admin'))

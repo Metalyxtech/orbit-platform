@@ -78,6 +78,20 @@ export async function setPortalEnabledAction(companyId: string, portal: string, 
   revalidatePath('/super-admin', 'layout');
 }
 
+/** Declines a portal a company asked for: the request is removed. Portals already on are untouched. */
+export async function declineCompanyPortalAction(companyId: string, portal: string) {
+  const userId = await requireSuperAdmin();
+  const id = z.uuid().parse(companyId);
+  const db = await getDb();
+  await withTenant(db, { companyId: id, userId }, async (tx) => {
+    await tx
+      .delete(companyPortals)
+      .where(and(eq(companyPortals.companyId, id), eq(companyPortals.portal, portal), eq(companyPortals.enabled, false)));
+    await audit(tx, { companyId: id, actorId: null, action: 'portal.decline', entity: 'company_portals', entityId: id, data: { portal } });
+  });
+  revalidatePath('/super-admin', 'layout');
+}
+
 /** Approves one person waiting to join a company. */
 export async function approveMemberAction(companyId: string, membershipId: string) {
   const userId = await requireSuperAdmin();

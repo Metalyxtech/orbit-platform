@@ -61,10 +61,10 @@ export async function activateRequestedPortals(tx: Tx, membershipIds: string[]) 
 }
 
 /**
- * Sets one person's access to one portal. A person without rows had every portal: the first change
+ * Sets one person's access to one portal (or files a request for it). A person without rows had every portal: the first change
  * writes their full list so turning one portal off does not remove the others.
  */
-export async function setMemberPortal(tx: Tx, companyId: string, membershipId: string, portal: string, status: 'active' | 'off') {
+export async function setMemberPortal(tx: Tx, companyId: string, membershipId: string, portal: string, status: MemberPortalStatus) {
   try {
     await tx.transaction(async (sp) => {
       const existing = await sp.select({ portal: memberPortals.portal }).from(memberPortals).where(eq(memberPortals.membershipId, membershipId));

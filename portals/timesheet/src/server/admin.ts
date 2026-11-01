@@ -1,6 +1,15 @@
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { activateRequestedPortals, audit, settingsValidator, upsertWeeklyReminder, type ActionContext, type SessionContext } from '@orbit/core';
+import {
+  activateRequestedPortals,
+  audit,
+  readMemberPortals,
+  setMemberPortal,
+  settingsValidator,
+  upsertWeeklyReminder,
+  type ActionContext,
+  type SessionContext,
+} from '@orbit/core';
 import {
   companyPortals,
   correctionRequests,
@@ -475,6 +484,57 @@ export async function listUsers(tx: Tx, ctx: SessionContext) {
     .orderBy(asc(memberships.status), asc(users.name));
   const names = new Map(rows.map((r) => [r.membershipId, r.name]));
   return rows.map((r) => ({ ...r, supervisor: r.supervisorId ? (names.get(r.supervisorId) ?? '') : '' }));
+}
+
+/** Portals of the company (on or requested) and each person's portal rows, for the Users page. */
+export async function portalAccess(tx: Tx, ctx: SessionContext) {
+  assertRole(ctx, 'company_admin');
+  const company = await tx
+    .select({ portal: companyPortals.portal, enabled: companyPortals.enabled })
+    .from(companyPortals)
+    .where(eq(companyPortals.companyId, ctx.companyId));
+  const ids = (await tx.select({ id: memberships.id }).from(memberships).where(eq(memberships.companyId, ctx.companyId))).map((m) => m.id);
+  return { company, rows: await readMemberPortals(tx, ids) };
+}
+
+const portalChange = z.object({
+  membershipId: z.uuid(),
+  portal: z.string().min(1).max(40),
+  action: z.enum(['request', 'remove', 'cancel']),
+});
+
+/**
+ * Company admin changes a person's portals. Adding a portal is a request that Orbit (Super Admin)
+ * approves; removing or cancelling takes effect at once, since it only narrows access.
+ */
+export async function changeMemberPortal(tx: Tx, ctx: ActionContext, raw: z.input<typeof portalChange>) {
+  assertRole(ctx, 'company_admin');
+  const input = portalChange.parse(raw);
+  const [m] = await tx
+    .select({ id: memberships.id, role: memberships.role })
+    .from(memberships)
+    .where(and(eq(memberships.id, input.membershipId), eq(memberships.companyId, ctx.companyId)));
+  if (!m) throw new Error('Person not found');
+  if (m.role === 'company_admin' || m.role === 'management') throw new Error('Admins and management use every portal the company has');
+  const [cp] = await tx
+    .select({ portal: companyPortals.portal })
+    .from(companyPortals)
+    .where(and(eq(companyPortals.companyId, ctx.companyId), eq(companyPortals.portal, input.portal)));
+  if (!cp) throw new Error('Your company does not have that portal. Ask Orbit to add it first.');
+  const [current] = (await readMemberPortals(tx, [m.id])).filter((r) => r.portal === input.portal);
+  if (input.action === 'request' && current?.status === 'active') return { status: 'active' as const };
+  const status = input.action === 'request' ? ('requested' as const) : ('off' as const);
+  await setMemberPortal(tx, ctx.companyId, m.id, input.portal, status);
+  await audit(tx, {
+    companyId: ctx.companyId,
+    actorId: ctx.membershipId,
+    action: `member_portal.${input.action}`,
+    entity: 'memberships',
+    entityId: m.id,
+    data: { portal: input.portal },
+    requestId: ctx.requestId,
+  });
+  return { status };
 }
 
 const memberUpdate = z.object({

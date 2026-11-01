@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { audit, settingsValidator, upsertWeeklyReminder, type ActionContext, type SessionContext } from '@orbit/core';
+import { activateRequestedPortals, audit, settingsValidator, upsertWeeklyReminder, type ActionContext, type SessionContext } from '@orbit/core';
 import {
   companyPortals,
   correctionRequests,
@@ -490,6 +490,7 @@ export async function updateMember(tx: Tx, ctx: ActionContext, raw: z.input<type
   const { membershipId, ...set } = memberUpdate.parse(raw);
   if (set.supervisorId === membershipId) throw new Error('A person cannot be their own supervisor');
   await tx.update(memberships).set(set).where(and(eq(memberships.id, membershipId), eq(memberships.companyId, ctx.companyId)));
+  if (set.status === 'active') await activateRequestedPortals(tx, [membershipId]);
   await audit(tx, {
     companyId: ctx.companyId,
     actorId: ctx.membershipId,

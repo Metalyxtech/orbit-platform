@@ -1,5 +1,6 @@
 import { asc, eq } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
+import { readMemberPortals } from '@orbit/core';
 import { getDb, getSession } from '@orbit/core/next';
 import { companies, companyPortals, memberships, users, withTenant } from '@orbit/db';
 import { portalModules } from '@/portals';
@@ -71,4 +72,10 @@ export async function loadPortals(companyId: string, superUserId: string) {
     const r = rows.find((x) => x.portal === manifest.id);
     return { id: manifest.id, name: manifest.name, state: r ? (r.enabled ? ('on' as const) : ('requested' as const)) : ('none' as const) };
   });
+}
+
+/** Portal rows (requested / active / off) for the people of one company. */
+export async function loadMemberPortals(companyId: string, superUserId: string, membershipIds: string[]) {
+  const db = await getDb();
+  return withTenant(db, { companyId, userId: superUserId }, (tx) => readMemberPortals(tx, membershipIds));
 }

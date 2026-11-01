@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { StatusChip } from '@orbit/ui';
 import { approveMemberAction, setMemberBlockedAction } from '../actions';
-import { ROLE_LABEL, fmtDate, loadCompanies, loadPeople, memberStatusChip, requireSuperAdminPage } from '../data';
+import { ROLE_LABEL, fmtDate, loadCompanies, loadMemberPortals, loadPeople, loadPortals, memberStatusChip, requireSuperAdminPage } from '../data';
+import { MemberPortals } from '../MemberPortals';
 
 const PAGE = 50;
 
@@ -16,6 +17,11 @@ export default async function People({
   const companies = await loadCompanies();
   const scoped = f.company ? companies.filter((c) => c.id === f.company) : companies;
   const perCompany = await Promise.all(scoped.map((c) => loadPeople(c.id, me.userId)));
+  const portalsBy = new Map(
+    await Promise.all(
+      scoped.map(async (c, i) => [c.id, { company: await loadPortals(c.id, me.userId), rows: await loadMemberPortals(c.id, me.userId, perCompany[i].map((p) => p.id)) }] as const),
+    ),
+  );
   const q = (f.q ?? '').trim().toLowerCase();
   const all = scoped
     .flatMap((c, i) => perCompany[i].map((p) => ({ ...p, companyId: c.id, company: c.name })))
@@ -73,6 +79,7 @@ export default async function People({
                 <th>Name</th>
                 <th>Company</th>
                 <th>Role</th>
+                <th>Portals</th>
                 <th>Status</th>
                 <th>Joined</th>
                 <th />
@@ -89,6 +96,16 @@ export default async function People({
                     <Link href={`/super-admin/companies/${m.companyId}`}>{m.company}</Link>
                   </td>
                   <td>{ROLE_LABEL[m.role]}</td>
+                  <td>
+                    <MemberPortals
+                      companyId={m.companyId}
+                      membershipId={m.id}
+                      role={m.role}
+                      memberStatus={m.status}
+                      companyPortals={portalsBy.get(m.companyId)!.company}
+                      rows={portalsBy.get(m.companyId)!.rows}
+                    />
+                  </td>
                   <td>
                     <StatusChip status={memberStatusChip(m.status)} />
                   </td>

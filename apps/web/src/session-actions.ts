@@ -3,9 +3,9 @@ import { eq, sql } from 'drizzle-orm';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { companies, companyPortals, memberPortals, memberships, withTenant } from '@orbit/db';
+import { companies, companyPortals, memberships, withTenant } from '@orbit/db';
 import { COMPANY_COOKIE, getDb, getSession } from '@orbit/core/next';
-import { missingTable } from './portal-access';
+import { requestMemberPortals } from '@orbit/core';
 import { portalModules } from './portals';
 
 /** Portal ids ticked on a form, limited to portals that exist. */
@@ -88,18 +88,7 @@ export async function joinCompanyAction(form: FormData) {
       .values({ companyId: company.id, userId: s.userId, role: 'employee', title: input.title || null, status: 'pending' })
       .onConflictDoNothing()
       .returning({ id: memberships.id });
-    if (m) {
-      try {
-        await tx.transaction((sp) =>
-          sp
-            .insert(memberPortals)
-            .values(ok.map((portal) => ({ companyId: company.id, membershipId: m.id, portal })))
-            .onConflictDoNothing(),
-        );
-      } catch (err) {
-        if (!missingTable(err)) throw err; // before migration 0005: everyone gets every portal
-      }
-    }
+    if (m) await requestMemberPortals(tx, company.id, m.id, ok);
     return true;
   });
   if (!offered) redirect('/register?error=no_portal');

@@ -1,10 +1,15 @@
 'use server';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { companies, memberships, withTenant } from '@orbit/db';
+import { companies, companyPortals, memberPortals, memberships, withTenant } from '@orbit/db';
 import { COMPANY_COOKIE, getDb, getSession } from '@orbit/core/next';
+import { missingTable } from './portal-access';
+import { portalModules } from './portals';
+
+/** Portal ids ticked on a form, limited to portals that exist. */
+const pickedPortals = (form: FormData) => [...new Set(form.getAll('portals').map(String))].filter((p) => portalModules[p]);
 
 export async function switchCompanyAction(companyId: string) {
   const s = await getSession();
@@ -23,6 +28,8 @@ export async function registerCompanyAction(form: FormData) {
   const s = await getSession();
   if (s.state !== 'no_company') redirect('/');
   const input = registerSchema.parse(Object.fromEntries(form));
+  const portals = pickedPortals(form);
+  if (portals.length === 0) redirect('/register?error=portals');
   const db = await getDb();
   if (await companyByName(input.name)) redirect('/register?error=exists');
   const slug = `${input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${Date.now().toString(36)}`;
@@ -31,14 +38,16 @@ export async function registerCompanyAction(form: FormData) {
     .insert(companies)
     .values({ name: input.name, slug, timezone: input.timezone, emailDomains: domain ? [domain] : [] })
     .returning();
-  await withTenant(db, { companyId: company.id, userId: s.userId }, (tx) =>
-    tx.insert(memberships).values({
+  await withTenant(db, { companyId: company.id, userId: s.userId }, async (tx) => {
+    await tx.insert(memberships).values({
       companyId: company.id,
       userId: s.userId,
       role: 'company_admin',
       title: input.title || 'Company admin',
-    }),
-  );
+    });
+    // Requested portals start switched off; Super Admin switches them on when approving.
+    await tx.insert(companyPortals).values(portals.map((portal) => ({ companyId: company.id, portal, enabled: false })));
+  });
   redirect('/pending');
 }
 
@@ -63,14 +72,36 @@ export async function joinCompanyAction(form: FormData) {
   const s = await getSession();
   if (s.state !== 'no_company') redirect('/');
   const input = joinSchema.parse(Object.fromEntries(form));
+  const wanted = pickedPortals(form);
+  if (wanted.length === 0) redirect('/register?error=portals');
   const company = await companyByName(input.company);
   if (!company || company.status !== 'active') redirect('/register?error=not_found');
   const db = await getDb();
-  await withTenant(db, { companyId: company.id, userId: s.userId }, (tx) =>
-    tx
+  const offered = await withTenant(db, { companyId: company.id, userId: s.userId }, async (tx) => {
+    const has = (await tx.select({ portal: companyPortals.portal }).from(companyPortals).where(eq(companyPortals.companyId, company.id))).map(
+      (r) => r.portal,
+    );
+    const ok = wanted.filter((p) => has.includes(p));
+    if (ok.length === 0) return false;
+    const [m] = await tx
       .insert(memberships)
       .values({ companyId: company.id, userId: s.userId, role: 'employee', title: input.title || null, status: 'pending' })
-      .onConflictDoNothing(),
-  );
+      .onConflictDoNothing()
+      .returning({ id: memberships.id });
+    if (m) {
+      try {
+        await tx.transaction((sp) =>
+          sp
+            .insert(memberPortals)
+            .values(ok.map((portal) => ({ companyId: company.id, membershipId: m.id, portal })))
+            .onConflictDoNothing(),
+        );
+      } catch (err) {
+        if (!missingTable(err)) throw err; // before migration 0005: everyone gets every portal
+      }
+    }
+    return true;
+  });
+  if (!offered) redirect('/register?error=no_portal');
   redirect('/pending');
 }

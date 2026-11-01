@@ -1,7 +1,8 @@
 import { asc, eq } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import { getDb, getSession } from '@orbit/core/next';
-import { companies, memberships, users, withTenant } from '@orbit/db';
+import { companies, companyPortals, memberships, users, withTenant } from '@orbit/db';
+import { portalModules } from '@/portals';
 
 const NO_USER = '00000000-0000-0000-0000-000000000000';
 
@@ -59,3 +60,15 @@ export async function loadCompanies() {
 export const companyStatusChip = (status: string) => (status === 'suspended' ? 'blocked' : status);
 export const memberStatusChip = (status: string) => (status === 'disabled' ? 'blocked' : status);
 export const fmtDate = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+/** Every registered portal with its state for one company: on, requested (asked for, off) or not requested. */
+export async function loadPortals(companyId: string, superUserId: string) {
+  const db = await getDb();
+  const rows = await withTenant(db, { companyId, userId: superUserId }, (tx) =>
+    tx.select({ portal: companyPortals.portal, enabled: companyPortals.enabled }).from(companyPortals).where(eq(companyPortals.companyId, companyId)),
+  );
+  return Object.values(portalModules).map(({ manifest }) => {
+    const r = rows.find((x) => x.portal === manifest.id);
+    return { id: manifest.id, name: manifest.name, state: r ? (r.enabled ? ('on' as const) : ('requested' as const)) : ('none' as const) };
+  });
+}

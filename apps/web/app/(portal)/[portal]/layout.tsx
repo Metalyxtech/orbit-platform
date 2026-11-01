@@ -1,10 +1,9 @@
-import { and, eq } from 'drizzle-orm';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { getSession, query } from '@orbit/core/next';
-import { companyPortals } from '@orbit/db';
 import { approvals } from '@orbit/portal-timesheet/server';
 import { AppShell } from '@orbit/ui';
+import { accessiblePortals } from '@/portal-access';
 import { BRAND, portalModules } from '@/portals';
 import { switchCompanyAction } from '@/session-actions';
 
@@ -16,18 +15,14 @@ export default async function PortalLayout({ children, params }: { children: Rea
   if (!mod) notFound();
 
   const { ctx, enabled, waiting } = await query(async (tx, ctx) => {
-    const rows = await tx
-      .select({ portal: companyPortals.portal })
-      .from(companyPortals)
-      .where(and(eq(companyPortals.companyId, ctx.companyId), eq(companyPortals.enabled, true)));
     const isApprover = ctx.role !== 'employee';
     return {
       ctx,
-      enabled: rows.map((r) => r.portal),
+      enabled: await accessiblePortals(tx, ctx),
       waiting: isApprover ? await approvals.countMine(tx, ctx) : 0,
     };
   });
-  if (!enabled.includes(portal)) notFound();
+  if (!enabled.includes(portal)) redirect('/');
   const session = await getSession();
   const companies = session.state === 'ok' ? session.companies : [];
 

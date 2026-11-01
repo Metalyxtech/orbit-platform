@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@orbit/core/next';
+import { portalModules } from '@/portals';
 import { joinCompanyAction, registerCompanyAction } from '@/session-actions';
 import { AuthCard } from '../AuthCard';
 
@@ -8,7 +9,26 @@ export const dynamic = 'force-dynamic';
 const errors: Record<string, string> = {
   not_found: 'No active company has that name. Check the spelling with your company admin.',
   exists: 'A company with that name is already registered. Use "Join your company" above instead.',
+  portals: 'Choose at least one portal.',
+  no_portal: 'That company does not use the portal you chose. Check with your company admin.',
 };
+
+const portalList = Object.values(portalModules).map((m) => m.manifest);
+
+function PortalPicker({ hint }: { hint: string }) {
+  return (
+    <fieldset className="o-field" style={{ border: 0, padding: 0, margin: 0 }}>
+      <legend style={{ marginBottom: 4 }}>Portals</legend>
+      {portalList.map((p, i) => (
+        <label key={p.id} className="o-row" style={{ gap: 8, fontSize: 13, color: 'var(--ink)' }}>
+          <input type="checkbox" name="portals" value={p.id} defaultChecked={i === 0} />
+          {p.name}
+        </label>
+      ))}
+      <span className="faint" style={{ fontSize: 11 }}>{hint}</span>
+    </fieldset>
+  );
+}
 
 export default async function Register({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const s = await getSession();
@@ -34,6 +54,7 @@ export default async function Register({ searchParams }: { searchParams: Promise
           Your job title
           <input className="o-input" name="title" maxLength={100} placeholder="Site engineer" />
         </label>
+        <PortalPicker hint="The portals you need. Your admin approves the request." />
         <button className="o-btn primary block" type="submit">
           Request to join
         </button>
@@ -60,6 +81,7 @@ export default async function Register({ searchParams }: { searchParams: Promise
             ))}
           </select>
         </label>
+        <PortalPicker hint="The portals your company needs. Orbit reviews and switches them on." />
         <button className="o-btn block" type="submit">
           Register company
         </button>

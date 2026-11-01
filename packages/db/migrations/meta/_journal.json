@@ -36,6 +36,13 @@
       "when": 1793600000000,
       "tag": "0004_management_role",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793700000000,
+      "tag": "0005_member_portals",
+      "breakpoints": true
     }
   ]
 }

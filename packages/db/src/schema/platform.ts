@@ -92,6 +92,18 @@ export const companyPortals = pgTable(
   (t) => [primaryKey({ columns: [t.companyId, t.portal] })],
 );
 
+/** Portals a person uses in a company. No rows = every portal the company has switched on. */
+export const memberPortals = pgTable(
+  'member_portals',
+  {
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    membershipId: uuid('membership_id').notNull().references(() => memberships.id),
+    portal: text('portal').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.membershipId, t.portal] })],
+);
+
 /** Workflow library (global) and company-built workflows, versioned. */
 export const workflowDefinitions = pgTable(
   'workflow_definitions',

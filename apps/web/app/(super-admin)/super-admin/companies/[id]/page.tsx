@@ -7,12 +7,14 @@ import { companies, companyPortals, withTenant, workflowDefinitions } from '@orb
 import { StatusChip } from '@orbit/ui';
 import {
   approveCompanyAction,
+  approveMemberAction,
+  setPortalEnabledAction,
   resetSandboxAction,
   setCompanyBlockedAction,
   setMemberBlockedAction,
   setStageAction,
 } from '../../actions';
-import { ROLE_LABEL, companyStatusChip, fmtDate, loadPeople, memberStatusChip, requireSuperAdminPage } from '../../data';
+import { ROLE_LABEL, companyStatusChip, fmtDate, loadPeople, loadPortals, memberStatusChip, requireSuperAdminPage } from '../../data';
 
 /** Super Admin > Companies > one company: profile, portals and people. */
 export default async function CompanyPage({ params }: { params: Promise<{ id: string }> }) {
@@ -30,6 +32,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
       .leftJoin(workflowDefinitions, eq(workflowDefinitions.id, companyPortals.workflowDefinitionId))
       .where(eq(companyPortals.companyId, c.id)),
   );
+  const portalStates = await loadPortals(c.id, me.userId);
   const admins = people.filter((p) => p.role === 'company_admin');
   const registeredBy = [...admins].sort((a, b) => a.joinedAt.getTime() - b.joinedAt.getTime())[0];
   const active = people.filter((p) => p.status === 'active');
@@ -120,7 +123,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
               <dl className="o-dl two">
                 {Object.entries(ROLE_LABEL).map(([role, label]) => (
                   <div key={role}>
-                    <dt>{label}s</dt>
+                    <dt>{label === 'Management' ? label : `${label}s`}</dt>
                     <dd>{active.filter((p) => p.role === role).length}</dd>
                   </div>
                 ))}
@@ -138,21 +141,31 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
               <div className="o-panel-head">
                 <h2>Portals</h2>
               </div>
-              {portals.length === 0 ? (
-                <p className="faint" style={{ margin: 0 }}>No portals yet. They are switched on when the company is approved.</p>
-              ) : (
-                <dl className="o-dl">
-                  {portals.map((p) => (
-                    <div key={p.portal}>
-                      <dt style={{ textTransform: 'capitalize' }}>{p.portal}</dt>
-                      <dd>
-                        {p.enabled ? 'On' : 'Off'}
-                        {p.workflow && <div className="faint" style={{ fontSize: 12 }}>{p.workflow} (v{p.version})</div>}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              )}
+              <div className="o-stack" style={{ gap: 10 }}>
+                {portalStates.map((p) => {
+                  const wf = portals.find((x) => x.portal === p.id);
+                  return (
+                    <form key={p.id} className="o-row" style={{ justifyContent: 'space-between' }}>
+                      <div>
+                        <strong>{p.name}</strong>{' '}
+                        <span className={`o-chip ${p.state === 'on' ? 'ok' : p.state === 'requested' ? 'warn' : ''}`}>
+                          {p.state === 'on' ? 'On' : p.state === 'requested' ? 'Requested' : 'Not requested'}
+                        </span>
+                        {wf?.workflow && p.state === 'on' && <div className="faint" style={{ fontSize: 12 }}>{wf.workflow} (v{wf.version})</div>}
+                      </div>
+                      {p.state === 'on' ? (
+                        <button className="o-btn small" formAction={setPortalEnabledAction.bind(null, c.id, p.id, false)}>
+                          Turn off
+                        </button>
+                      ) : (
+                        <button className="o-btn small ok" formAction={setPortalEnabledAction.bind(null, c.id, p.id, true)}>
+                          {p.state === 'requested' ? 'Approve' : 'Turn on'}
+                        </button>
+                      )}
+                    </form>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
@@ -190,6 +203,11 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
                   <td>{fmtDate(m.joinedAt)}</td>
                   <td>
                     <form className="o-row" style={{ justifyContent: 'flex-end' }}>
+                      {m.status === 'pending' && c.status === 'active' && (
+                        <button className="o-btn small ok" formAction={approveMemberAction.bind(null, c.id, m.id)}>
+                          Approve
+                        </button>
+                      )}
                       {m.status === 'disabled' ? (
                         <button className="o-btn small" formAction={setMemberBlockedAction.bind(null, c.id, m.id, false)}>
                           Unblock

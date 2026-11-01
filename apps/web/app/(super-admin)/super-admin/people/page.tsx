@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { StatusChip } from '@orbit/ui';
-import { setMemberBlockedAction } from '../actions';
+import { approveMemberAction, setMemberBlockedAction } from '../actions';
 import { ROLE_LABEL, fmtDate, loadCompanies, loadPeople, memberStatusChip, requireSuperAdminPage } from '../data';
 
 const PAGE = 50;
@@ -95,6 +95,11 @@ export default async function People({
                   <td>{fmtDate(m.joinedAt)}</td>
                   <td>
                     <form className="o-row" style={{ justifyContent: 'flex-end' }}>
+                      {m.status === 'pending' && (
+                        <button className="o-btn small ok" formAction={approveMemberAction.bind(null, m.companyId, m.id)}>
+                          Approve
+                        </button>
+                      )}
                       {m.status === 'disabled' ? (
                         <button className="o-btn small" formAction={setMemberBlockedAction.bind(null, m.companyId, m.id, false)}>
                           Unblock

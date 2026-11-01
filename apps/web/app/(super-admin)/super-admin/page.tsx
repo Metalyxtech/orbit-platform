@@ -1,16 +1,17 @@
 import Link from 'next/link';
 import { KpiStrip, StatusChip } from '@orbit/ui';
 import { approveCompanyAction } from './actions';
-import { companyStatusChip, fmtDate, loadCompanies, loadPeople, requireSuperAdminPage } from './data';
+import { companyStatusChip, fmtDate, loadCompanies, loadPeople, loadPortals, requireSuperAdminPage } from './data';
 
 /** Super Admin > Companies: one compact row per company; details live on the company page. */
 export default async function Companies() {
   const me = await requireSuperAdminPage();
   const rows = await loadCompanies();
   const people = await Promise.all(rows.map((c) => loadPeople(c.id, me.userId)));
+  const portals = await Promise.all(rows.map((c) => loadPortals(c.id, me.userId)));
   const order = { pending: 0, active: 1, suspended: 2 } as const;
   const list = rows
-    .map((c, i) => ({ c, people: people[i] }))
+    .map((c, i) => ({ c, people: people[i], portals: portals[i] }))
     .sort((a, b) => order[a.c.status] - order[b.c.status] || a.c.name.localeCompare(b.c.name));
   const count = (s: string) => rows.filter((c) => c.status === s).length;
 
@@ -36,6 +37,7 @@ export default async function Companies() {
                 <th>Company</th>
                 <th>Status</th>
                 <th>Stage</th>
+                <th>Portals</th>
                 <th className="num">People</th>
                 <th className="num">Waiting to join</th>
                 <th>Registered</th>
@@ -43,7 +45,7 @@ export default async function Companies() {
               </tr>
             </thead>
             <tbody>
-              {list.map(({ c, people: p }) => (
+              {list.map(({ c, people: p, portals: ps }) => (
                 <tr key={c.id}>
                   <td>
                     <Link href={`/super-admin/companies/${c.id}`}>
@@ -55,6 +57,17 @@ export default async function Companies() {
                     <StatusChip status={companyStatusChip(c.status)} />
                   </td>
                   <td style={{ textTransform: 'capitalize' }}>{c.stage}</td>
+                  <td>
+                    <span className="o-row" style={{ gap: 4, flexWrap: 'wrap' }}>
+                      {ps.filter((x) => x.state !== 'none').map((x) => (
+                        <span key={x.id} className={`o-chip ${x.state === 'on' ? 'ok' : 'warn'}`} title={x.state === 'on' ? 'On' : 'Requested, waiting for you'}>
+                          {x.name}
+                          {x.state === 'requested' ? ' (requested)' : ''}
+                        </span>
+                      ))}
+                      {ps.every((x) => x.state === 'none') && <span className="faint">None</span>}
+                    </span>
+                  </td>
                   <td className="num">{p.filter((m) => m.status === 'active').length}</td>
                   <td className="num">{p.filter((m) => m.status === 'pending').length || '-'}</td>
                   <td>{fmtDate(c.createdAt)}</td>

@@ -4,7 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { audit, Effects, newEvent, uuidv7 } from '@orbit/core';
 import { getDb, getSession } from '@orbit/core/next';
-import { companies, companyPortals, memberships, withTenant, workflowDefinitionColumns, workflowDefinitions } from '@orbit/db';
+import { companies, companyPortals, memberships, withTenant, workflowDefinitionColumns, workflowDefinitions, type Tx } from '@orbit/db';
+import { portalModules } from '@/portals';
 import { timesheetManifest } from '@orbit/portal-timesheet/manifest';
 
 async function requireSuperAdmin() {
@@ -14,9 +15,8 @@ async function requireSuperAdmin() {
   return s.state === 'ok' ? s.ctx.userId : s.state === 'no_company' ? s.userId : '00000000-0000-0000-0000-000000000000';
 }
 
-/** Approves a registered company: activates it, its first admin, and the Timesheet portal. */
-export async function approveCompanyAction(companyId: string) {
-  const userId = await requireSuperAdmin();
+async function defaultWorkflowId(portal: string) {
+  if (portal !== timesheetManifest.id) return null;
   const db = await getDb();
   const [wf] = await db
     .select(workflowDefinitionColumns)
@@ -24,14 +24,66 @@ export async function approveCompanyAction(companyId: string) {
     .where(eq(workflowDefinitions.key, timesheetManifest.defaultWorkflowKey))
     .orderBy(desc(workflowDefinitions.version))
     .limit(1);
-  await db.update(companies).set({ status: 'active' }).where(eq(companies.id, z.uuid().parse(companyId)));
+  return wf?.id ?? null;
+}
+
+/** Switches one portal on or off for a company. Switching on keeps an existing workflow choice. */
+async function setPortal(tx: Tx, companyId: string, portal: string, enabled: boolean) {
+  const [row] = await tx
+    .select({ workflowDefinitionId: companyPortals.workflowDefinitionId })
+    .from(companyPortals)
+    .where(and(eq(companyPortals.companyId, companyId), eq(companyPortals.portal, portal)));
+  const workflowDefinitionId = row?.workflowDefinitionId ?? (enabled ? await defaultWorkflowId(portal) : null);
+  await tx
+    .insert(companyPortals)
+    .values({ companyId, portal, enabled, workflowDefinitionId })
+    .onConflictDoUpdate({ target: [companyPortals.companyId, companyPortals.portal], set: { enabled, workflowDefinitionId } });
+}
+
+/**
+ * Approves a registered company: activates it, its first admin and every portal it asked for.
+ * Companies registered before portal requests existed get the Timesheet portal.
+ */
+export async function approveCompanyAction(companyId: string) {
+  const userId = await requireSuperAdmin();
+  const db = await getDb();
+  const id = z.uuid().parse(companyId);
+  await db.update(companies).set({ status: 'active' }).where(eq(companies.id, id));
+  await withTenant(db, { companyId: id, userId }, async (tx) => {
+    await tx.update(memberships).set({ status: 'active' }).where(and(eq(memberships.companyId, id), eq(memberships.status, 'pending')));
+    const requested = (await tx.select({ portal: companyPortals.portal }).from(companyPortals).where(eq(companyPortals.companyId, id))).map(
+      (r) => r.portal,
+    );
+    for (const portal of requested.length ? requested : [timesheetManifest.id]) await setPortal(tx, id, portal, true);
+    await audit(tx, { companyId: id, actorId: null, action: 'company.approve', entity: 'companies', entityId: id, data: { portals: requested } });
+  });
+  revalidatePath('/super-admin', 'layout');
+}
+
+/** Turns one portal on or off for a company. */
+export async function setPortalEnabledAction(companyId: string, portal: string, enabled: boolean) {
+  const userId = await requireSuperAdmin();
+  const id = z.uuid().parse(companyId);
+  if (!portalModules[portal]) throw new Error('Unknown portal');
+  const db = await getDb();
+  await withTenant(db, { companyId: id, userId }, async (tx) => {
+    await setPortal(tx, id, portal, enabled);
+    await audit(tx, { companyId: id, actorId: null, action: enabled ? 'portal.enable' : 'portal.disable', entity: 'company_portals', entityId: id, data: { portal } });
+  });
+  revalidatePath('/super-admin', 'layout');
+}
+
+/** Approves one person waiting to join a company. */
+export async function approveMemberAction(companyId: string, membershipId: string) {
+  const userId = await requireSuperAdmin();
+  const db = await getDb();
+  const id = z.uuid().parse(membershipId);
   await withTenant(db, { companyId, userId }, async (tx) => {
-    await tx.update(memberships).set({ status: 'active' }).where(and(eq(memberships.companyId, companyId), eq(memberships.status, 'pending')));
     await tx
-      .insert(companyPortals)
-      .values({ companyId, portal: 'timesheet', enabled: true, workflowDefinitionId: wf?.id })
-      .onConflictDoUpdate({ target: [companyPortals.companyId, companyPortals.portal], set: { enabled: true } });
-    await audit(tx, { companyId, actorId: null, action: 'company.approve', entity: 'companies', entityId: companyId });
+      .update(memberships)
+      .set({ status: 'active' })
+      .where(and(eq(memberships.id, id), eq(memberships.companyId, companyId), eq(memberships.status, 'pending')));
+    await audit(tx, { companyId, actorId: null, action: 'membership.approve', entity: 'memberships', entityId: id });
   });
   revalidatePath('/super-admin', 'layout');
 }

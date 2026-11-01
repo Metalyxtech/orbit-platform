@@ -92,13 +92,15 @@ export const companyPortals = pgTable(
   (t) => [primaryKey({ columns: [t.companyId, t.portal] })],
 );
 
-/** Portals a person uses in a company. No rows = every portal the company has switched on. */
+/** Portals a person uses in a company, each requested / active / off. No rows = every portal switched on for the company. */
 export const memberPortals = pgTable(
   'member_portals',
   {
     companyId: uuid('company_id').notNull().references(() => companies.id),
     membershipId: uuid('membership_id').notNull().references(() => memberships.id),
     portal: text('portal').notNull(),
+    /** requested (asked for on joining), active, or off. */
+    status: text('status').$type<'requested' | 'active' | 'off'>().notNull().default('active'),
     createdAt: createdAt(),
   },
   (t) => [primaryKey({ columns: [t.membershipId, t.portal] })],

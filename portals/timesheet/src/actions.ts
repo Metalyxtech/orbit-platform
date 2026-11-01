@@ -59,3 +59,6 @@ export async function saveCostCodeAction(input: Parameters<typeof admin.saveCost
 export async function saveCustomWorkflowAction(input: Parameters<typeof admin.saveCustomWorkflow>[2]) {
   return runAction((tx, ctx) => admin.saveCustomWorkflow(tx, ctx, input));
 }
+export async function changeMemberPortalAction(input: Parameters<typeof admin.changeMemberPortal>[2]) {
+  return runAction((tx, ctx) => admin.changeMemberPortal(tx, ctx, input));
+}

@@ -400,8 +400,12 @@ const Reports: Screen = async ({ searchParams }) => {
 };
 
 const Users: Screen = async () => {
-  const data = await query(async (tx, ctx) => ({ users: await admin.listUsers(tx, ctx), corrections: await admin.listCorrections(tx, ctx) }));
-  return <UsersClient users={data.users} corrections={data.corrections} />;
+  const data = await query(async (tx, ctx) => ({
+    users: await admin.listUsers(tx, ctx),
+    corrections: await admin.listCorrections(tx, ctx),
+    portals: await admin.portalAccess(tx, ctx),
+  }));
+  return <UsersClient users={data.users} corrections={data.corrections} portals={data.portals} />;
 };
 
 const Projects: Screen = async () => {

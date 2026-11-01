@@ -6,6 +6,7 @@ import type { SettingsField } from '@orbit/core/portals';
 import { Button, DataTable, Field, Segmented, Select, StatusChip, Toggle, TopBar, useToast } from '@orbit/ui';
 import {
   addMemberAction,
+  changeMemberPortalAction,
   decideCorrectionAction,
   exportAction,
   importCsvAction,
@@ -1019,7 +1020,63 @@ const ROLES = [
   { value: 'management', label: 'Management (GM / CEO)' },
 ] as const;
 
-export function UsersClient({ users, corrections }: { users: UserRow[]; corrections: CorrectionRow[] }) {
+type PortalAccess = {
+  company: { portal: string; enabled: boolean }[];
+  rows: { membershipId: string; portal: string; status: 'requested' | 'active' | 'off' }[];
+};
+const portalName = (id: string) => id.charAt(0).toUpperCase() + id.slice(1).replace(/[-_]/g, ' ');
+
+/** A person's portals with the company admin's controls: adding needs Orbit approval, removing is immediate. */
+function PortalCell({ user, access }: { user: UserRow; access: PortalAccess }) {
+  const toast = useToast();
+  const router = useRouter();
+  if (user.role === 'company_admin' || user.role === 'management') return <span className="faint">All portals</span>;
+  const mine = access.rows.filter((r) => r.membershipId === user.membershipId);
+  async function change(portal: string, action: 'request' | 'remove' | 'cancel') {
+    const res = await changeMemberPortalAction({ membershipId: user.membershipId, portal, action });
+    if (!res.ok) return toast(res.error, 'bad');
+    toast(
+      action === 'request'
+        ? res.data.status === 'active'
+          ? 'Already on.'
+          : `${portalName(portal)} requested for ${user.name}. Orbit will review it.`
+        : `${portalName(portal)} removed for ${user.name}.`,
+    );
+    router.refresh();
+  }
+  return (
+    <div className="o-stack" style={{ gap: 4 }}>
+      {access.company.map((cp) => {
+        const row = mine.find((m) => m.portal === cp.portal);
+        const status = row ? row.status : mine.length === 0 && cp.enabled ? 'active' : 'off';
+        return (
+          <div key={cp.portal} className="o-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+            <span className={`o-chip ${status === 'active' ? 'ok' : status === 'requested' ? 'warn' : ''}`}>
+              {portalName(cp.portal)}: {status === 'active' ? 'On' : status === 'requested' ? 'Waiting for Orbit' : 'Off'}
+            </span>
+            {user.status !== 'disabled' &&
+              (status === 'active' ? (
+                <Button size="small" onClick={() => change(cp.portal, 'remove')}>
+                  Remove
+                </Button>
+              ) : status === 'requested' ? (
+                <Button size="small" onClick={() => change(cp.portal, 'cancel')}>
+                  Cancel
+                </Button>
+              ) : (
+                <Button size="small" variant="ok" onClick={() => change(cp.portal, 'request')}>
+                  Request
+                </Button>
+              ))}
+          </div>
+        );
+      })}
+      {access.company.length === 0 && <span className="faint">No portals yet</span>}
+    </div>
+  );
+}
+
+export function UsersClient({ users, corrections, portals }: { users: UserRow[]; corrections: CorrectionRow[]; portals: PortalAccess }) {
   const toast = useToast();
   const router = useRouter();
   const supervisors = users.filter((u) => u.role !== 'employee' && u.status === 'active');
@@ -1143,6 +1200,7 @@ export function UsersClient({ users, corrections }: { users: UserRow[]; correcti
                   </select>
                 ),
               },
+              { key: 'po', header: 'Portals', render: (u) => <PortalCell user={u} access={portals} /> },
               { key: 'st', header: 'Status', render: (u) => <StatusChip status={u.status} /> },
               {
                 key: 'a',

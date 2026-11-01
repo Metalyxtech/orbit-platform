@@ -2,7 +2,7 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { audit, Effects, newEvent, uuidv7 } from '@orbit/core';
+import { activateRequestedPortals, audit, Effects, newEvent, setMemberPortal, uuidv7 } from '@orbit/core';
 import { getDb, getSession } from '@orbit/core/next';
 import { companies, companyPortals, memberships, withTenant, workflowDefinitionColumns, workflowDefinitions, type Tx } from '@orbit/db';
 import { portalModules } from '@/portals';
@@ -50,7 +50,12 @@ export async function approveCompanyAction(companyId: string) {
   const id = z.uuid().parse(companyId);
   await db.update(companies).set({ status: 'active' }).where(eq(companies.id, id));
   await withTenant(db, { companyId: id, userId }, async (tx) => {
-    await tx.update(memberships).set({ status: 'active' }).where(and(eq(memberships.companyId, id), eq(memberships.status, 'pending')));
+    const approved = await tx
+      .update(memberships)
+      .set({ status: 'active' })
+      .where(and(eq(memberships.companyId, id), eq(memberships.status, 'pending')))
+      .returning({ id: memberships.id });
+    await activateRequestedPortals(tx, approved.map((m) => m.id));
     const requested = (await tx.select({ portal: companyPortals.portal }).from(companyPortals).where(eq(companyPortals.companyId, id))).map(
       (r) => r.portal,
     );
@@ -73,6 +78,20 @@ export async function setPortalEnabledAction(companyId: string, portal: string, 
   revalidatePath('/super-admin', 'layout');
 }
 
+/** Declines a portal a company asked for: the request is removed. Portals already on are untouched. */
+export async function declineCompanyPortalAction(companyId: string, portal: string) {
+  const userId = await requireSuperAdmin();
+  const id = z.uuid().parse(companyId);
+  const db = await getDb();
+  await withTenant(db, { companyId: id, userId }, async (tx) => {
+    await tx
+      .delete(companyPortals)
+      .where(and(eq(companyPortals.companyId, id), eq(companyPortals.portal, portal), eq(companyPortals.enabled, false)));
+    await audit(tx, { companyId: id, actorId: null, action: 'portal.decline', entity: 'company_portals', entityId: id, data: { portal } });
+  });
+  revalidatePath('/super-admin', 'layout');
+}
+
 /** Approves one person waiting to join a company. */
 export async function approveMemberAction(companyId: string, membershipId: string) {
   const userId = await requireSuperAdmin();
@@ -83,7 +102,21 @@ export async function approveMemberAction(companyId: string, membershipId: strin
       .update(memberships)
       .set({ status: 'active' })
       .where(and(eq(memberships.id, id), eq(memberships.companyId, companyId), eq(memberships.status, 'pending')));
+    await activateRequestedPortals(tx, [id]);
     await audit(tx, { companyId, actorId: null, action: 'membership.approve', entity: 'memberships', entityId: id });
+  });
+  revalidatePath('/super-admin', 'layout');
+}
+
+/** Gives or removes one person's access to one portal (approves a requested portal too). */
+export async function setMemberPortalAction(companyId: string, membershipId: string, portal: string, on: boolean) {
+  const userId = await requireSuperAdmin();
+  const id = z.uuid().parse(membershipId);
+  if (!portalModules[portal]) throw new Error('Unknown portal');
+  const db = await getDb();
+  await withTenant(db, { companyId, userId }, async (tx) => {
+    await setMemberPortal(tx, companyId, id, portal, on ? 'active' : 'off');
+    await audit(tx, { companyId, actorId: null, action: on ? 'member_portal.on' : 'member_portal.off', entity: 'memberships', entityId: id, data: { portal } });
   });
   revalidatePath('/super-admin', 'layout');
 }

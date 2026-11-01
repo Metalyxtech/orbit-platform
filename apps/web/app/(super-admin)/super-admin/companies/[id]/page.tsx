@@ -14,7 +14,8 @@ import {
   setMemberBlockedAction,
   setStageAction,
 } from '../../actions';
-import { ROLE_LABEL, companyStatusChip, fmtDate, loadPeople, loadPortals, memberStatusChip, requireSuperAdminPage } from '../../data';
+import { ROLE_LABEL, companyStatusChip, fmtDate, loadMemberPortals, loadPeople, loadPortals, memberStatusChip, requireSuperAdminPage } from '../../data';
+import { MemberPortals } from '../../MemberPortals';
 
 /** Super Admin > Companies > one company: profile, portals and people. */
 export default async function CompanyPage({ params }: { params: Promise<{ id: string }> }) {
@@ -33,6 +34,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
       .where(eq(companyPortals.companyId, c.id)),
   );
   const portalStates = await loadPortals(c.id, me.userId);
+  const memberPortalRows = await loadMemberPortals(c.id, me.userId, people.map((p) => p.id));
   const admins = people.filter((p) => p.role === 'company_admin');
   const registeredBy = [...admins].sort((a, b) => a.joinedAt.getTime() - b.joinedAt.getTime())[0];
   const active = people.filter((p) => p.status === 'active');
@@ -183,6 +185,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
                 <th>Name</th>
                 <th>Email</th>
                 <th>Role</th>
+                <th>Portals</th>
                 <th>Status</th>
                 <th>Joined</th>
                 <th />
@@ -197,6 +200,16 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
                   </td>
                   <td>{m.email}</td>
                   <td>{ROLE_LABEL[m.role]}</td>
+                  <td>
+                    <MemberPortals
+                      companyId={c.id}
+                      membershipId={m.id}
+                      role={m.role}
+                      memberStatus={m.status}
+                      companyPortals={portalStates}
+                      rows={memberPortalRows}
+                    />
+                  </td>
                   <td>
                     <StatusChip status={memberStatusChip(m.status)} />
                   </td>

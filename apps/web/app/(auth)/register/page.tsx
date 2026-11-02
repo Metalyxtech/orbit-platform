@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@orbit/core/next';
+import { joinableCompanies } from '@/company-directory';
 import { portalModules } from '@/portals';
 import { joinCompanyAction, registerCompanyAction } from '@/session-actions';
 import { AuthCard } from '../AuthCard';
@@ -7,7 +8,8 @@ import { AuthCard } from '../AuthCard';
 export const dynamic = 'force-dynamic';
 
 const errors: Record<string, string> = {
-  not_found: 'No active company has that name. Check the spelling with your company admin.',
+  not_found: 'That company is not available to join right now. Ask your company admin.',
+  choose: 'Choose your company from the list.',
   exists: 'A company with that name is already registered. Use "Join your company" above instead.',
   portals: 'Choose at least one portal.',
   no_portal: 'That company does not use the portal you chose. Check with your company admin.',
@@ -35,10 +37,12 @@ export default async function Register({ searchParams }: { searchParams: Promise
   if (s.state === 'signed_out') redirect('/sign-in');
   if (s.state !== 'no_company') redirect('/');
   const error = errors[(await searchParams).error ?? ''];
+  const list = await joinableCompanies();
   return (
     <AuthCard title="Join your company">
       <p className="muted" style={{ fontSize: 13 }}>
-        Signed in as {s.email}. If your company already uses Orbit, enter its name. Your company admin approves the request.
+        Signed in as {s.email}. If your company already uses Orbit, choose it below. Your company admin approves the request and
+        sets your role.
       </p>
       {error && (
         <p role="alert" style={{ fontSize: 13, color: 'var(--bad)' }}>
@@ -47,12 +51,17 @@ export default async function Register({ searchParams }: { searchParams: Promise
       )}
       <form action={joinCompanyAction} className="o-stack" style={{ gap: 12 }}>
         <label className="o-field">
-          Company name
-          <input className="o-input" name="company" required minLength={2} maxLength={120} />
-        </label>
-        <label className="o-field">
-          Your job title
-          <input className="o-input" name="title" maxLength={100} placeholder="Site engineer" />
+          Company
+          <select className="o-select" name="companyId" required defaultValue="">
+            <option value="" disabled>
+              {list.length ? 'Choose your company' : 'No companies to join yet'}
+            </option>
+            {list.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
         </label>
         <PortalPicker hint="The portals you need. Your admin approves the request." />
         <button className="o-btn primary block" type="submit">

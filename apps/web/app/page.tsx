@@ -10,6 +10,8 @@ export default async function Home() {
   if (s.state === 'signed_out') redirect('/sign-in');
   if (s.state === 'pending') redirect('/pending');
   if (s.state === 'no_company') redirect(s.isSuperAdmin ? '/super-admin' : '/register');
+  // Management (GM / CEO) start in the Management workspace, above every portal.
+  if (s.state === 'ok' && s.ctx.role === 'management') redirect('/manage');
   const { open, waiting } = await query(async (tx, ctx) => ({
     open: await accessiblePortals(tx, ctx),
     waiting: (await readMemberPortals(tx, [ctx.membershipId])).some((r) => r.status === 'requested'),

@@ -7,3 +7,4 @@ export { loadSettings, rulesFrom } from './shared';
 export type { WeekView, WeekRow, HistoryRow, SubmitResult, TimesheetStatus } from './week';
 export type { InboxRow } from './approvals';
 export type { CsvPreviewRow } from './admin';
+export * as executive from './executive';

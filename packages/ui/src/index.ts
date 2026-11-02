@@ -7,3 +7,5 @@ export * from './Controls';
 export * from './Toast';
 export * from './DataTable';
 export * from './WeekGrid';
+export * from './TrendChart';
+export * from './PieChart';

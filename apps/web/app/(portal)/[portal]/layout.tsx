@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { getSession, query } from '@orbit/core/next';
 import { approvals } from '@orbit/portal-timesheet/server';
 import { AppShell } from '@orbit/ui';
+import { unreadCount } from '@/messages';
 import { accessiblePortals } from '@/portal-access';
 import { BRAND, portalModules } from '@/portals';
 import { switchCompanyAction } from '@/session-actions';
@@ -14,12 +15,13 @@ export default async function PortalLayout({ children, params }: { children: Rea
   const mod = portalModules[portal];
   if (!mod) notFound();
 
-  const { ctx, enabled, waiting } = await query(async (tx, ctx) => {
+  const { ctx, enabled, waiting, unread } = await query(async (tx, ctx) => {
     const isApprover = ctx.role !== 'employee';
     return {
       ctx,
       enabled: await accessiblePortals(tx, ctx),
       waiting: isApprover ? await approvals.countMine(tx, ctx) : 0,
+      unread: await unreadCount(tx, ctx),
     };
   });
   if (!enabled.includes(portal)) redirect('/');
@@ -34,6 +36,11 @@ export default async function PortalLayout({ children, params }: { children: Rea
       section: n.section,
       badge: n.badge === 'approvals' ? waiting : undefined,
     }));
+  // Management and admins get a way back to the Management workspace from any portal.
+  if (ctx.role === 'management' || ctx.role === 'company_admin') {
+    nav.unshift({ href: '/manage', label: 'Management', section: 'main', badge: undefined });
+  }
+  nav.push({ href: '/manage/messages', label: 'Messages', section: 'main', badge: unread || undefined });
 
   return (
     <AppShell

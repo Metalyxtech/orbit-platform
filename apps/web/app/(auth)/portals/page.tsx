@@ -23,6 +23,11 @@ export default async function Portals() {
         Signed in to {s.ctx.companyName} as {s.ctx.name}.
       </p>
       <div className="o-stack" style={{ gap: 8 }}>
+        {(s.ctx.role === 'management' || s.ctx.role === 'company_admin') && (
+          <a className="o-btn primary block" href="/manage">
+            Management workspace
+          </a>
+        )}
         {open.map((p) => (
           <a key={p} className="o-btn primary block" href={`/${p}`}>
             {name(p)}

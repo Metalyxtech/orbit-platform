@@ -5,6 +5,7 @@ import { approvals } from '@orbit/portal-timesheet/server';
 import { unreadCount } from '@/messages';
 import { accessiblePortals } from '@/portal-access';
 import { BRAND, portalModules } from '@/portals';
+import { workspaceFor } from '@/management/workspaces';
 import { ManageNav } from './ManageNav';
 
 export const dynamic = 'force-dynamic';
@@ -14,7 +15,8 @@ export default async function ManageLayout({ children }: { children: ReactNode }
   const s = await getSession();
   if (s.state !== 'ok') redirect('/');
   // Everyone can read and send messages here; the overview and approvals are for management and admins.
-  const manager = s.ctx.role === 'management' || s.ctx.role === 'company_admin';
+  const ws = workspaceFor(s.ctx);
+  const manager = ws.roles.includes(s.ctx.role);
   const d = await query(async (tx, ctx) => ({
     portals: await accessiblePortals(tx, ctx),
     waiting: await approvals.countMine(tx, ctx),
@@ -32,19 +34,20 @@ export default async function ManageLayout({ children }: { children: ReactNode }
           </div>
         </div>
         <ManageNav
-          title={manager ? 'Management' : 'Workspace'}
+          title={manager ? ws.title : 'Workspace'}
           main={
             manager
               ? [
                   { href: '/manage', label: 'Overview' },
                   { href: '/manage/approvals', label: 'My approvals', badge: d.waiting },
                   { href: '/manage/messages', label: 'Messages', badge: d.unread },
-                  { href: '/timesheet/reports', label: 'Reports' },
-                  { href: '/timesheet/team', label: 'Team' },
                 ]
               : [{ href: '/manage/messages', label: 'Messages', badge: d.unread }]
           }
-          portals={d.portals.map((p) => ({ href: `/${p}`, label: portalModules[p].manifest.name }))}
+          // Managers open each portal's management view (one entry per portal); others go to the portal.
+          portals={d.portals
+            .filter((p) => portalModules[p])
+            .map((p) => ({ href: manager && ws.modules[p] ? `/manage/${p}` : `/${p}`, label: portalModules[p].manifest.name }))}
         />
         <div className="o-side-foot">
           <strong>{ctx.name}</strong>

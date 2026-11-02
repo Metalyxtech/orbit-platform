@@ -4,6 +4,7 @@ import { getSession, query } from '@orbit/core/next';
 import { approvals } from '@orbit/portal-timesheet/server';
 import { AppShell } from '@orbit/ui';
 import { unreadCount } from '@/messages';
+import { isManager, workspaceFor } from '@/management/workspaces';
 import { accessiblePortals } from '@/portal-access';
 import { BRAND, portalModules } from '@/portals';
 import { switchCompanyAction } from '@/session-actions';
@@ -37,8 +38,8 @@ export default async function PortalLayout({ children, params }: { children: Rea
       badge: n.badge === 'approvals' ? waiting : undefined,
     }));
   // Management and admins get a way back to the Management workspace from any portal.
-  if (ctx.role === 'management' || ctx.role === 'company_admin') {
-    nav.unshift({ href: '/manage', label: 'Management', section: 'main', badge: undefined });
+  if (isManager(ctx)) {
+    nav.unshift({ href: workspaceFor(ctx).modules[portal] ? `/manage/${portal}` : '/manage', label: 'Management view', section: 'main', badge: undefined });
   }
   nav.push({ href: '/manage/messages', label: 'Messages', section: 'main', badge: unread || undefined });
 

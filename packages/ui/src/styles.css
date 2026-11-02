@@ -272,3 +272,19 @@ h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
 .o-seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .o-seg a { padding: 4px 10px; font-size: 12px; color: var(--ink-2); }
 .o-seg a[aria-current='page'] { background: var(--steel); color: #fff; }
+
+/* ---------- Stacked bar chart ---------- */
+.o-stack-chart { display: flex; flex-direction: column; gap: 6px; }
+.o-stack-row { display: grid; grid-template-columns: minmax(120px, 200px) 1fr 64px; gap: 10px; align-items: center; font-size: 13px; }
+.o-stack-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.o-stack-track { display: flex; height: 16px; background: var(--line-2); border-radius: 2px; overflow: hidden; }
+.o-stack-part { display: block; height: 100%; }
+.o-stack-part + .o-stack-part { box-shadow: inset 1px 0 0 var(--sheet); }
+@media (max-width: 600px) { .o-stack-row { grid-template-columns: 100px 1fr 52px; } }
+.o-subhead { font-size: 12px; font-weight: 600; color: var(--ink-2); margin: 0 0 10px; }
+
+/* Tabs inside a Management portal view */
+.o-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.o-tabs a { padding: 8px 14px; font-size: 13px; color: var(--ink-2); border-bottom: 2px solid transparent; margin-bottom: -1px; text-decoration: none; }
+.o-tabs a:hover { color: var(--ink); }
+.o-tabs a[aria-current='page'] { color: var(--steel); border-bottom-color: var(--steel); font-weight: 600; }

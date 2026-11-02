@@ -2,13 +2,14 @@ import { redirect } from 'next/navigation';
 import { getSession, query } from '@orbit/core/next';
 import { approvals } from '@orbit/portal-timesheet/server';
 import { DataTable, EmptyState } from '@orbit/ui';
+import { isManager } from '@/management/workspaces';
 
 export const dynamic = 'force-dynamic';
 
 /** Approvals assigned to me, across portals. Decisions are made in the portal's own approval screen. */
 export default async function MyApprovals() {
   const s = await getSession();
-  if (s.state !== 'ok' || (s.ctx.role !== 'management' && s.ctx.role !== 'company_admin')) redirect('/manage/messages');
+  if (s.state !== 'ok' || !isManager(s.ctx)) redirect('/manage/messages');
   const rows = await query((tx, ctx) => approvals.mine(tx, ctx));
   return (
     <>

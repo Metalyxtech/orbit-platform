@@ -10,7 +10,8 @@ import { accessiblePortals } from '@/portal-access';
 export const dynamic = 'force-dynamic';
 
 /** Management overview: what waits for me, latest messages, then one section per portal. */
-export default async function Overview() {
+export default async function Overview({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+  const params = await searchParams;
   const s = await getSession();
   if (s.state !== 'ok' || (s.ctx.role !== 'management' && s.ctx.role !== 'company_admin')) redirect('/manage/messages');
   const d = await query(async (tx, ctx) => ({
@@ -73,7 +74,7 @@ export default async function Overview() {
         </div>
         {d.portals.map((p) => {
           const Section = executiveSections[p];
-          return Section ? <Section key={p} /> : null;
+          return Section ? <Section key={p} params={params} /> : null;
         })}
       </div>
     </>

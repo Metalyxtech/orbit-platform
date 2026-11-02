@@ -1,12 +1,13 @@
 import { query } from '@orbit/core/next';
-import { DataTable, EmptyState, HBarChart, KpiStrip, TrendChart } from '@orbit/ui';
+import { DataTable, EmptyState, HBarChart, KpiStrip, PieChart, TrendChart } from '@orbit/ui';
 import { executive } from '../server';
 
 const fmtH = (n: number) => n.toLocaleString('en-GB', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 /** Timesheet section of the Management workspace overview: KPIs, weekly trend, projects and where approvals wait. */
-export async function TimesheetExecutive() {
-  const d = await query((tx, ctx) => executive.executiveSummary(tx, ctx));
+export async function TimesheetExecutive({ params = {} }: { params?: Record<string, string | undefined> }) {
+  const period = params.period === 'week' ? 'week' : 'month';
+  const d = await query((tx, ctx) => executive.executiveSummary(tx, ctx, period));
   const monthLabel = new Date(`${d.month}-01T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' });
   const k = d.kpis;
   const overdue = d.levels.reduce((n, l) => n + l.overdue, 0);
@@ -61,6 +62,23 @@ export async function TimesheetExecutive() {
             ]}
           />
         </div>
+      </div>
+      <div className="o-panel">
+        <div className="o-panel-head" style={{ flexWrap: 'wrap', gap: 8 }}>
+          <h2>Hours by person, {d.people.label}</h2>
+          <nav className="o-seg" aria-label="Period">
+            <a href="?period=week" aria-current={period === 'week' ? 'page' : undefined}>
+              This week
+            </a>
+            <a href="?period=month" aria-current={period === 'month' ? 'page' : undefined}>
+              This month
+            </a>
+          </nav>
+        </div>
+        <PieChart slices={d.people.rows.map((r) => ({ label: r.name, value: r.hours, detail: r.title ?? undefined }))} />
+        <p className="faint" style={{ fontSize: 11, margin: '8px 0 0' }}>
+          Submitted and approved timesheets. Hover a slice for details; the 8 largest are shown, the rest grouped as Others.
+        </p>
       </div>
       <div className="o-cols-wide">
         <div className="o-panel">

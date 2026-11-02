@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { companies, companyPortals, memberships, withTenant } from '@orbit/db';
 import { COMPANY_COOKIE, getDb, getSession } from '@orbit/core/next';
 import { requestMemberPortals } from '@orbit/core';
+import { activeCompany } from './company-directory';
 import { portalModules } from './portals';
 
 /** Portal ids ticked on a form, limited to portals that exist. */
@@ -62,20 +63,19 @@ async function companyByName(name: string) {
   return row;
 }
 
-const joinSchema = z.object({
-  company: z.string().trim().min(2).max(120),
-  title: z.string().trim().max(100).optional(),
-});
+// The company is picked from the list of active companies; role and job title are set by the company admin.
+const joinSchema = z.object({ companyId: z.uuid() });
 
 /** Join request: a pending employee membership that the company admin approves on the Users page. */
 export async function joinCompanyAction(form: FormData) {
   const s = await getSession();
   if (s.state !== 'no_company') redirect('/');
-  const input = joinSchema.parse(Object.fromEntries(form));
+  const parsed = joinSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) redirect('/register?error=choose');
   const wanted = pickedPortals(form);
   if (wanted.length === 0) redirect('/register?error=portals');
-  const company = await companyByName(input.company);
-  if (!company || company.status !== 'active') redirect('/register?error=not_found');
+  const company = await activeCompany(parsed.data.companyId);
+  if (!company) redirect('/register?error=not_found');
   const db = await getDb();
   const offered = await withTenant(db, { companyId: company.id, userId: s.userId }, async (tx) => {
     const has = (await tx.select({ portal: companyPortals.portal }).from(companyPortals).where(eq(companyPortals.companyId, company.id))).map(
@@ -85,11 +85,11 @@ export async function joinCompanyAction(form: FormData) {
     if (ok.length === 0) return false;
     const [m] = await tx
       .insert(memberships)
-      .values({ companyId: company.id, userId: s.userId, role: 'employee', title: input.title || null, status: 'pending' })
+      .values({ companyId: company.id, userId: s.userId, role: 'employee', title: null, status: 'pending' })
       // Someone removed from this company earlier can ask to join again.
       .onConflictDoUpdate({
         target: [memberships.companyId, memberships.userId],
-        set: { status: 'pending', role: 'employee', title: input.title || null, supervisorId: null },
+        set: { status: 'pending', role: 'employee', title: null, supervisorId: null },
         setWhere: sql`${memberships.status}::text = 'removed'`,
       })
       .returning({ id: memberships.id });

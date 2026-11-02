@@ -282,3 +282,9 @@ h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
 .o-stack-part + .o-stack-part { box-shadow: inset 1px 0 0 var(--sheet); }
 @media (max-width: 600px) { .o-stack-row { grid-template-columns: 100px 1fr 52px; } }
 .o-subhead { font-size: 12px; font-weight: 600; color: var(--ink-2); margin: 0 0 10px; }
+
+/* Tabs inside a Management portal view */
+.o-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.o-tabs a { padding: 8px 14px; font-size: 13px; color: var(--ink-2); border-bottom: 2px solid transparent; margin-bottom: -1px; text-decoration: none; }
+.o-tabs a:hover { color: var(--ink); }
+.o-tabs a[aria-current='page'] { color: var(--steel); border-bottom-color: var(--steel); font-weight: 600; }

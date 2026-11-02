@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { readMemberPortals } from '@orbit/core';
 import { getSession, query } from '@orbit/core/next';
+import { isManager } from '@/management/workspaces';
 import { accessiblePortals } from '@/portal-access';
 import { portalModules } from '@/portals';
 import { AuthCard } from '../AuthCard';
@@ -23,7 +24,7 @@ export default async function Portals() {
         Signed in to {s.ctx.companyName} as {s.ctx.name}.
       </p>
       <div className="o-stack" style={{ gap: 8 }}>
-        {(s.ctx.role === 'management' || s.ctx.role === 'company_admin') && (
+        {isManager(s.ctx) && (
           <a className="o-btn primary block" href="/manage">
             Management workspace
           </a>

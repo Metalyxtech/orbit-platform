@@ -149,3 +149,20 @@ export async function executiveSummary(tx: Tx, ctx: SessionContext, period: Peri
   ]);
   return { month, kpis: k, trend, byProject, levels, byApprover, top, people, pending, period };
 }
+
+/** Current month (YYYY-MM) in the company's time zone. */
+export const currentMonth = (ctx: SessionContext) => new Date().toLocaleDateString('en-CA', { timeZone: ctx.timezone }).slice(0, 7);
+
+/** Management > Timesheet > Summary: headline numbers, weekly trend and approvals by level. */
+export async function summaryView(tx: Tx, ctx: SessionContext) {
+  const month = currentMonth(ctx);
+  const [k, trend, levels] = await Promise.all([kpis(tx, ctx, { month }), weeklyTrend(tx, ctx), approvalsByLevel(tx, ctx)]);
+  return { month, kpis: k, trend, levels };
+}
+
+/** Management > Timesheet > Projects: approved hours by project and the highest overtime. */
+export async function projectsView(tx: Tx, ctx: SessionContext) {
+  const month = currentMonth(ctx);
+  const [byProject, top] = await Promise.all([hoursByProject(tx, ctx, { month }), topOvertime(tx, ctx, { month })]);
+  return { month, byProject, top };
+}

@@ -3,17 +3,17 @@ import { redirect } from 'next/navigation';
 import { getSession, query } from '@orbit/core/next';
 import { approvals } from '@orbit/portal-timesheet/server';
 import { DataTable } from '@orbit/ui';
-import { executiveSections } from '@/executive';
+import { isManager, workspaceFor } from '@/management/workspaces';
 import { listMessages } from '@/messages';
 import { accessiblePortals } from '@/portal-access';
+import { portalModules } from '@/portals';
 
 export const dynamic = 'force-dynamic';
 
-/** Management overview: what waits for me, latest messages, then one section per portal. */
-export default async function Overview({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  const params = await searchParams;
+/** Management overview: what waits for me, latest messages, then a short summary per portal. */
+export default async function Overview() {
   const s = await getSession();
-  if (s.state !== 'ok' || (s.ctx.role !== 'management' && s.ctx.role !== 'company_admin')) redirect('/manage/messages');
+  if (s.state !== 'ok' || !isManager(s.ctx)) redirect('/manage/messages');
   const d = await query(async (tx, ctx) => ({
     name: ctx.name.split(' ')[0],
     company: ctx.companyName,
@@ -73,8 +73,20 @@ export default async function Overview({ searchParams }: { searchParams: Promise
           </div>
         </div>
         {d.portals.map((p) => {
-          const Section = executiveSections[p];
-          return Section ? <Section key={p} params={params} /> : null;
+          const mod = workspaceFor(s.ctx).modules[p];
+          if (!mod || !portalModules[p]) return null;
+          const Headline = mod.headline;
+          return (
+            <section key={p} className="o-stack" style={{ gap: 12 }}>
+              <div className="o-row" style={{ justifyContent: 'space-between' }}>
+                <h2 style={{ margin: 0 }}>{portalModules[p].manifest.name}</h2>
+                <Link className="o-btn small" href={`/manage/${p}`}>
+                  Open details
+                </Link>
+              </div>
+              {Headline && <Headline />}
+            </section>
+          );
         })}
       </div>
     </>

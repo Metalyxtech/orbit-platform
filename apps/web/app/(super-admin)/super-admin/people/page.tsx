@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { StatusChip } from '@orbit/ui';
 import { approveMemberAction, setMemberBlockedAction } from '../actions';
 import { ROLE_LABEL, fmtDate, loadCompanies, loadMemberPortals, loadPeople, loadPortals, memberStatusChip, requireSuperAdminPage } from '../data';
+import { RemoveMemberButton } from '../RemoveMemberButton';
 import { MemberPortals } from '../MemberPortals';
 
 const PAGE = 50;
@@ -126,6 +127,7 @@ export default async function People({
                           Block
                         </button>
                       )}
+                      <RemoveMemberButton companyId={m.companyId} membershipId={m.id} name={m.name} company={m.company} />
                     </form>
                   </td>
                 </tr>

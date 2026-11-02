@@ -50,6 +50,13 @@
       "when": 1793800000000,
       "tag": "0006_member_portal_status",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793900000000,
+      "tag": "0007_member_removed",
+      "breakpoints": true
     }
   ]
 }

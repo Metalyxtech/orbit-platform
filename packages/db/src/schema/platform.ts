@@ -22,7 +22,7 @@ export const memberRole = pgEnum('member_role', [
   'company_admin',
   'management',
 ]);
-export const memberStatus = pgEnum('member_status', ['pending', 'active', 'disabled']);
+export const memberStatus = pgEnum('member_status', ['pending', 'active', 'disabled', 'removed']);
 export const workflowStatus = pgEnum('workflow_status', [
   'running',
   'approved',

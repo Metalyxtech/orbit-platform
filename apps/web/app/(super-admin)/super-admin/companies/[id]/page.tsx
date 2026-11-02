@@ -15,6 +15,7 @@ import {
   setStageAction,
 } from '../../actions';
 import { ROLE_LABEL, companyStatusChip, fmtDate, loadMemberPortals, loadPeople, loadPortals, memberStatusChip, requireSuperAdminPage } from '../../data';
+import { RemoveMemberButton } from '../../RemoveMemberButton';
 import { MemberPortals } from '../../MemberPortals';
 
 /** Super Admin > Companies > one company: profile, portals and people. */
@@ -230,6 +231,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
                           Block
                         </button>
                       )}
+                      <RemoveMemberButton companyId={c.id} membershipId={m.id} name={m.name} company={c.name} />
                     </form>
                   </td>
                 </tr>

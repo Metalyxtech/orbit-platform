@@ -11,7 +11,7 @@ export function PieChart({
   max = 8,
   size = 200,
 }: {
-  slices: { label: string; value: number; detail?: string }[];
+  slices: { label: string; value: number; detail?: string; color?: string }[];
   unit?: string;
   max?: number;
   size?: number;
@@ -31,7 +31,8 @@ export function PieChart({
     const a0 = angle;
     const a1 = angle + sweep;
     angle = a1;
-    const color = i === data.length - 1 && rest > 0 ? COLORS[COLORS.length - 1] : COLORS[i % (COLORS.length - 1)];
+    const color =
+      ('color' in s && s.color) || (i === data.length - 1 && rest > 0 ? COLORS[COLORS.length - 1] : COLORS[i % (COLORS.length - 1)]);
     const outer = r - 2;
     const inner = outer - ring;
     const p = (rad: number, a: number) => `${r + rad * Math.cos(a)} ${r + rad * Math.sin(a)}`;

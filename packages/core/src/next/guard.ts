@@ -42,13 +42,15 @@ export const getSession = cache(async (): Promise<SessionState> => {
   if (!user) return { state: 'signed_out' };
 
   // RLS lets a user see their own memberships in any company (app.user_id).
-  const rows = await withTenant(db, { companyId: NO_COMPANY, userId: user.id }, (tx) =>
+  const all = await withTenant(db, { companyId: NO_COMPANY, userId: user.id }, (tx) =>
     tx
       .select({ m: memberships, c: companies })
       .from(memberships)
       .innerJoin(companies, eq(companies.id, memberships.companyId))
       .where(eq(memberships.userId, user.id)),
   );
+  // A removed membership is history only: the person counts as having no company there.
+  const rows = all.filter((r) => r.m.status !== 'removed');
   const active = rows.filter((r) => r.m.status === 'active' && r.c.status === 'active');
   if (active.length === 0) {
     const pending = rows.find((r) => r.m.status === 'pending' || r.c.status === 'pending');

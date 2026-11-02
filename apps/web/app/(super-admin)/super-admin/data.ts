@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import { readMemberPortals } from '@orbit/core';
 import { getDb, getSession } from '@orbit/core/next';
@@ -45,7 +45,7 @@ export async function loadPeople(companyId: string, superUserId: string) {
       })
       .from(memberships)
       .innerJoin(users, eq(users.id, memberships.userId))
-      .where(eq(memberships.companyId, companyId))
+      .where(and(eq(memberships.companyId, companyId), sql`${memberships.status}::text <> 'removed'`))
       .orderBy(asc(users.name)),
   );
   return rows.sort(

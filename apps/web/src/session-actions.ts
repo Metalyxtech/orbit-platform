@@ -86,7 +86,12 @@ export async function joinCompanyAction(form: FormData) {
     const [m] = await tx
       .insert(memberships)
       .values({ companyId: company.id, userId: s.userId, role: 'employee', title: input.title || null, status: 'pending' })
-      .onConflictDoNothing()
+      // Someone removed from this company earlier can ask to join again.
+      .onConflictDoUpdate({
+        target: [memberships.companyId, memberships.userId],
+        set: { status: 'pending', role: 'employee', title: input.title || null, supervisorId: null },
+        setWhere: sql`${memberships.status}::text = 'removed'`,
+      })
       .returning({ id: memberships.id });
     if (m) await requestMemberPortals(tx, company.id, m.id, ok);
     return true;

@@ -480,7 +480,8 @@ export async function listUsers(tx: Tx, ctx: SessionContext) {
     })
     .from(memberships)
     .innerJoin(users, eq(users.id, memberships.userId))
-    .where(eq(memberships.companyId, ctx.companyId))
+    // Removed people stay in the table for history only (text compare works before migration 0007).
+    .where(and(eq(memberships.companyId, ctx.companyId), sql`${memberships.status}::text <> 'removed'`))
     .orderBy(asc(memberships.status), asc(users.name));
   const names = new Map(rows.map((r) => [r.membershipId, r.name]));
   return rows.map((r) => ({ ...r, supervisor: r.supervisorId ? (names.get(r.supervisorId) ?? '') : '' }));

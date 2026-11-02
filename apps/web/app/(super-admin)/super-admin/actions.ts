@@ -6,6 +6,7 @@ import { activateRequestedPortals, audit, Effects, newEvent, setMemberPortal, uu
 import { getDb, getSession } from '@orbit/core/next';
 import { companies, companyPortals, memberships, withTenant, workflowDefinitionColumns, workflowDefinitions, type Tx } from '@orbit/db';
 import { portalModules } from '@/portals';
+import { confirmed, removeMembership, REMOVE_WORD } from './remove-member';
 import { timesheetManifest } from '@orbit/portal-timesheet/manifest';
 
 async function requireSuperAdmin() {
@@ -90,6 +91,28 @@ export async function declineCompanyPortalAction(companyId: string, portal: stri
     await audit(tx, { companyId: id, actorId: null, action: 'portal.decline', entity: 'company_portals', entityId: id, data: { portal } });
   });
   revalidatePath('/super-admin', 'layout');
+}
+
+/**
+ * Removes a person from a company after the Super Admin typed the confirmation word. Returns a
+ * result instead of throwing so the dialog can show what happened.
+ */
+export async function removeMemberAction(companyId: string, membershipId: string, typed: string) {
+  const userId = await requireSuperAdmin();
+  if (!confirmed(typed)) return { ok: false as const, error: `Type ${REMOVE_WORD} to confirm.` };
+  const id = z.uuid().parse(membershipId);
+  const db = await getDb();
+  try {
+    const summary = await withTenant(db, { companyId, userId }, async (tx) => {
+      const result = await removeMembership(tx, companyId, id);
+      await audit(tx, { companyId, actorId: null, action: 'membership.remove', entity: 'memberships', entityId: id, data: result });
+      return result;
+    });
+    // No revalidatePath here: the dialog shows the result first and refreshes the list when closed.
+    return { ok: true as const, summary };
+  } catch (err) {
+    return { ok: false as const, error: err instanceof Error && !('code' in err) ? err.message : "Couldn't remove this person. Try again." };
+  }
 }
 
 /** Approves one person waiting to join a company. */

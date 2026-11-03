@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
 import { query } from '@orbit/core/next';
 import { DataTable, EmptyState, HBarChart, KpiStrip, StatusChip, TopBar } from '@orbit/ui';
-import { admin, approvals, reports, week } from '../server';
+import { admin, approvals, forms, reports, week } from '../server';
 import { ApprovalsClient } from './ApprovalsClient';
 import { HistoryClient } from './HistoryClient';
+import { FormsClient } from './FormsClient';
 import { MyWeekClient } from './MyWeekClient';
 import { ProjectsClient, ReportFilters, SettingsClient, UsersClient, WorkflowClient } from './AdminClients';
 
@@ -12,9 +13,13 @@ type Screen = (props: { searchParams: SearchParams }) => Promise<ReactNode>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
 const MyWeek: Screen = async ({ searchParams }) => {
-  const { view, ctx } = await query(async (tx, ctx) => ({ view: await week.getWeek(tx, ctx, { weekStart: one(searchParams.week) }), ctx }));
-  const key = `${view.weekStart}:${view.timesheet.status}:${view.timesheet.revision}:${view.rows.length}`;
-  return <MyWeekClient key={key} view={view} draftKey={`orbit-ts:${ctx.membershipId}:${view.weekStart}`} />;
+  const { view, ctx, formId } = await query(async (tx, ctx) => ({
+    view: await week.getWeek(tx, ctx, { weekStart: one(searchParams.week) }),
+    formId: await forms.formFor(tx, ctx),
+    ctx,
+  }));
+  const key = `${formId}:${view.weekStart}:${view.timesheet.status}:${view.timesheet.revision}:${view.rows.length}`;
+  return <MyWeekClient key={key} view={view} formId={formId} draftKey={`orbit-ts:${ctx.membershipId}:${view.weekStart}`} />;
 };
 
 const History: Screen = async ({ searchParams }) => {
@@ -418,6 +423,11 @@ const Workflow: Screen = async () => {
   return <WorkflowClient {...data} />;
 };
 
+const Forms: Screen = async () => {
+  const data = await query((tx, ctx) => forms.listFormChoices(tx, ctx));
+  return <FormsClient {...data} />;
+};
+
 const Settings: Screen = async () => {
   const data = await query(async (tx, ctx) => ({
     s: await admin.getSettings(tx, ctx),
@@ -446,5 +456,6 @@ export const timesheetRoutes: Record<string, Screen> = {
   'admin/users': Users,
   'admin/projects': Projects,
   'admin/workflow': Workflow,
+  'admin/forms': Forms,
   'admin/settings': Settings,
 };

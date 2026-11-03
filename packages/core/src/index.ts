@@ -7,4 +7,5 @@ export * from './timers';
 export * from './hmac';
 export * from './portals';
 export * from './member-portals';
+export * from './portal-forms';
 export * as workflow from './workflow';

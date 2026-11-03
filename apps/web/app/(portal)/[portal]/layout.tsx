@@ -6,6 +6,7 @@ import { AppShell } from '@orbit/ui';
 import { unreadCount } from '@/messages';
 import { isManager, workspaceFor } from '@/management/workspaces';
 import { accessiblePortals } from '@/portal-access';
+import { portalNavItems } from '@/portal-nav';
 import { BRAND, portalModules } from '@/portals';
 import { switchCompanyAction } from '@/session-actions';
 
@@ -29,14 +30,7 @@ export default async function PortalLayout({ children, params }: { children: Rea
   const session = await getSession();
   const companies = session.state === 'ok' ? session.companies : [];
 
-  const nav = mod.manifest.nav
-    .filter((n) => !n.roles || n.roles.includes(ctx.role) || ctx.role === 'company_admin')
-    .map((n) => ({
-      href: `/${portal}${n.path ? `/${n.path}` : ''}`,
-      label: n.label,
-      section: n.section,
-      badge: n.badge === 'approvals' ? waiting : undefined,
-    }));
+  const nav = portalNavItems(portal, ctx, { approvals: waiting });
   // Management and admins get a way back to the Management workspace from any portal.
   if (isManager(ctx)) {
     nav.unshift({ href: workspaceFor(ctx).modules[portal] ? `/manage/${portal}` : '/manage', label: 'Management view', section: 'main', badge: undefined });

@@ -5,6 +5,7 @@ import { AppShell } from '@orbit/ui';
 import { unreadCount } from '@/messages';
 import { isManager, workspaceFor } from '@/management/workspaces';
 import { accessiblePortals } from '@/portal-access';
+import { companyAdminItems } from '@/company-admin-nav';
 import { portalNavItems } from '@/portal-nav';
 import { portalRolesFor, queueCounts } from '@/portal-role';
 import { BRAND, portalModules } from '@/portals';
@@ -17,13 +18,14 @@ export default async function PortalLayout({ children, params }: { children: Rea
   const mod = portalModules[portal];
   if (!mod) notFound();
 
-  const { ctx, enabled, waiting, unread, portalRole } = await query(async (tx, ctx) => ({
+  const { ctx, enabled, waiting, unread, roles } = await query(async (tx, ctx) => ({
     ctx,
     enabled: await accessiblePortals(tx, ctx),
     waiting: (await queueCounts(tx, ctx, [portal]))[portal],
     unread: await unreadCount(tx, ctx),
-    portalRole: (await portalRolesFor(tx, ctx, [portal]))[portal],
+    roles: await portalRolesFor(tx, ctx, Object.keys(portalModules)),
   }));
+  const portalRole = roles[portal];
   if (!enabled.includes(portal)) redirect('/');
   const session = await getSession();
   const companies = session.state === 'ok' ? session.companies : [];
@@ -34,11 +36,9 @@ export default async function PortalLayout({ children, params }: { children: Rea
     nav.unshift({ href: workspaceFor(ctx).modules[portal] ? `/manage/${portal}` : '/manage', label: 'Management view', section: 'main', badge: undefined });
   }
   nav.push({ href: '/manage/messages', label: 'Messages', section: 'main', badge: unread || undefined });
-  // Company-wide admin pages, reachable from every portal.
-  if (ctx.role === 'company_admin') {
-    nav.push({ href: '/manage/company/people', label: 'People and portals', section: 'admin', badge: undefined });
-    nav.push({ href: '/manage/company/portals', label: 'Company portals', section: 'admin', badge: undefined });
-  }
+  // One Company admin menu (company pages and every portal's settings), the same in every portal.
+  const adminNav = companyAdminItems(ctx, enabled, roles).map((n) => ({ ...n, section: 'admin' as const, badge: undefined }));
+  const shellNav = [...nav.filter((n) => n.section !== 'admin'), ...adminNav];
 
   return (
     <AppShell
@@ -48,7 +48,7 @@ export default async function PortalLayout({ children, params }: { children: Rea
       portals={enabled.filter((p) => portalModules[p]).map((p) => ({ id: p, name: portalModules[p].manifest.name }))}
       companies={companies}
       onSwitchCompany={switchCompanyAction}
-      nav={nav}
+      nav={shellNav}
       user={{ name: ctx.name, title: ctx.title }}
       signOutHref="/auth/sign-out"
     >

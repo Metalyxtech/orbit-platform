@@ -67,7 +67,7 @@ const Dashboard: Screen = async () => {
             <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
               <h2>Waiting for you</h2>
               <Link className="o-btn small" href="/procurement/queue">
-                Open queue
+                All approvals and tasks
               </Link>
             </div>
             <RequestTable rows={d.queue} currency={cur} showOwner={false} empty="Nothing waiting for you." />
@@ -112,9 +112,9 @@ const Queue: Screen = async () => {
   const d = await query(async (tx, ctx) => ({ rows: await requests.myQueue(tx, ctx), cfg: await loadConfig(tx, ctx.companyId), me: await myRole(tx, ctx) }));
   return (
     <>
-      <TopBar crumbs={['Purchase', 'My queue']} />
+      <TopBar crumbs={['Purchase', 'Approvals and tasks']} />
       <div className="o-page">
-        <PageHead title="My queue" lead={`Steps waiting for ${roleLabel(d.me).toLowerCase()}, oldest first.`} />
+        <PageHead title="Approvals and tasks" lead={`Approvals and steps waiting for you as ${roleLabel(d.me).toLowerCase()}, oldest first.`} />
         <div className="o-panel flush">
           <RequestTable rows={d.rows} currency={d.cfg.money.currency} showOwner={false} empty="Nothing waiting for you. You are up to date." />
         </div>

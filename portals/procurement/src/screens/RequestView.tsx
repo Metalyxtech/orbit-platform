@@ -268,19 +268,45 @@ export function RequestView({ d, suppliers }: { d: RequestDetail; suppliers: Sup
             </div>
 
             <div className="o-panel">
-              <h2>{d.approval.kind === 'po' ? 'PO approval' : 'Requisition approval'}</h2>
-              {d.approval.chain.length === 0 ? (
-                <p className="faint" style={{ fontSize: 12 }}>No approval rule applies to this value.</p>
-              ) : (
-                <ol className="p-chain">
-                  {d.approval.chain.map((l) => (
-                    <li key={l.id} className={l.done ? 'done' : d.approval.pending?.id === l.id ? 'now' : ''}>
-                      <strong>{l.name}</strong>
-                      <span className="faint">{l.done ? 'Approved' : d.approval.pending?.id === l.id ? 'Waiting' : 'Next'} · {l.role}</span>
-                    </li>
-                  ))}
-                </ol>
-              )}
+              <h2>Approvals</h2>
+              {d.approvals.map((a) => (
+                <div key={a.kind} className="p-appr">
+                  <div className="p-appr-head">
+                    <strong>{a.label}</strong>
+                    <Chip tone={a.state === 'done' ? 'ok' : a.state === 'now' ? 'warn' : a.state === 'rejected' ? 'bad' : 'grey'}>
+                      {a.state === 'off' ? 'Switched off' : a.state === 'none' ? 'Not needed' : a.state === 'done' ? 'Approved' : a.state === 'now' ? 'Waiting' : a.state === 'rejected' ? 'Rejected' : 'Later'}
+                    </Chip>
+                  </div>
+                  {a.state === 'off' ? (
+                    <p className="faint" style={{ fontSize: 11, margin: '4px 0 0' }}>
+                      This step is switched off in Purchase workflow.
+                    </p>
+                  ) : a.chain.length === 0 ? (
+                    <p className="faint" style={{ fontSize: 11, margin: '4px 0 0' }}>
+                      No approval rule applies to this value.
+                    </p>
+                  ) : (
+                    <ol className="p-chain" style={{ marginTop: 6 }}>
+                      {a.chain.map((l) => (
+                        <li key={l.id} className={l.state === 'done' ? 'done' : l.state === 'now' ? 'now' : ''}>
+                          <div>
+                            <strong>{l.name}</strong>
+                            <div className="faint" style={{ fontSize: 11 }}>
+                              {l.people.length ? l.people.join(', ') : `Nobody is ${l.role.toLowerCase()} yet`}
+                            </div>
+                          </div>
+                          <span className="faint">{l.state === 'done' ? 'Approved' : l.state === 'now' ? 'Waiting' : a.state === 'later' ? 'After award' : 'Next'}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                  {a.state === 'later' && a.kind === 'po' && (
+                    <p className="faint" style={{ fontSize: 11, margin: '4px 0 0' }}>
+                      Based on the {a.basis}; checked again on the awarded value.
+                    </p>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         </div>

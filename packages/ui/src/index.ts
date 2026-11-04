@@ -12,3 +12,4 @@ export * from './PieChart';
 export * from './StackedBarChart';
 export * from './SideMenu';
 export * from './menu';
+export * from './NotificationCenter';

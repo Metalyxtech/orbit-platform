@@ -13,7 +13,7 @@ export const procurementManifest: PortalManifest = {
   defaultWorkflowKey: 'procurement.value_levels',
   nav: [
     { path: '', label: 'Dashboard', section: 'main', portalRoles: ALL },
-    { path: 'queue', menu: 'Purchasing', label: 'My queue', section: 'main', portalRoles: ALL.filter((r) => r !== 'requester'), badge: 'approvals' },
+    { path: 'queue', menu: 'Purchasing', label: 'Approvals and tasks', section: 'main', portalRoles: ALL.filter((r) => r !== 'requester'), badge: 'approvals' },
     { path: 'new', menu: 'Purchasing', label: 'New requisition', section: 'main', portalRoles: ['requester', 'buyer', 'store', 'manager', 'admin'] },
     { path: 'requests', menu: 'Purchasing', label: 'All requests', section: 'main', portalRoles: ALL },
     { path: 'orders', menu: 'Purchasing', label: 'Purchase orders', section: 'main', portalRoles: BUY },

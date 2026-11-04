@@ -2,6 +2,7 @@
 import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { toEntries } from './menu';
+import { NotificationCenter } from './NotificationCenter';
 import { SideMenu } from './SideMenu';
 
 export interface ShellNavItem {
@@ -44,6 +45,7 @@ export function AppShell(props: AppShellProps) {
             <div className="o-brand-name">{props.brand}</div>
             <div className="o-brand-co">{props.companyName}</div>
           </div>
+          <NotificationCenter />
         </div>
         <div className="o-switch">
           <span>{props.portalName}</span>

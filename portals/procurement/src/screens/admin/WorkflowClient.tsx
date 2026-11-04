@@ -1,25 +1,22 @@
 'use client';
 import { useState } from 'react';
-import { Button, ConfirmDialog, TopBar } from '@orbit/ui';
-import { applyTemplateAction, saveWorkflowAction } from '../../actions';
-import { PROC_ROLES, STAGES, TEMPLATES, WORK, type ProcConfig, type StageKey } from '../../config';
+import { Button, TopBar } from '@orbit/ui';
+import { saveWorkflowAction } from '../../actions';
+import { PROC_ROLES, STAGES, WORK, type ProcConfig, type StageKey } from '../../config';
+import { TemplatePicker, type TemplateInfo } from './TemplatePicker';
 import { useSave } from './useSave';
 
-type Tpl = { id: string; name: string; header: string[]; line: string[]; options: string[] };
 
 /** Admin > Purchase workflow: industry template, stage switches and owners, industry options. */
-export function WorkflowClient({ config, templates }: { config: ProcConfig; templates: Tpl[] }) {
+export function WorkflowClient({ config, templates }: { config: ProcConfig; templates: TemplateInfo[] }) {
   const { busy, save } = useSave();
   const [flow, setFlow] = useState(config.flow);
   const [stageCfg, setStageCfg] = useState(config.stageCfg);
   const [minQuotes, setMinQuotes] = useState(config.minQuotes);
   const [options, setOptions] = useState(Object.fromEntries(config.options.map((o) => [o.id, o.on])));
-  const [pick, setPick] = useState(config.template);
-  const [confirm, setConfirm] = useState(false);
   const stages: StageKey[] = [...WORK, 'stock_issue'];
   const label = (k: StageKey) => stageCfg[k]?.label || STAGES[k].label;
   const on = (k: StageKey) => !STAGES[k].optional || flow[k as keyof typeof flow];
-  const chosen = templates.find((t) => t.id === pick);
 
   return (
     <>
@@ -39,36 +36,7 @@ export function WorkflowClient({ config, templates }: { config: ProcConfig; temp
           </Button>
         </div>
 
-        <div className="o-panel">
-          <div className="o-panel-head">
-            <h2>Industry template</h2>
-            <span className="muted" style={{ fontSize: 12 }}>
-              Now: {TEMPLATES[config.template]?.name ?? 'Custom'}
-            </span>
-          </div>
-          <p className="muted" style={{ fontSize: 12, marginTop: -6 }}>
-            The template sets the requisition form, the default stages and the industry options. You can fine-tune everything after applying it.
-          </p>
-          <div className="p-tpl-grid">
-            {templates.map((t) => (
-              <button key={t.id} type="button" className={`p-tpl${pick === t.id ? ' on' : ''}`} onClick={() => setPick(t.id)} aria-pressed={pick === t.id}>
-                <strong>{t.name}</strong>
-                <span>{t.header.slice(0, 3).join(', ') || 'Simple form'}</span>
-                {t.id === config.template && <em>In use</em>}
-              </button>
-            ))}
-          </div>
-          {chosen && pick !== config.template && (
-            <div className="o-row" style={{ marginTop: 12 }}>
-              <span className="muted" style={{ fontSize: 12 }}>
-                Header: {chosen.header.join(', ')}. Lines: {chosen.line.join(', ')}.
-              </span>
-              <Button variant="danger" onClick={() => setConfirm(true)}>
-                Apply {chosen.name}
-              </Button>
-            </div>
-          )}
-        </div>
+        <TemplatePicker templates={templates} current={config.template} />
 
         <div className="o-panel flush">
           <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
@@ -170,19 +138,6 @@ export function WorkflowClient({ config, templates }: { config: ProcConfig; temp
           </p>
         </div>
       </div>
-      <ConfirmDialog
-        open={confirm}
-        title={`Apply ${chosen?.name ?? ''}?`}
-        variant="danger"
-        confirmLabel="Replace form and workflow"
-        onCancel={() => setConfirm(false)}
-        onConfirm={async () => {
-          setConfirm(false);
-          await save(() => applyTemplateAction({ template: pick }), `${chosen?.name} applied.`);
-        }}
-      >
-        This replaces your requisition form, stage switches and industry options. Requests, stock, suppliers, approval rules and numbering are kept.
-      </ConfirmDialog>
     </>
   );
 }

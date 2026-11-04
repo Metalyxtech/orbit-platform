@@ -1,9 +1,10 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, TopBar } from '@orbit/ui';
 import { saveFormAction } from '../../actions';
 import type { FieldType, FormField, ProcConfig } from '../../config';
 import { FieldInput } from '../FieldInput';
+import { TemplatePicker, type TemplateInfo } from './TemplatePicker';
 import { useSave } from './useSave';
 
 const TYPES: { id: FieldType; label: string }[] = [
@@ -97,9 +98,10 @@ function FieldTable({ title, lead, fields, onChange }: { title: string; lead: st
 }
 
 /** Admin > Requisition form: header and line fields, with a live preview. */
-export function FormClient({ form }: { form: ProcConfig['form'] }) {
+export function FormClient({ form, templates, current }: { form: ProcConfig['form']; templates: TemplateInfo[]; current: string }) {
   const { busy, save } = useSave();
   const [v, setV] = useState(form);
+  useEffect(() => setV(form), [form]);
   return (
     <>
       <TopBar crumbs={['Purchase', 'Admin', 'Requisition form']} />
@@ -113,6 +115,7 @@ export function FormClient({ form }: { form: ProcConfig['form'] }) {
             Save form
           </Button>
         </div>
+        <TemplatePicker templates={templates} current={current} />
         <div className="o-panel">
           <div className="o-grid2">
             <label className="o-field">

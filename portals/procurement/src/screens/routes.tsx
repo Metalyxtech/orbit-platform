@@ -335,7 +335,7 @@ const AdminWorkflow: Screen = async () => {
 };
 const AdminForm: Screen = async () => {
   const d = await query((tx, ctx) => admin.adminConfig(tx, ctx));
-  return <FormClient form={d.config.form} />;
+  return <FormClient form={d.config.form} templates={d.templates} current={d.config.template} />;
 };
 const AdminApprovals: Screen = async () => {
   const d = await query((tx, ctx) => admin.adminConfig(tx, ctx));

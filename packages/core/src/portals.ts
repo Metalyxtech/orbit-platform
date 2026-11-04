@@ -19,7 +19,16 @@ export interface PortalNavItem {
   label: string;
   section: 'main' | 'admin';
   roles?: MemberRole[]; // omitted = everyone
+  /** For portals with their own roles (see PortalManifest.portalRoles): who sees this item. */
+  portalRoles?: string[];
   badge?: 'approvals';
+}
+
+/** A role inside one portal (for example Purchase: buyer, storekeeper), set per person by the company admin. */
+export interface PortalRoleDef {
+  id: string;
+  label: string;
+  detail: string;
 }
 
 export interface PortalManifest {
@@ -29,6 +38,18 @@ export interface PortalManifest {
   defaultWorkflowKey: string;
   nav: PortalNavItem[];
   settingsSchema: SettingsSchema;
+  /** Roles inside this portal. Omitted = the portal uses the company roles only. */
+  portalRoles?: PortalRoleDef[];
+  /** The portal role a person has when the admin has not set one. */
+  defaultPortalRole?: (role: MemberRole) => string;
+}
+
+/** The portal role this person acts as: the admin's choice, or the portal's default for their company role. */
+export function portalRoleFor(manifest: PortalManifest, role: MemberRole, stored: string | null | undefined): string | null {
+  if (!manifest.portalRoles) return null;
+  const fallback = manifest.defaultPortalRole?.(role) ?? manifest.portalRoles[0].id;
+  if (role === 'company_admin') return fallback;
+  return stored && manifest.portalRoles.some((r) => r.id === stored) ? stored : fallback;
 }
 
 /** Builds the server-side validator for a settings schema. */
@@ -60,6 +81,14 @@ export function settingsValidator(schema: SettingsSchema) {
   }
   return z.object(shape);
 }
+
+/**
+ * Portals a person without portal rows (joined before per-person portals) still gets. Newer
+ * portals, such as Purchase, are opt-in: the company admin requests them per person.
+ */
+export const LEGACY_PORTALS = ['timesheet'];
+/** True when a person with no portal rows can use this portal. */
+export const legacyPortal = (portal: string) => LEGACY_PORTALS.includes(portal);
 
 const registry = new Map<string, PortalManifest>();
 

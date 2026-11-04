@@ -2,7 +2,7 @@ import type { NextConfig } from 'next';
 
 const config: NextConfig = {
   reactStrictMode: true,
-  transpilePackages: ['@orbit/core', '@orbit/db', '@orbit/ui', '@orbit/portal-timesheet'],
+  transpilePackages: ['@orbit/core', '@orbit/db', '@orbit/ui', '@orbit/portal-timesheet', '@orbit/portal-procurement'],
   poweredByHeader: false,
   async headers() {
     return [

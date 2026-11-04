@@ -8,4 +8,5 @@ export * from './hmac';
 export * from './portals';
 export * from './member-portals';
 export * from './portal-forms';
+export * from './portal-roles';
 export * as workflow from './workflow';

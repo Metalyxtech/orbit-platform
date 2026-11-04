@@ -4,6 +4,7 @@ import { getSession, query } from '@orbit/core/next';
 import { approvals } from '@orbit/portal-timesheet/server';
 import { unreadCount } from '@/messages';
 import { accessiblePortals } from '@/portal-access';
+import { portalRolesFor, queueCounts } from '@/portal-role';
 import { BRAND } from '@/portals';
 import { workspaceFor } from '@/management/workspaces';
 import { ManageNav } from './ManageNav';
@@ -17,11 +18,16 @@ export default async function ManageLayout({ children }: { children: ReactNode }
   if (s.state !== 'ok') redirect('/');
   // Everyone can read and send messages here; the overview and approvals are for management and admins.
   const ws = workspaceFor(s.ctx);
-  const d = await query(async (tx, ctx) => ({
-    portals: await accessiblePortals(tx, ctx),
-    waiting: await approvals.countMine(tx, ctx),
-    unread: await unreadCount(tx, ctx),
-  }));
+  const d = await query(async (tx, ctx) => {
+    const portals = await accessiblePortals(tx, ctx);
+    return {
+      portals,
+      waiting: await approvals.countMine(tx, ctx),
+      unread: await unreadCount(tx, ctx),
+      badges: await queueCounts(tx, ctx, portals),
+      roles: await portalRolesFor(tx, ctx, portals),
+    };
+  });
   const ctx = s.ctx;
   return (
     <div className="o-shell">

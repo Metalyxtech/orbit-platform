@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import type { SessionContext } from '@orbit/core';
-import { readMemberPortals } from '@orbit/core';
+import { legacyPortal, readMemberPortals } from '@orbit/core';
 import { companyPortals, type Tx } from '@orbit/db';
 import { portalModules } from './portals';
 
@@ -16,6 +16,6 @@ export async function accessiblePortals(tx: Tx, ctx: SessionContext): Promise<st
   const enabled = on.map((r) => r.portal).filter((p) => portalModules[p]);
   if (ctx.role === 'company_admin' || ctx.role === 'management') return enabled;
   const mine = await readMemberPortals(tx, [ctx.membershipId]);
-  if (mine.length === 0) return enabled;
+  if (mine.length === 0) return enabled.filter(legacyPortal);
   return enabled.filter((p) => mine.some((m) => m.portal === p && m.status === 'active'));
 }

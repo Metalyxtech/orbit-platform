@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import type { SettingsField } from '@orbit/core/portals';
+import { legacyPortal, type SettingsField } from '@orbit/core/portals';
 import { Button, DataTable, Field, Segmented, Select, StatusChip, Toggle, TopBar, useToast } from '@orbit/ui';
 import {
   addMemberAction,
@@ -1048,7 +1048,7 @@ function PortalCell({ user, access }: { user: UserRow; access: PortalAccess }) {
     <div className="o-stack" style={{ gap: 4 }}>
       {access.company.map((cp) => {
         const row = mine.find((m) => m.portal === cp.portal);
-        const status = row ? row.status : mine.length === 0 && cp.enabled ? 'active' : 'off';
+        const status = row ? row.status : mine.length === 0 && cp.enabled && legacyPortal(cp.portal) ? 'active' : 'off';
         return (
           <div key={cp.portal} className="o-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
             <span className={`o-chip ${status === 'active' ? 'ok' : status === 'requested' ? 'warn' : ''}`}>

@@ -82,6 +82,8 @@ export interface ProcConfig {
   levels: ApprovalLevel[];
   money: { currency: string; taxName: string; taxRate: number; tolerance: number };
   numbering: { prPrefix: string; poPrefix: string };
+  /** Roles a purchase admin also covers (membershipId -> roles), when nobody else holds them. */
+  covers?: Record<string, ProcRole[]>;
 }
 
 const f = (id: string, label: string, type: FieldType = 'text', options = '', required = false): FormField => ({ id, label, type, options, required });

@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Button, TopBar } from '@orbit/ui';
+import { SaveBar, TopBar } from '@orbit/ui';
 import { saveFormAction } from '../../actions';
 import type { FieldType, FormField, ProcConfig } from '../../config';
 import { FieldInput } from '../FieldInput';
@@ -138,9 +138,6 @@ export function FormClient({
             <h1>Requisition form</h1>
             <p>The form people fill in to raise a request. Changes affect new requests only.</p>
           </div>
-          <Button variant="primary" disabled={busy} onClick={() => save(() => saveFormAction(v), 'Form saved.')}>
-            Save form
-          </Button>
         </div>
         <TemplatePicker templates={templates} current={current} />
         <div className="o-panel">
@@ -204,6 +201,14 @@ export function FormClient({
             </table>
           </div>
         </div>
+        <SaveBar
+          dirty={JSON.stringify(v) !== JSON.stringify(form)}
+          busy={busy}
+          what="the requisition form"
+          impact="Everyone who raises a new requisition gets the new form. Requests already raised keep their answers."
+          onDiscard={() => setV(form)}
+          onSave={() => save(() => saveFormAction(v), 'Form saved.')}
+        />
       </div>
     </>
   );

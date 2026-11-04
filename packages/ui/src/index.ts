@@ -13,3 +13,4 @@ export * from './StackedBarChart';
 export * from './SideMenu';
 export * from './menu';
 export * from './NotificationCenter';
+export * from './SaveBar';

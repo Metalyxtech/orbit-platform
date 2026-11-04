@@ -52,8 +52,8 @@ export function ownerRole(cfg: ProcConfig, stage: Stage, pending: ApprovalLevel 
   return role === 'approval' ? null : role;
 }
 
-/** Admins can act on any step; everyone else only on steps their role owns. */
-export const canAct = (me: ProcRole, owner: ProcRole | null) => owner != null && (me === owner || me === 'admin');
+/** A person acts on a step when their role owns it, or when they cover that role (admins standing in). */
+export const canAct = (roles: ProcRole[], owner: ProcRole | null) => owner != null && roles.includes(owner);
 
 /** Received quantity per line across all receipts. */
 export const receivedQty = (lineCount: number, receipts: { qty: number[] }[]) =>

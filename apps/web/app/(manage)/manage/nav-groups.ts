@@ -29,6 +29,8 @@ export function manageNavSections(ctx: SessionContext, ws: Workspace, portals: s
         { href: '/manage', label: 'Overview' },
         { href: '/manage/approvals', label: 'My approvals', badge: c.waiting },
         { href: '/manage/messages', label: 'Messages', badge: c.unread },
+        // Management sees the change history here; company admins find it under Company admin.
+        ...(ctx.role === 'management' ? [{ href: '/manage/company/history', label: 'Change history' }] : []),
       ],
     },
     {

@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Button, Chip, useToast } from '@orbit/ui';
+import { Button, Chip, useConfirm, useToast } from '@orbit/ui';
 import type { PeopleData } from '@/company-admin/people';
 import { addPersonAction, changePersonPortalAction, setPersonPortalRoleAction } from '../actions';
 
@@ -20,17 +20,36 @@ export function PeopleClient({ data, me }: { data: PeopleData; me: string }) {
   const router = useRouter();
   const toast = useToast();
   const [adding, setAdding] = useState(false);
+  const { confirm, dialog } = useConfirm();
   const [q, setQ] = useState('');
   const name = (p: string) => data.portals.find((x) => x.id === p)?.name ?? p;
   const rows = data.people.filter((p) => !q || `${p.name} ${p.email} ${p.title ?? ''}`.toLowerCase().includes(q.toLowerCase()));
 
-  async function change(p: Person, portal: string, action: 'grant' | 'remove') {
+  function change(p: Person, portal: string, action: 'grant' | 'remove') {
+    confirm({
+      title: action === 'grant' ? `Give ${p.name} ${name(portal)}?` : `Remove ${name(portal)} for ${p.name}?`,
+      body: action === 'grant' ? `${p.name} can open ${name(portal)} straight away.` : `${p.name} can no longer open ${name(portal)}. Their records stay.`,
+      label: action === 'grant' ? 'Give access' : 'Remove access',
+      danger: action === 'remove',
+      run: () => void doChange(p, portal, action),
+    });
+  }
+  async function doChange(p: Person, portal: string, action: 'grant' | 'remove') {
     const res = await changePersonPortalAction({ membershipId: p.membershipId, portal, action });
     if (!res.ok) return toast(res.error, 'bad');
     toast(action === 'grant' ? `${p.name} can now open ${name(portal)}.` : `${name(portal)} removed for ${p.name}.`);
     router.refresh();
   }
-  async function setRole(p: Person, portal: string, role: string) {
+  function setRole(p: Person, portal: string, role: string) {
+    const label = data.portals.find((x) => x.id === portal)?.roles?.find((r) => r.id === role)?.label ?? role;
+    confirm({
+      title: `Make ${p.name} ${label.toLowerCase()} in ${name(portal)}?`,
+      body: `${p.name} gets the ${label.toLowerCase()} menu, approvals and tasks in ${name(portal)}.`,
+      label: 'Change role',
+      run: () => void doSetRole(p, portal, role),
+    });
+  }
+  async function doSetRole(p: Person, portal: string, role: string) {
     const res = await setPersonPortalRoleAction({ membershipId: p.membershipId, portal, role });
     if (!res.ok) return toast(res.error, 'bad');
     toast(`${p.name}: ${name(portal)} role saved.`);
@@ -126,6 +145,7 @@ export function PeopleClient({ data, me }: { data: PeopleData; me: string }) {
           </table>
         </div>
       </div>
+      {dialog}
     </div>
   );
 }

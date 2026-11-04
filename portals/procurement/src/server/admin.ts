@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { audit, writePortalRole, type ActionContext, type SessionContext } from '@orbit/core';
 import type { Tx } from '@orbit/db';
 import { checkLibrary, FIELD_LIBRARY, INDUSTRY_INFO } from '../industries';
-import { PROC_ROLES, TEMPLATES, configFromTemplate, type ProcConfig, type ProcRole, type StageKey } from '../config';
+import { PROC_ROLES, STAGES, TEMPLATES, configFromTemplate, roleLabel, type ProcConfig, type ProcRole, type StageKey } from '../config';
 import { purchaseTeam } from './team';
 import { PORTAL, loadConfig, requireAdmin, saveConfig } from './shared';
 
@@ -26,18 +26,26 @@ export async function adminConfig(tx: Tx, ctx: SessionContext) {
   };
 }
 
-async function update(tx: Tx, ctx: ActionContext, action: string, change: (c: ProcConfig) => ProcConfig) {
+async function update(
+  tx: Tx,
+  ctx: ActionContext,
+  action: string,
+  change: (c: ProcConfig) => ProcConfig,
+  detail?: Record<string, unknown> | ((before: ProcConfig, after: ProcConfig) => Record<string, unknown>),
+) {
   requireAdmin(ctx);
-  const next = change(await loadConfig(tx, ctx.companyId));
+  const before = await loadConfig(tx, ctx.companyId);
+  const next = change(before);
+  const data = typeof detail === 'function' ? detail(before, next) : detail;
   await saveConfig(tx, ctx.companyId, next);
-  await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: `procurement.${action}`, entity: 'proc_settings', entityId: ctx.companyId, requestId: ctx.requestId });
+  await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: `procurement.${action}`, entity: 'proc_settings', entityId: ctx.companyId, data: data ?? null, requestId: ctx.requestId });
   return next;
 }
 
 /** Replaces form, stages and industry options with a template. Approval levels, money and numbering are kept. */
 export async function applyTemplate(tx: Tx, ctx: ActionContext, raw: { template: string }) {
   const { template } = z.object({ template: z.enum(Object.keys(TEMPLATES) as [string, ...string[]]) }).parse(raw);
-  await update(tx, ctx, 'template', (c) => configFromTemplate(template, c));
+  await update(tx, ctx, 'template', (c) => ({ ...configFromTemplate(template, c), covers: c.covers }), (b, a) => ({ summary: [`Industry form changed from ${TEMPLATES[b.template]?.name ?? 'custom'} to ${TEMPLATES[a.template]?.name}`] }));
   return { ok: true as const };
 }
 
@@ -56,7 +64,7 @@ export async function saveWorkflow(tx: Tx, ctx: ActionContext, raw: z.input<type
     stageCfg: Object.fromEntries(Object.entries(input.stageCfg).map(([k, v]) => [k, { label: v.label || undefined, role: v.role }])) as ProcConfig['stageCfg'],
     minQuotes: input.minQuotes,
     options: c.options.map((o) => ({ ...o, on: input.options[o.id] ?? o.on })),
-  }));
+  }), workflowChanges);
   return { ok: true as const };
 }
 
@@ -72,7 +80,7 @@ const formInput = z.object({ name: z.string().trim().min(2).max(100), unit: z.st
 export async function saveForm(tx: Tx, ctx: ActionContext, raw: z.input<typeof formInput>) {
   const input = formInput.parse(raw);
   for (const f of [...input.header, ...input.line]) if (f.type === 'select' && !f.options.split(',').some((o) => o.trim())) throw new Error(`Add the choices for the dropdown "${f.label}"`);
-  await update(tx, ctx, 'form', (c) => ({ ...c, form: input }));
+  await update(tx, ctx, 'form', (c) => ({ ...c, form: input }), (b, a) => ({ summary: fieldChanges(b.form, a.form) }));
   return { ok: true as const };
 }
 
@@ -82,7 +90,7 @@ const levelsInput = z
 
 export async function saveLevels(tx: Tx, ctx: ActionContext, raw: z.input<typeof levelsInput>) {
   const levels = levelsInput.parse(raw);
-  await update(tx, ctx, 'levels', (c) => ({ ...c, levels }));
+  await update(tx, ctx, 'levels', (c) => ({ ...c, levels }), (_b, a) => ({ summary: a.levels.map((l) => `${l.name} (${roleLabel(l.role)}) from ${a.money.currency}${l.min.toLocaleString('en-US')}${l.pr ? ', requisitions' : ''}${l.po ? ', POs' : ''}`) }));
   return { ok: true as const };
 }
 
@@ -97,7 +105,12 @@ const moneyInput = z.object({
 
 export async function saveMoney(tx: Tx, ctx: ActionContext, raw: z.input<typeof moneyInput>) {
   const m = moneyInput.parse(raw);
-  await update(tx, ctx, 'money', (c) => ({ ...c, money: { currency: m.currency, taxName: m.taxName, taxRate: m.taxRate, tolerance: m.tolerance }, numbering: { prPrefix: m.prPrefix, poPrefix: m.poPrefix } }));
+  await update(tx, ctx, 'money', (c) => ({ ...c, money: { currency: m.currency, taxName: m.taxName, taxRate: m.taxRate, tolerance: m.tolerance }, numbering: { prPrefix: m.prPrefix, poPrefix: m.poPrefix } }), (b, a) => ({
+    summary: [
+      ...(['currency', 'taxName', 'taxRate', 'tolerance'] as const).filter((k) => b.money[k] !== a.money[k]).map((k) => `${k}: ${b.money[k]} → ${a.money[k]}`),
+      ...(['prPrefix', 'poPrefix'] as const).filter((k) => b.numbering[k] !== a.numbering[k]).map((k) => `${k}: ${b.numbering[k]} → ${a.numbering[k]}`),
+    ],
+  }));
   return { ok: true as const };
 }
 
@@ -123,7 +136,7 @@ export async function setPurchaseRole(tx: Tx, ctx: ActionContext, raw: { members
   if (input.role === 'admin') throw new Error('Make the person a company admin to give them purchase admin');
   const ok = await writePortalRole(tx, { companyId: ctx.companyId, membershipId: m.membershipId, portal: PORTAL, role: input.role });
   if (!ok) throw new Error('Purchase roles switch on after the latest database update.');
-  await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'procurement.role', entity: 'memberships', entityId: m.membershipId, data: { role: input.role }, requestId: ctx.requestId });
+  await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'procurement.role', entity: 'memberships', entityId: m.membershipId, data: { summary: [`${m.name}: ${roleLabel(m.purchaseRole)} → ${roleLabel(input.role)}`] }, requestId: ctx.requestId });
   return { role: input.role };
 }
 
@@ -134,13 +147,63 @@ export async function addIndustryCheck(tx: Tx, ctx: ActionContext, raw: { id: st
   const { id } = z.object({ id: z.string().min(1).max(40) }).parse(raw);
   const lib = checkLibrary(TEMPLATES).find((o) => o.id === id);
   if (!lib) throw new Error('Unknown industry check');
-  await update(tx, ctx, 'check.add', (c) => (c.options.some((o) => o.id === id) ? c : { ...c, options: [...c.options, { ...lib, from: undefined, on: true } as ProcConfig['options'][number]] }));
+  await update(tx, ctx, 'check.add', (c) => (c.options.some((o) => o.id === id) ? c : { ...c, options: [...c.options, { ...lib, from: undefined, on: true } as ProcConfig['options'][number]] }), { summary: [`Added industry check: ${lib.label}`] });
   return { ok: true as const };
 }
 
 /** Removes an industry check from this company. */
 export async function removeIndustryCheck(tx: Tx, ctx: ActionContext, raw: { id: string }) {
   const { id } = z.object({ id: z.string().min(1).max(40) }).parse(raw);
-  await update(tx, ctx, 'check.remove', (c) => ({ ...c, options: c.options.filter((o) => o.id !== id) }));
+  await update(tx, ctx, 'check.remove', (c) => ({ ...c, options: c.options.filter((o) => o.id !== id) }), (b) => ({ summary: [`Removed industry check: ${b.options.find((o) => o.id === id)?.label ?? id}`] }));
   return { ok: true as const };
+}
+
+/** Roles a purchase admin also covers, when nobody else in the company holds them. */
+export async function setAdminCovers(tx: Tx, ctx: ActionContext, raw: { membershipId: string; roles: string[] }) {
+  requireAdmin(ctx);
+  const input = z.object({ membershipId: z.uuid(), roles: z.array(z.enum(roleIds)).max(8) }).parse(raw);
+  const m = (await purchaseTeam(tx, ctx)).find((x) => x.membershipId === input.membershipId);
+  if (!m) throw new Error('Person not found');
+  if (m.companyRole !== 'company_admin') throw new Error('Only company admins can cover other purchase roles');
+  const roles = [...new Set(input.roles.filter((r) => r !== 'admin'))];
+  await update(tx, ctx, 'covers', (c) => ({ ...c, covers: { ...(c.covers ?? {}), [m.membershipId]: roles } }), { summary: [roles.length ? `${m.name} now also covers: ${roles.map(roleLabel).join(', ')}` : `${m.name} no longer covers other roles`] });
+  return { roles };
+}
+
+// ---------- change summaries for the Change history page ----------
+
+function workflowChanges(b: ProcConfig, a: ProcConfig) {
+  const out: string[] = [];
+  for (const k of Object.keys(a.flow) as (keyof ProcConfig['flow'])[]) if (b.flow[k] !== a.flow[k]) out.push(`${STAGES[k].label} switched ${a.flow[k] ? 'on' : 'off'}`);
+  for (const k of Object.keys(STAGES) as StageKey[]) {
+    const bl = b.stageCfg[k]?.label || STAGES[k].label;
+    const al = a.stageCfg[k]?.label || STAGES[k].label;
+    if (bl !== al) out.push(`Stage renamed: ${bl} → ${al}`);
+    const br = b.stageCfg[k]?.role;
+    const ar = a.stageCfg[k]?.role;
+    if (br !== ar && ar) out.push(`${al} now handled by ${roleLabel(ar)}`);
+  }
+  if (b.minQuotes !== a.minQuotes) out.push(`Minimum quotes: ${b.minQuotes} → ${a.minQuotes}`);
+  for (const o of a.options) {
+    const was = b.options.find((x) => x.id === o.id)?.on;
+    if (was !== undefined && was !== o.on) out.push(`${o.label} switched ${o.on ? 'on' : 'off'}`);
+  }
+  return { summary: out.length ? out : ['Saved with no changes'] };
+}
+
+function fieldChanges(b: ProcConfig['form'], a: ProcConfig['form']) {
+  const out: string[] = [];
+  for (const [sec, name] of [['header', 'request field'], ['line', 'line field']] as const) {
+    const bl = b[sec].map((f) => f.label);
+    const al = a[sec].map((f) => f.label);
+    for (const l of al.filter((x) => !bl.includes(x))) out.push(`Added ${name}: ${l}`);
+    for (const l of bl.filter((x) => !al.includes(x))) out.push(`Removed ${name}: ${l}`);
+    for (const f of a[sec]) {
+      const old = b[sec].find((x) => x.label === f.label);
+      if (old && (old.type !== f.type || old.required !== f.required || old.options !== f.options)) out.push(`Changed ${name}: ${f.label}`);
+    }
+  }
+  if (b.name !== a.name) out.push(`Form name: ${b.name} → ${a.name}`);
+  if (b.unit !== a.unit) out.push(`Default unit: ${b.unit} → ${a.unit}`);
+  return out.length ? out : ['Saved with no changes'];
 }

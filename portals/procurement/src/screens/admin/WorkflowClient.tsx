@@ -1,25 +1,24 @@
 'use client';
 import { useState } from 'react';
-import { Button, ConfirmDialog, TopBar } from '@orbit/ui';
-import { applyTemplateAction, saveWorkflowAction } from '../../actions';
-import { PROC_ROLES, STAGES, TEMPLATES, WORK, type ProcConfig, type StageKey } from '../../config';
+import { Button, TopBar } from '@orbit/ui';
+import { addIndustryCheckAction, removeIndustryCheckAction, saveWorkflowAction } from '../../actions';
+import { PROC_ROLES, STAGES, WORK, type ProcConfig, type StageKey } from '../../config';
+import { TemplatePicker, type TemplateInfo } from './TemplatePicker';
 import { useSave } from './useSave';
 
-type Tpl = { id: string; name: string; header: string[]; line: string[]; options: string[] };
 
 /** Admin > Purchase workflow: industry template, stage switches and owners, industry options. */
-export function WorkflowClient({ config, templates }: { config: ProcConfig; templates: Tpl[] }) {
+export function WorkflowClient({ config, templates, checks }: { config: ProcConfig; templates: TemplateInfo[]; checks: { id: string; label: string; desc: string; from: string }[] }) {
+  const [addId, setAddId] = useState('');
+  const available = checks.filter((c) => !config.options.some((o) => o.id === c.id));
   const { busy, save } = useSave();
   const [flow, setFlow] = useState(config.flow);
   const [stageCfg, setStageCfg] = useState(config.stageCfg);
   const [minQuotes, setMinQuotes] = useState(config.minQuotes);
   const [options, setOptions] = useState(Object.fromEntries(config.options.map((o) => [o.id, o.on])));
-  const [pick, setPick] = useState(config.template);
-  const [confirm, setConfirm] = useState(false);
   const stages: StageKey[] = [...WORK, 'stock_issue'];
   const label = (k: StageKey) => stageCfg[k]?.label || STAGES[k].label;
   const on = (k: StageKey) => !STAGES[k].optional || flow[k as keyof typeof flow];
-  const chosen = templates.find((t) => t.id === pick);
 
   return (
     <>
@@ -39,36 +38,7 @@ export function WorkflowClient({ config, templates }: { config: ProcConfig; temp
           </Button>
         </div>
 
-        <div className="o-panel">
-          <div className="o-panel-head">
-            <h2>Industry template</h2>
-            <span className="muted" style={{ fontSize: 12 }}>
-              Now: {TEMPLATES[config.template]?.name ?? 'Custom'}
-            </span>
-          </div>
-          <p className="muted" style={{ fontSize: 12, marginTop: -6 }}>
-            The template sets the requisition form, the default stages and the industry options. You can fine-tune everything after applying it.
-          </p>
-          <div className="p-tpl-grid">
-            {templates.map((t) => (
-              <button key={t.id} type="button" className={`p-tpl${pick === t.id ? ' on' : ''}`} onClick={() => setPick(t.id)} aria-pressed={pick === t.id}>
-                <strong>{t.name}</strong>
-                <span>{t.header.slice(0, 3).join(', ') || 'Simple form'}</span>
-                {t.id === config.template && <em>In use</em>}
-              </button>
-            ))}
-          </div>
-          {chosen && pick !== config.template && (
-            <div className="o-row" style={{ marginTop: 12 }}>
-              <span className="muted" style={{ fontSize: 12 }}>
-                Header: {chosen.header.join(', ')}. Lines: {chosen.line.join(', ')}.
-              </span>
-              <Button variant="danger" onClick={() => setConfirm(true)}>
-                Apply {chosen.name}
-              </Button>
-            </div>
-          )}
-        </div>
+        <TemplatePicker templates={templates} current={config.template} />
 
         <div className="o-panel flush">
           <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
@@ -133,17 +103,40 @@ export function WorkflowClient({ config, templates }: { config: ProcConfig; temp
         </div>
 
         <div className="o-panel">
-          <h2>Industry options</h2>
-          {config.options.length === 0 && <p className="faint">This template has no industry options.</p>}
+          <div className="o-panel-head">
+            <h2>Industry checks</h2>
+            <span className="muted" style={{ fontSize: 12 }}>
+              Switch on, off, or add checks used in other industries
+            </span>
+          </div>
+          {config.options.length === 0 && <p className="faint">No industry checks yet. Add one below.</p>}
           {config.options.map((o) => (
-            <label key={o.id} className="p-opt">
-              <input type="checkbox" checked={options[o.id]} onChange={(e) => setOptions((x) => ({ ...x, [o.id]: e.target.checked }))} />
-              <div>
+            <div key={o.id} className="p-opt">
+              <input type="checkbox" checked={options[o.id] ?? o.on} onChange={(e) => setOptions((x) => ({ ...x, [o.id]: e.target.checked }))} aria-label={o.label} />
+              <div style={{ flex: 1 }}>
                 <strong>{o.label}</strong>
                 <span>{o.desc}</span>
               </div>
-            </label>
+              <button type="button" className="o-btn small" disabled={busy} onClick={() => save(() => removeIndustryCheckAction({ id: o.id }), `${o.label} removed.`)}>
+                Remove
+              </button>
+            </div>
           ))}
+          {available.length > 0 && (
+            <div className="o-row" style={{ marginTop: 12, gap: 8 }}>
+              <select className="o-select" style={{ maxWidth: 420 }} value={addId} onChange={(e) => setAddId(e.target.value)} aria-label="Add an industry check">
+                <option value="">Add a check from any industry…</option>
+                {available.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label} ({c.from})
+                  </option>
+                ))}
+              </select>
+              <Button disabled={!addId || busy} onClick={async () => (await save(() => addIndustryCheckAction({ id: addId }), 'Check added.')) && setAddId('')}>
+                Add check
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="o-panel">
@@ -170,19 +163,6 @@ export function WorkflowClient({ config, templates }: { config: ProcConfig; temp
           </p>
         </div>
       </div>
-      <ConfirmDialog
-        open={confirm}
-        title={`Apply ${chosen?.name ?? ''}?`}
-        variant="danger"
-        confirmLabel="Replace form and workflow"
-        onCancel={() => setConfirm(false)}
-        onConfirm={async () => {
-          setConfirm(false);
-          await save(() => applyTemplateAction({ template: pick }), `${chosen?.name} applied.`);
-        }}
-      >
-        This replaces your requisition form, stage switches and industry options. Requests, stock, suppliers, approval rules and numbering are kept.
-      </ConfirmDialog>
     </>
   );
 }

@@ -65,3 +65,9 @@ export async function saveMoneyAction(input: In<typeof admin.saveMoney>) {
 export async function setPurchaseRoleAction(input: { membershipId: string; role: string }) {
   return runAction((tx, ctx) => admin.setPurchaseRole(tx, ctx, input));
 }
+export async function addIndustryCheckAction(input: { id: string }) {
+  return runAction((tx, ctx) => admin.addIndustryCheck(tx, ctx, input));
+}
+export async function removeIndustryCheckAction(input: { id: string }) {
+  return runAction((tx, ctx) => admin.removeIndustryCheck(tx, ctx, input));
+}

@@ -1,9 +1,10 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, TopBar } from '@orbit/ui';
 import { saveFormAction } from '../../actions';
 import type { FieldType, FormField, ProcConfig } from '../../config';
 import { FieldInput } from '../FieldInput';
+import { TemplatePicker, type TemplateInfo } from './TemplatePicker';
 import { useSave } from './useSave';
 
 const TYPES: { id: FieldType; label: string }[] = [
@@ -20,7 +21,9 @@ const newId = (label: string, taken: string[]) => {
   return id;
 };
 
-function FieldTable({ title, lead, fields, onChange }: { title: string; lead: string; fields: FormField[]; onChange: (f: FormField[]) => void }) {
+function FieldTable({ title, lead, fields, library, onChange }: { title: string; lead: string; fields: FormField[]; library: FormField[]; onChange: (f: FormField[]) => void }) {
+  const taken = new Set(fields.map((f) => f.label.toLowerCase()));
+  const extra = library.filter((f) => !taken.has(f.label.toLowerCase()));
   const set = (i: number, p: Partial<FormField>) => onChange(fields.map((f, j) => (j === i ? { ...f, ...p } : f)));
   const move = (i: number) => {
     const next = [...fields];
@@ -92,14 +95,40 @@ function FieldTable({ title, lead, fields, onChange }: { title: string; lead: st
           + Add field
         </button>
       </div>
+      {extra.length > 0 && (
+        <div className="p-lib">
+          <span>Quick add:</span>
+          {extra.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => onChange([...fields, { ...f, id: newId(f.label, fields.map((x) => x.id)) }])}
+              title={`Add "${f.label}"`}
+            >
+              + {f.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 /** Admin > Requisition form: header and line fields, with a live preview. */
-export function FormClient({ form }: { form: ProcConfig['form'] }) {
+export function FormClient({
+  form,
+  templates,
+  current,
+  library,
+}: {
+  form: ProcConfig['form'];
+  templates: TemplateInfo[];
+  current: string;
+  library: { header: FormField[]; line: FormField[] };
+}) {
   const { busy, save } = useSave();
   const [v, setV] = useState(form);
+  useEffect(() => setV(form), [form]);
   return (
     <>
       <TopBar crumbs={['Purchase', 'Admin', 'Requisition form']} />
@@ -113,6 +142,7 @@ export function FormClient({ form }: { form: ProcConfig['form'] }) {
             Save form
           </Button>
         </div>
+        <TemplatePicker templates={templates} current={current} />
         <div className="o-panel">
           <div className="o-grid2">
             <label className="o-field">
@@ -125,8 +155,8 @@ export function FormClient({ form }: { form: ProcConfig['form'] }) {
             </label>
           </div>
         </div>
-        <FieldTable title="Header fields" lead="Asked once per request: drawing refs, packages, certificates" fields={v.header} onChange={(header) => setV({ ...v, header })} />
-        <FieldTable title="Line fields" lead="Columns next to description, quantity, unit and rate" fields={v.line} onChange={(line) => setV({ ...v, line })} />
+        <FieldTable title="Header fields" lead="Asked once per request: drawing refs, packages, certificates" fields={v.header} library={library.header} onChange={(header) => setV({ ...v, header })} />
+        <FieldTable title="Line fields" lead="Columns next to description, quantity, unit and rate" fields={v.line} library={library.line} onChange={(line) => setV({ ...v, line })} />
         <div className="o-panel p-preview">
           <span className="p-preview-tag">Live preview</span>
           <div className="p-fields">

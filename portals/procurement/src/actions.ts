@@ -71,3 +71,6 @@ export async function addIndustryCheckAction(input: { id: string }) {
 export async function removeIndustryCheckAction(input: { id: string }) {
   return runAction((tx, ctx) => admin.removeIndustryCheck(tx, ctx, input));
 }
+export async function setAdminCoversAction(input: { membershipId: string; roles: string[] }) {
+  return runAction((tx, ctx) => admin.setAdminCovers(tx, ctx, input));
+}

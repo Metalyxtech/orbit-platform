@@ -45,9 +45,11 @@ describe('purchase workflow', () => {
     expect(ownerRole(cfg, 'rfq', null)).toBe('buyer');
     expect(ownerRole(cfg, 'receiving', null)).toBe('store');
     expect(ownerRole(cfg, 'po_approval', cfg.levels[1])).toBe('gm');
-    expect(canAct('buyer', 'buyer')).toBe(true);
-    expect(canAct('store', 'buyer')).toBe(false);
-    expect(canAct('admin', 'qc')).toBe(true);
+    expect(canAct(['buyer'], 'buyer')).toBe(true);
+    expect(canAct(['store'], 'buyer')).toBe(false);
+    // An admin acts only on the roles they cover, not on every step.
+    expect(canAct(['admin'], 'qc')).toBe(false);
+    expect(canAct(['admin', 'qc'], 'qc')).toBe(true);
   });
 
   it('tracks partial receipts and the invoice match', () => {

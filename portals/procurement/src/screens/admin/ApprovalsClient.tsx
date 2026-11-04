@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Button, TopBar } from '@orbit/ui';
+import { SaveBar, TopBar } from '@orbit/ui';
 import { saveLevelsAction } from '../../actions';
 import { PROC_ROLES, roleLabel, type ApprovalLevel, type ProcRole } from '../../config';
 import { fmtMoney } from '../ui';
@@ -24,9 +24,6 @@ export function ApprovalsClient({ levels: initial, currency }: { levels: Approva
             <h1>Approval rules</h1>
             <p>Each level signs off in order once the value reaches its threshold. Requisitions use the estimate of what is bought; POs use the awarded value.</p>
           </div>
-          <Button variant="primary" disabled={busy} onClick={() => save(() => saveLevelsAction(levels), 'Approval rules saved.')}>
-            Save rules
-          </Button>
         </div>
         <div className="o-panel flush">
           <div className="o-scroll">
@@ -111,6 +108,14 @@ export function ApprovalsClient({ levels: initial, currency }: { levels: Approva
             ))}
           </div>
         </div>
+        <SaveBar
+          dirty={JSON.stringify(levels) !== JSON.stringify(initial)}
+          busy={busy}
+          what="the approval rules"
+          impact="Requests already waiting keep their approvers; the new rules apply from the next approval step."
+          onDiscard={() => setLevels(initial)}
+          onSave={() => save(() => saveLevelsAction(levels), 'Approval rules saved.')}
+        />
       </div>
     </>
   );

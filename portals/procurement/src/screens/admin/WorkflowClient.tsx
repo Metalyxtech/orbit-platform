@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Button, TopBar } from '@orbit/ui';
+import { Button, SaveBar, TopBar, useConfirm } from '@orbit/ui';
 import { addIndustryCheckAction, removeIndustryCheckAction, saveWorkflowAction } from '../../actions';
 import { PROC_ROLES, STAGES, WORK, type ProcConfig, type StageKey } from '../../config';
 import { TemplatePicker, type TemplateInfo } from './TemplatePicker';
@@ -12,10 +12,19 @@ export function WorkflowClient({ config, templates, checks }: { config: ProcConf
   const [addId, setAddId] = useState('');
   const available = checks.filter((c) => !config.options.some((o) => o.id === c.id));
   const { busy, save } = useSave();
+  const { confirm, dialog } = useConfirm();
   const [flow, setFlow] = useState(config.flow);
   const [stageCfg, setStageCfg] = useState(config.stageCfg);
   const [minQuotes, setMinQuotes] = useState(config.minQuotes);
   const [options, setOptions] = useState(Object.fromEntries(config.options.map((o) => [o.id, o.on])));
+  const initial = JSON.stringify({ flow: config.flow, stageCfg: config.stageCfg, minQuotes: config.minQuotes, options: Object.fromEntries(config.options.map((o) => [o.id, o.on])) });
+  const draft = JSON.stringify({ flow, stageCfg, minQuotes, options });
+  const discard = () => {
+    setFlow(config.flow);
+    setStageCfg(config.stageCfg);
+    setMinQuotes(config.minQuotes);
+    setOptions(Object.fromEntries(config.options.map((o) => [o.id, o.on])));
+  };
   const stages: StageKey[] = [...WORK, 'stock_issue'];
   const label = (k: StageKey) => stageCfg[k]?.label || STAGES[k].label;
   const on = (k: StageKey) => !STAGES[k].optional || flow[k as keyof typeof flow];
@@ -29,13 +38,6 @@ export function WorkflowClient({ config, templates, checks }: { config: ProcConf
             <h1>Purchase workflow</h1>
             <p>How every request moves in your company. Changes apply to requests as they move forward.</p>
           </div>
-          <Button
-            variant="primary"
-            disabled={busy}
-            onClick={() => save(() => saveWorkflowAction({ flow, stageCfg: stageCfg as Record<string, { label?: string; role?: (typeof PROC_ROLES)[number]['id'] }>, minQuotes, options }), 'Workflow saved.')}
-          >
-            Save workflow
-          </Button>
         </div>
 
         <TemplatePicker templates={templates} current={config.template} />
@@ -117,7 +119,20 @@ export function WorkflowClient({ config, templates, checks }: { config: ProcConf
                 <strong>{o.label}</strong>
                 <span>{o.desc}</span>
               </div>
-              <button type="button" className="o-btn small" disabled={busy} onClick={() => save(() => removeIndustryCheckAction({ id: o.id }), `${o.label} removed.`)}>
+              <button
+                type="button"
+                className="o-btn small"
+                disabled={busy}
+                onClick={() =>
+                  confirm({
+                    title: `Remove "${o.label}"?`,
+                    body: 'Requests that reach this step will no longer ask for it. You can add it back later.',
+                    label: 'Remove check',
+                    danger: true,
+                    run: () => void save(() => removeIndustryCheckAction({ id: o.id }), `${o.label} removed.`),
+                  })
+                }
+              >
                 Remove
               </button>
             </div>
@@ -132,7 +147,17 @@ export function WorkflowClient({ config, templates, checks }: { config: ProcConf
                   </option>
                 ))}
               </select>
-              <Button disabled={!addId || busy} onClick={async () => (await save(() => addIndustryCheckAction({ id: addId }), 'Check added.')) && setAddId('')}>
+              <Button
+                disabled={!addId || busy}
+                onClick={() =>
+                  confirm({
+                    title: `Add "${available.find((c) => c.id === addId)?.label}"?`,
+                    body: 'Requests that reach this step will ask for it from now on.',
+                    label: 'Add check',
+                    run: () => void save(() => addIndustryCheckAction({ id: addId }), 'Check added.').then((ok) => ok && setAddId('')),
+                  })
+                }
+              >
                 Add check
               </Button>
             </div>
@@ -162,7 +187,16 @@ export function WorkflowClient({ config, templates, checks }: { config: ProcConf
             Struck-through stages are skipped.
           </p>
         </div>
+        <SaveBar
+          dirty={draft !== initial}
+          busy={busy}
+          what="the purchase workflow"
+          impact="Requests move by the new stages and owners from their next step."
+          onDiscard={discard}
+          onSave={() => save(() => saveWorkflowAction({ flow, stageCfg: stageCfg as Record<string, { label?: string; role?: (typeof PROC_ROLES)[number]['id'] }>, minQuotes, options }), 'Workflow saved.')}
+        />
       </div>
+      {dialog}
     </>
   );
 }

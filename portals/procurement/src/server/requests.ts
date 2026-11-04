@@ -23,7 +23,7 @@ import {
   withinTolerance,
 } from '../engine';
 import { holdersOf } from './team';
-import { loadConfig, moneyText, myRole, nextNumber, peopleById, requireRole, today } from './shared';
+import { loadConfig, moneyText, myRole, myRoles, nextNumber, peopleById, requireRole, today } from './shared';
 
 type Req = typeof procRequests.$inferSelect;
 type Line = typeof procLines.$inferSelect;
@@ -65,7 +65,7 @@ async function stageValue(tx: Tx, r: Req, lines: Line[], stage: Stage) {
 
 export async function requestDetail(tx: Tx, ctx: SessionContext, id: string) {
   const cfg = await loadConfig(tx, ctx.companyId);
-  const me = await myRole(tx, ctx);
+  const { role: me, roles } = await myRoles(tx, ctx);
   const [r] = await tx.select().from(procRequests).where(and(eq(procRequests.id, id), eq(procRequests.companyId, ctx.companyId)));
   if (!r) return null;
   const [lines, quotes, receipts, events] = await Promise.all([
@@ -190,8 +190,8 @@ export async function requestDetail(tx: Tx, ctx: SessionContext, id: string) {
       };
     }),
     owner: owner ? { role: owner, label: roleLabel(owner), people: await holdersOf(tx, ctx, owner) } : null,
-    canAct: canAct(me, owner),
-    canIssueStock: (me === 'store' || me === 'admin') && lines.some((l) => l.reserveState === 'reserved') && stage !== 'rejected',
+    canAct: canAct(roles, owner),
+    canIssueStock: roles.includes('store') && lines.some((l) => l.reserveState === 'reserved') && stage !== 'rejected',
     fullyReceived: fullyReceived(lines, received),
   };
 }
@@ -203,7 +203,7 @@ export type RequestFilter = 'open' | 'mine' | 'action' | 'closed' | 'all';
 /** Request list with stage, value, owner and age. */
 export async function listRequests(tx: Tx, ctx: SessionContext, opts: { filter?: RequestFilter; q?: string; poOnly?: boolean } = {}) {
   const cfg = await loadConfig(tx, ctx.companyId);
-  const me = await myRole(tx, ctx);
+  const { roles } = await myRoles(tx, ctx);
   const rows = await tx.select().from(procRequests).where(eq(procRequests.companyId, ctx.companyId)).orderBy(desc(procRequests.createdAt)).limit(500);
   const ids = rows.map((r) => r.id);
   const [lines, quotes, approvals] = ids.length
@@ -233,7 +233,7 @@ export async function listRequests(tx: Tx, ctx: SessionContext, opts: { filter?:
       stageLabel: stageLabel(cfg, stage),
       owner: owner ? roleLabel(owner) : null,
       ownerRole: owner,
-      actionable: canAct(me, owner),
+      actionable: canAct(roles, owner),
       value,
       supplier: aw?.supplier ?? null,
       poNo: r.poNo,
@@ -291,7 +291,7 @@ async function advance(tx: Tx, ctx: ActionContext, cfg: ProcConfig, r: Req) {
 /** Checks the stage and that this person's role owns it. */
 async function begin(tx: Tx, ctx: ActionContext, id: string, stage: Stage) {
   const cfg = await loadConfig(tx, ctx.companyId);
-  const me = await myRole(tx, ctx);
+  const { role: me, roles } = await myRoles(tx, ctx);
   const r = await lockRequest(tx, ctx, id);
   if (r.stage !== stage) throw new Error(`This request is at ${stageLabel(cfg, r.stage as Stage)} now. Refresh the page.`);
   const lines = await linesOf(tx, id);
@@ -300,7 +300,7 @@ async function begin(tx: Tx, ctx: ActionContext, id: string, stage: Stage) {
       ? pendingLevel(cfg, stage, await stageValue(tx, r, lines, stage), await approvedLevels(tx, id, stage))
       : null;
   const owner = ownerRole(cfg, stage, pending);
-  if (!canAct(me, owner)) throw new Error(`Only the ${owner ? roleLabel(owner).toLowerCase() : 'owner'} can do this step`);
+  if (!canAct(roles, owner)) throw new Error(`Only the ${owner ? roleLabel(owner).toLowerCase() : 'owner'} can do this step`);
   return { cfg, me, r, lines, pending };
 }
 
@@ -382,7 +382,7 @@ export async function stockCheck(tx: Tx, ctx: ActionContext, raw: { id: string; 
 export async function issueStock(tx: Tx, ctx: ActionContext, raw: { id: string }) {
   const { id } = idOnly.parse(raw);
   const cfg = await loadConfig(tx, ctx.companyId);
-  requireRole(await myRole(tx, ctx), 'store');
+  if (!(await myRoles(tx, ctx)).roles.includes('store')) throw new Error('Only the storekeeper (or an admin covering that role) can issue stock');
   const r = await lockRequest(tx, ctx, id);
   const lines = (await linesOf(tx, id)).filter((l) => l.reserveState === 'reserved' && l.itemId);
   if (lines.length === 0) throw new Error('Nothing reserved to issue');

@@ -17,6 +17,14 @@ export async function myRole(tx: Tx, ctx: SessionContext): Promise<ProcRole> {
   return portalRoleFor(procurementManifest, ctx.role, stored) as ProcRole;
 }
 
+/** The person's purchase role plus any roles they cover (admins only). Workflow steps use this list. */
+export async function myRoles(tx: Tx, ctx: SessionContext): Promise<{ role: ProcRole; roles: ProcRole[] }> {
+  const role = await myRole(tx, ctx);
+  if (role !== 'admin') return { role, roles: [role] };
+  const cfg = await loadConfig(tx, ctx.companyId);
+  return { role, roles: ['admin', ...(cfg.covers?.[ctx.membershipId] ?? [])] };
+}
+
 export function requireRole(me: ProcRole, ...roles: ProcRole[]) {
   if (me !== 'admin' && !roles.includes(me)) throw new Error('Your purchase role cannot do this');
 }

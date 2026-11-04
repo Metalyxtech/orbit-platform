@@ -3,7 +3,7 @@ import { legacyPortal, portalRoleFor, readMemberPortals, readPortalRoles, type S
 import { companyPortals, memberships, users, type Tx } from '@orbit/db';
 import type { ProcRole } from '../config';
 import { procurementManifest } from '../manifest';
-import { PORTAL } from './shared';
+import { loadConfig, PORTAL } from './shared';
 
 export interface TeamMember {
   membershipId: string;
@@ -12,6 +12,8 @@ export interface TeamMember {
   title: string | null;
   companyRole: SessionContext['role'];
   purchaseRole: ProcRole;
+  /** Extra roles a purchase admin covers. */
+  covers: ProcRole[];
   /** on = can open the Purchase portal; requested = waiting for Orbit; off = no access. */
   access: 'on' | 'requested' | 'off';
 }
@@ -24,10 +26,11 @@ export async function purchaseTeam(tx: Tx, ctx: SessionContext): Promise<TeamMem
     .innerJoin(users, eq(users.id, memberships.userId))
     .where(and(eq(memberships.companyId, ctx.companyId), eq(memberships.status, 'active')));
   const ids = people.map((p) => p.id);
-  const [roles, rows, cp] = await Promise.all([
+  const [roles, rows, cp, cfg] = await Promise.all([
     readPortalRoles(tx, PORTAL, ids),
     readMemberPortals(tx, ids),
     tx.select({ enabled: companyPortals.enabled }).from(companyPortals).where(and(eq(companyPortals.companyId, ctx.companyId), eq(companyPortals.portal, PORTAL))),
+    loadConfig(tx, ctx.companyId),
   ]);
   const companyOn = cp[0]?.enabled === true;
   return people
@@ -47,14 +50,17 @@ export async function purchaseTeam(tx: Tx, ctx: SessionContext): Promise<TeamMem
         title: p.title,
         companyRole: p.role,
         purchaseRole: portalRoleFor(procurementManifest, p.role, roles.get(p.id)) as ProcRole,
+        covers: p.role === 'company_admin' ? (cfg.covers?.[p.id] ?? []) : [],
         access,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Names of the people who hold a purchase role (and can open the portal). */
+/** Names of the people who hold a purchase role (and can open the portal), including admins covering it. */
 export async function holdersOf(tx: Tx, ctx: SessionContext, role: ProcRole | null) {
   if (!role) return [];
-  return (await purchaseTeam(tx, ctx)).filter((m) => m.access === 'on' && m.purchaseRole === role).map((m) => m.name);
+  return (await purchaseTeam(tx, ctx))
+    .filter((m) => m.access === 'on' && (m.purchaseRole === role || m.covers.includes(role)))
+    .map((m) => (m.purchaseRole === role ? m.name : `${m.name} (admin, covering)`));
 }

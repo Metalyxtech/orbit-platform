@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Button, TopBar } from '@orbit/ui';
+import { SaveBar, TopBar } from '@orbit/ui';
 import { saveMoneyAction } from '../../actions';
 import type { ProcConfig } from '../../config';
 import { useSave } from './useSave';
@@ -8,7 +8,8 @@ import { useSave } from './useSave';
 /** Admin > Money and numbering: currency, tax, invoice tolerance and number prefixes. */
 export function MoneyClient({ money, numbering }: { money: ProcConfig['money']; numbering: ProcConfig['numbering'] }) {
   const { busy, save } = useSave();
-  const [v, setV] = useState({ ...money, ...numbering });
+  const initial = { ...money, ...numbering };
+  const [v, setV] = useState(initial);
   const set = (p: Partial<typeof v>) => setV((x) => ({ ...x, ...p }));
   return (
     <>
@@ -19,9 +20,6 @@ export function MoneyClient({ money, numbering }: { money: ProcConfig['money']; 
             <h1>Money and numbering</h1>
             <p>Currency, tax and the numbers on requisitions and purchase orders.</p>
           </div>
-          <Button variant="primary" disabled={busy} onClick={() => save(() => saveMoneyAction(v), 'Settings saved.')}>
-            Save settings
-          </Button>
         </div>
         <div className="o-panel" style={{ maxWidth: 720 }}>
           <h2>Money and tax</h2>
@@ -60,6 +58,14 @@ export function MoneyClient({ money, numbering }: { money: ProcConfig['money']; 
             </label>
           </div>
         </div>
+        <SaveBar
+          dirty={JSON.stringify(v) !== JSON.stringify(initial)}
+          busy={busy}
+          what="money and numbering"
+          impact="New requisitions, POs and invoice checks use these settings."
+          onDiscard={() => setV(initial)}
+          onSave={() => save(() => saveMoneyAction(v), 'Settings saved.')}
+        />
       </div>
     </>
   );

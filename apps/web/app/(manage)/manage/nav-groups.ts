@@ -4,7 +4,7 @@ import { portalNavItems } from '@/portal-nav';
 import { portalModules } from '@/portals';
 import type { Group } from './ManageNav';
 
-type Counts = { waiting: number; unread: number };
+type Counts = { waiting: number; unread: number; badges: Record<string, number>; roles: Record<string, string | null> };
 
 /**
  * Sidebar groups for the Management workspace:
@@ -33,16 +33,23 @@ export function manageNavGroups(ctx: SessionContext, ws: Workspace, portals: str
     },
   ];
   for (const p of open) {
-    const items = portalNavItems(p, ctx, { approvals: c.waiting }).filter((n) => n.section === 'main');
+    const items = portalNavItems(p, ctx, { approvals: c.badges[p] }, c.roles[p]).filter((n) => n.section === 'main');
     groups.push({
       title: name(p),
       items: [...(ws.modules[p] ? [{ href: `/manage/${p}`, label: 'Insights and charts' }] : []), ...items],
     });
   }
   if (ctx.role === 'company_admin') {
+    groups.push({
+      title: 'Company',
+      items: [
+        { href: '/manage/company/people', label: 'People and portals' },
+        { href: '/manage/company/portals', label: 'Company portals' },
+      ],
+    });
     for (const p of open) {
-      const items = portalNavItems(p, ctx).filter((n) => n.section === 'admin');
-      groups.push({ title: open.length > 1 ? `${name(p)} admin` : 'Company admin', items });
+      const items = portalNavItems(p, ctx, {}, c.roles[p]).filter((n) => n.section === 'admin');
+      groups.push({ title: `${name(p)} admin`, items });
     }
   }
   return groups;

@@ -1,7 +1,9 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { companyPortals, memberPortals, type Tx } from '@orbit/db';
+import { legacyPortal } from './portals';
 
 export type MemberPortalStatus = 'requested' | 'active' | 'off';
+
 export type MemberPortalRow = { membershipId: string; portal: string; status: MemberPortalStatus };
 
 const pgCode = (err: unknown) => (err as { code?: string; cause?: { code?: string } })?.code ?? (err as { cause?: { code?: string } })?.cause?.code;
@@ -73,7 +75,7 @@ export async function setMemberPortal(tx: Tx, companyId: string, membershipId: s
           .select({ portal: companyPortals.portal })
           .from(companyPortals)
           .where(and(eq(companyPortals.companyId, companyId), eq(companyPortals.enabled, true)));
-        const others = on.map((r) => r.portal).filter((p) => p !== portal);
+        const others = on.map((r) => r.portal).filter((p) => p !== portal && legacyPortal(p));
         if (others.length) {
           await sp.insert(memberPortals).values(others.map((p) => ({ companyId, membershipId, portal: p, status: 'active' as const })));
         }

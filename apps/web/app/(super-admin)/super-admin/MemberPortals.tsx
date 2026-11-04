@@ -1,4 +1,5 @@
 import type { MemberPortalRow } from '@orbit/core';
+import { legacyPortal } from '@orbit/core/portals';
 import { setMemberPortalAction } from './actions';
 
 type CompanyPortal = { id: string; name: string; state: 'on' | 'requested' | 'none' };
@@ -30,7 +31,7 @@ export function MemberPortals({
     <div className="o-stack" style={{ gap: 4 }}>
       {shown.map((p) => {
         const row = mine.find((m) => m.portal === p.id);
-        const status = row ? row.status : mine.length === 0 && p.state === 'on' ? 'active' : 'off';
+        const status = row ? row.status : mine.length === 0 && p.state === 'on' && legacyPortal(p.id) ? 'active' : 'off';
         const tone = status === 'active' ? 'ok' : status === 'requested' ? 'warn' : '';
         const label = status === 'active' ? 'On' : status === 'requested' ? 'Requested' : 'Off';
         return (

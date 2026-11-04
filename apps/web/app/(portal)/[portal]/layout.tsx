@@ -1,12 +1,12 @@
 import { notFound, redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { getSession, query } from '@orbit/core/next';
-import { approvals } from '@orbit/portal-timesheet/server';
 import { AppShell } from '@orbit/ui';
 import { unreadCount } from '@/messages';
 import { isManager, workspaceFor } from '@/management/workspaces';
 import { accessiblePortals } from '@/portal-access';
 import { portalNavItems } from '@/portal-nav';
+import { portalRolesFor, queueCounts } from '@/portal-role';
 import { BRAND, portalModules } from '@/portals';
 import { switchCompanyAction } from '@/session-actions';
 
@@ -17,25 +17,28 @@ export default async function PortalLayout({ children, params }: { children: Rea
   const mod = portalModules[portal];
   if (!mod) notFound();
 
-  const { ctx, enabled, waiting, unread } = await query(async (tx, ctx) => {
-    const isApprover = ctx.role !== 'employee';
-    return {
-      ctx,
-      enabled: await accessiblePortals(tx, ctx),
-      waiting: isApprover ? await approvals.countMine(tx, ctx) : 0,
-      unread: await unreadCount(tx, ctx),
-    };
-  });
+  const { ctx, enabled, waiting, unread, portalRole } = await query(async (tx, ctx) => ({
+    ctx,
+    enabled: await accessiblePortals(tx, ctx),
+    waiting: (await queueCounts(tx, ctx, [portal]))[portal],
+    unread: await unreadCount(tx, ctx),
+    portalRole: (await portalRolesFor(tx, ctx, [portal]))[portal],
+  }));
   if (!enabled.includes(portal)) redirect('/');
   const session = await getSession();
   const companies = session.state === 'ok' ? session.companies : [];
 
-  const nav = portalNavItems(portal, ctx, { approvals: waiting });
+  const nav = portalNavItems(portal, ctx, { approvals: waiting }, portalRole);
   // Management and admins get a way back to the Management workspace from any portal.
   if (isManager(ctx)) {
     nav.unshift({ href: workspaceFor(ctx).modules[portal] ? `/manage/${portal}` : '/manage', label: 'Management view', section: 'main', badge: undefined });
   }
   nav.push({ href: '/manage/messages', label: 'Messages', section: 'main', badge: unread || undefined });
+  // Company-wide admin pages, reachable from every portal.
+  if (ctx.role === 'company_admin') {
+    nav.push({ href: '/manage/company/people', label: 'People and portals', section: 'admin', badge: undefined });
+    nav.push({ href: '/manage/company/portals', label: 'Company portals', section: 'admin', badge: undefined });
+  }
 
   return (
     <AppShell

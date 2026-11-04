@@ -24,10 +24,10 @@ export function PeopleClient({ data, me }: { data: PeopleData; me: string }) {
   const name = (p: string) => data.portals.find((x) => x.id === p)?.name ?? p;
   const rows = data.people.filter((p) => !q || `${p.name} ${p.email} ${p.title ?? ''}`.toLowerCase().includes(q.toLowerCase()));
 
-  async function change(p: Person, portal: string, action: 'request' | 'remove' | 'cancel') {
+  async function change(p: Person, portal: string, action: 'grant' | 'remove') {
     const res = await changePersonPortalAction({ membershipId: p.membershipId, portal, action });
     if (!res.ok) return toast(res.error, 'bad');
-    toast(action === 'request' ? (res.data.status === 'active' ? 'Already on.' : `${name(portal)} requested for ${p.name}. Orbit will review it.`) : `${name(portal)} removed for ${p.name}.`);
+    toast(action === 'grant' ? `${p.name} can now open ${name(portal)}.` : `${name(portal)} removed for ${p.name}.`);
     router.refresh();
   }
   async function setRole(p: Person, portal: string, role: string) {
@@ -42,7 +42,7 @@ export function PeopleClient({ data, me }: { data: PeopleData; me: string }) {
       <div className="o-page-head">
         <div>
           <h1>People and portals</h1>
-          <p>Give each person the portals they need. A new portal for a person is a request Orbit approves; removing one is immediate.</p>
+          <p>Give each person the portals your company has, and their role inside each. Changes apply straight away. New portals for the company are requested in Company portals.</p>
         </div>
         <div className="o-row">
           <Link className="o-btn" href="/manage/company/portals">
@@ -94,10 +94,10 @@ export function PeopleClient({ data, me }: { data: PeopleData; me: string }) {
                       <td key={portal.id} style={{ minWidth: 190 }}>
                         <div className="o-stack" style={{ gap: 6 }}>
                           <div className="o-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
-                            <Chip tone={a === 'on' ? 'ok' : a === 'requested' ? 'warn' : 'grey'}>{a === 'on' ? 'On' : a === 'requested' ? 'Waiting for Orbit' : 'Off'}</Chip>
+                            <Chip tone={a === 'on' ? 'ok' : a === 'requested' ? 'warn' : 'grey'}>{a === 'on' ? 'On' : a === 'requested' ? 'Asked for' : 'Off'}</Chip>
                             {!all && p.status !== 'disabled' && (
-                              <Button size="small" variant={a === 'off' ? 'ok' : undefined} onClick={() => change(p, portal.id, a === 'on' ? 'remove' : a === 'requested' ? 'cancel' : 'request')}>
-                                {a === 'on' ? 'Remove' : a === 'requested' ? 'Cancel' : 'Request'}
+                              <Button size="small" variant={a === 'on' ? undefined : 'ok'} onClick={() => change(p, portal.id, a === 'on' ? 'remove' : 'grant')}>
+                                {a === 'on' ? 'Remove' : a === 'requested' ? 'Approve' : 'Give access'}
                               </Button>
                             )}
                           </div>
@@ -143,7 +143,7 @@ function AddPerson({ portals, onDone }: { portals: PeopleData['portals']; onDone
     const res = await addPersonAction({ ...v, role: v.role as 'employee', title: v.title || undefined, portals: every ? portals.map((p) => p.id) : picked, portalRoles: roles });
     setBusy(false);
     if (!res.ok) return toast(res.error, 'bad');
-    toast(res.data.needsApproval ? `${v.name} added. Their portals are waiting for Orbit to approve.` : `${v.name} added with every portal.`);
+    toast(every ? `${v.name} added with every portal.` : `${v.name} added. They can sign in now.`);
     onDone();
     router.refresh();
   }
@@ -151,7 +151,7 @@ function AddPerson({ portals, onDone }: { portals: PeopleData['portals']; onDone
     <div className="o-panel">
       <h2>Add person</h2>
       <p className="muted" style={{ fontSize: 12, marginTop: -6 }}>
-        They sign in with this email. You choose their portals; Orbit approves them.
+        They sign in with this email and land in the portals you choose, with the role you pick.
       </p>
       <div className="o-grid2">
         <label className="o-field">

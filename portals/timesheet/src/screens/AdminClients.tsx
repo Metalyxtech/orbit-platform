@@ -1037,9 +1037,7 @@ function PortalCell({ user, access }: { user: UserRow; access: PortalAccess }) {
     if (!res.ok) return toast(res.error, 'bad');
     toast(
       action === 'request'
-        ? res.data.status === 'active'
-          ? 'Already on.'
-          : `${portalName(portal)} requested for ${user.name}. Orbit will review it.`
+        ? `${user.name} can now open ${portalName(portal)}.`
         : `${portalName(portal)} removed for ${user.name}.`,
     );
     router.refresh();
@@ -1052,20 +1050,16 @@ function PortalCell({ user, access }: { user: UserRow; access: PortalAccess }) {
         return (
           <div key={cp.portal} className="o-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
             <span className={`o-chip ${status === 'active' ? 'ok' : status === 'requested' ? 'warn' : ''}`}>
-              {portalName(cp.portal)}: {status === 'active' ? 'On' : status === 'requested' ? 'Waiting for Orbit' : 'Off'}
+              {portalName(cp.portal)}: {status === 'active' ? 'On' : status === 'requested' ? 'Asked for' : 'Off'}
             </span>
             {user.status !== 'disabled' &&
               (status === 'active' ? (
                 <Button size="small" onClick={() => change(cp.portal, 'remove')}>
                   Remove
                 </Button>
-              ) : status === 'requested' ? (
-                <Button size="small" onClick={() => change(cp.portal, 'cancel')}>
-                  Cancel
-                </Button>
               ) : (
                 <Button size="small" variant="ok" onClick={() => change(cp.portal, 'request')}>
-                  Request
+                  {status === 'requested' ? 'Approve' : 'Give access'}
                 </Button>
               ))}
           </div>

@@ -48,7 +48,7 @@ h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
 
 /* ---------- App shell ---------- */
 .o-shell { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
-.o-side { background: var(--graphite); color: #d6dbe0; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
+.o-side { background: var(--graphite); color: #d6dbe0; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #3a424b transparent; }
 .o-brand { display: flex; gap: 10px; align-items: center; padding: 18px 16px; border-bottom: 1px solid var(--graphite-2); }
 .o-brand-mark { width: 30px; height: 30px; border: 1.5px solid #fff; border-radius: 50%; display: grid; place-items: center; position: relative; }
 .o-brand-mark::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--hivis); position: absolute; top: -3px; right: 2px; }
@@ -379,3 +379,18 @@ h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
 .p-flow em { font-style: normal; color: var(--ink-3); }
 .p-preview { border-style: dashed; position: relative; padding-top: 28px; }
 .p-preview-tag { position: absolute; top: 8px; left: 12px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); }
+
+/* Sidebar: scrolls inside the dark panel; groups fold */
+.o-side-scroll { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #3a424b transparent; }
+.o-nav-group + .o-nav-group { border-top: 1px solid rgba(255, 255, 255, 0.04); }
+.o-nav-toggle { width: 100%; display: flex; align-items: center; gap: 8px; background: none; border: 0; font: inherit; font-size: 11px; color: #9aa3ab; padding: 14px 16px 6px; cursor: pointer; text-align: left; text-transform: uppercase; letter-spacing: 0.05em; }
+.o-nav-toggle span:first-child { flex: 1; }
+.o-nav-toggle i { font-style: normal; font-size: 14px; color: #7d868e; width: 12px; text-align: center; }
+.o-nav-toggle:hover, .o-nav-toggle:hover i { color: #fff; }
+.o-side .o-nav-title { text-transform: uppercase; letter-spacing: 0.05em; }
+.o-nav-group.closed .o-nav { display: none; }
+@media (max-width: 767px) {
+  .o-nav-toggle { display: none; }
+  .o-nav-group.closed .o-nav { display: flex; }
+  .o-side-scroll { flex-direction: row; overflow-x: auto; }
+}

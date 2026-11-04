@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
-import { audit, legacyPortal, portalRoleFor, readMemberPortals, readPortalRoles, requestMemberPortals, setMemberPortal, writePortalRole, type ActionContext, type SessionContext } from '@orbit/core';
+import { activateRequestedPortals, audit, legacyPortal, portalRoleFor, readMemberPortals, readPortalRoles, requestMemberPortals, setMemberPortal, writePortalRole, type ActionContext, type SessionContext } from '@orbit/core';
 import { companyPortals, memberships, users, type Tx } from '@orbit/db';
 import { portalModules } from '../portals';
 
@@ -51,9 +51,12 @@ export async function peopleAndPortals(tx: Tx, ctx: SessionContext) {
 }
 export type PeopleData = Awaited<ReturnType<typeof peopleAndPortals>>;
 
-const changeInput = z.object({ membershipId: z.uuid(), portal: z.string().min(1).max(40), action: z.enum(['request', 'remove', 'cancel']) });
+const changeInput = z.object({ membershipId: z.uuid(), portal: z.string().min(1).max(40), action: z.enum(['grant', 'remove']) });
 
-/** Adding a portal for a person is a request Orbit approves; removing one takes effect at once. */
+/**
+ * Gives or removes a portal for one person. Orbit approves each portal once for the company
+ * (Company portals); inside those, the company admin decides who uses what, effective at once.
+ */
 export async function changePersonPortal(tx: Tx, ctx: ActionContext, raw: z.input<typeof changeInput>) {
   requireAdmin(ctx);
   const input = changeInput.parse(raw);
@@ -62,9 +65,7 @@ export async function changePersonPortal(tx: Tx, ctx: ActionContext, raw: z.inpu
   if (m.role === 'company_admin' || m.role === 'management') throw new Error('Admins and management use every portal the company has');
   const [cp] = await tx.select({ enabled: companyPortals.enabled }).from(companyPortals).where(and(eq(companyPortals.companyId, ctx.companyId), eq(companyPortals.portal, input.portal)));
   if (!cp?.enabled) throw new Error('Your company does not have that portal yet. Request it in Company portals first.');
-  const current = (await readMemberPortals(tx, [m.id])).find((r) => r.portal === input.portal);
-  if (input.action === 'request' && current?.status === 'active') return { status: 'active' as const };
-  const status = input.action === 'request' ? ('requested' as const) : ('off' as const);
+  const status = input.action === 'grant' ? ('active' as const) : ('off' as const);
   await setMemberPortal(tx, ctx.companyId, m.id, input.portal, status);
   await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: `member_portal.${input.action}`, entity: 'memberships', entityId: m.id, data: { portal: input.portal }, requestId: ctx.requestId });
   return { status };
@@ -96,8 +97,8 @@ const addInput = z.object({
 });
 
 /**
- * Adds a person with the portals they should use. The person can sign in straight away; each portal
- * is a request that Orbit (Super Admin) approves. Admins and management get every portal.
+ * Adds a person with the portals they should use (any portal the company has). They can sign in and
+ * use them straight away. Admins and management get every portal.
  */
 export async function addPerson(tx: Tx, ctx: ActionContext, raw: z.input<typeof addInput>) {
   requireAdmin(ctx);
@@ -115,8 +116,11 @@ export async function addPerson(tx: Tx, ctx: ActionContext, raw: z.input<typeof 
     .values({ companyId: ctx.companyId, userId: user.id, role: input.role, title: input.title || null, status: 'active' })
     .returning({ id: memberships.id });
   const everyPortal = input.role === 'company_admin' || input.role === 'management';
-  // A new person has no portal rows yet: record exactly the portals asked for (not the legacy set).
-  if (!everyPortal) await requestMemberPortals(tx, ctx.companyId, m.id, input.portals);
+  // A new person has no portal rows yet: record exactly the chosen portals (not the legacy set), switched on.
+  if (!everyPortal) {
+    await requestMemberPortals(tx, ctx.companyId, m.id, input.portals);
+    await activateRequestedPortals(tx, [m.id]);
+  }
   for (const [p, role] of Object.entries(input.portalRoles)) {
     const man = portalModules[p]?.manifest;
     if (input.portals.includes(p) && man?.portalRoles?.some((r) => r.id === role) && role !== 'admin' && input.role !== 'company_admin') {
@@ -124,5 +128,5 @@ export async function addPerson(tx: Tx, ctx: ActionContext, raw: z.input<typeof 
     }
   }
   await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'membership.add', entity: 'memberships', entityId: m.id, data: { email: input.email, role: input.role, portals: input.portals }, requestId: ctx.requestId });
-  return { needsApproval: !everyPortal };
+  return { ok: true as const };
 }

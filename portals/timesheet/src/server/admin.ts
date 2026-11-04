@@ -505,8 +505,8 @@ const portalChange = z.object({
 });
 
 /**
- * Company admin changes a person's portals. Adding a portal is a request that Orbit (Super Admin)
- * approves; removing or cancelling takes effect at once, since it only narrows access.
+ * Company admin changes a person's portals, effective at once. Orbit approves portals per company
+ * (Company portals); inside them the company admin decides who uses what.
  */
 export async function changeMemberPortal(tx: Tx, ctx: ActionContext, raw: z.input<typeof portalChange>) {
   assertRole(ctx, 'company_admin');
@@ -518,13 +518,12 @@ export async function changeMemberPortal(tx: Tx, ctx: ActionContext, raw: z.inpu
   if (!m) throw new Error('Person not found');
   if (m.role === 'company_admin' || m.role === 'management') throw new Error('Admins and management use every portal the company has');
   const [cp] = await tx
-    .select({ portal: companyPortals.portal })
+    .select({ enabled: companyPortals.enabled })
     .from(companyPortals)
     .where(and(eq(companyPortals.companyId, ctx.companyId), eq(companyPortals.portal, input.portal)));
-  if (!cp) throw new Error('Your company does not have that portal. Ask Orbit to add it first.');
-  const [current] = (await readMemberPortals(tx, [m.id])).filter((r) => r.portal === input.portal);
-  if (input.action === 'request' && current?.status === 'active') return { status: 'active' as const };
-  const status = input.action === 'request' ? ('requested' as const) : ('off' as const);
+  if (!cp?.enabled && input.action === 'request') throw new Error('Your company does not have that portal yet. Request it in Company portals first.');
+  // The company has this portal (Orbit approved it), so the admin's choice applies at once.
+  const status = input.action === 'request' ? ('active' as const) : ('off' as const);
   await setMemberPortal(tx, ctx.companyId, m.id, input.portal, status);
   await audit(tx, {
     companyId: ctx.companyId,

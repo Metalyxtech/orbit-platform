@@ -10,3 +10,5 @@ export * from './WeekGrid';
 export * from './TrendChart';
 export * from './PieChart';
 export * from './StackedBarChart';
+export * from './SideMenu';
+export * from './menu';

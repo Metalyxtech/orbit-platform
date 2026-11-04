@@ -1,15 +1,18 @@
 'use client';
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
+import { toEntries } from './menu';
+import { SideMenu } from './SideMenu';
 
 export interface ShellNavItem {
   href: string;
   label: string;
   section: 'main' | 'admin';
   badge?: number;
-  /** Small heading shown above the first item of each group (admin section). */
+  /** Admin section: which portal's settings this page belongs to ('Company' = company-wide). */
   group?: string;
+  /** Main section: drop-down this page sits in (omitted = a main menu item). */
+  menu?: string;
 }
 
 export interface AppShellProps {
@@ -27,19 +30,10 @@ export interface AppShellProps {
 
 /** Sidebar (graphite) + top bar + portal switcher. */
 export function AppShell(props: AppShellProps) {
-  const pathname = usePathname();
   const router = useRouter();
-  const isActive = (href: string) =>
-    pathname === href || (href.split('/').length > 2 && pathname.startsWith(href + '/'));
   const main = props.nav.filter((n) => n.section === 'main');
   const admin = props.nav.filter((n) => n.section === 'admin');
 
-  const link = (n: ShellNavItem) => (
-    <Link key={n.href} href={n.href} aria-current={isActive(n.href) ? 'page' : undefined}>
-      {n.label}
-      {n.badge ? <span className="o-badge">{n.badge}</span> : null}
-    </Link>
-  );
 
   return (
     <div className="o-shell">
@@ -66,20 +60,15 @@ export function AppShell(props: AppShellProps) {
             <span className="faint">switch</span>
           )}
         </div>
-        <nav className="o-nav">{main.map(link)}</nav>
-        {admin.length > 0 && (
-          <>
-            <div className="o-nav-title">Company admin</div>
-            <nav className="o-nav">
-              {admin.map((n, i) => (
-                <span key={n.href} style={{ display: 'contents' }}>
-                  {n.group && n.group !== admin[i - 1]?.group && <span className="o-nav-sub">{n.group}</span>}
-                  {link(n)}
-                </span>
-              ))}
-            </nav>
-          </>
-        )}
+        <SideMenu
+          sections={[
+            { entries: toEntries(main) },
+            {
+              title: 'Company admin',
+              entries: toEntries(admin.map((n) => ({ ...n, menu: n.group && n.group !== 'Company' ? `${n.group} settings` : undefined }))),
+            },
+          ]}
+        />
         <div className="o-side-foot">
           <strong>{props.user.name}</strong>
           {props.user.title}

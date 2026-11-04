@@ -2,13 +2,13 @@ import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { getSession, query } from '@orbit/core/next';
 import { approvals } from '@orbit/portal-timesheet/server';
+import { SideMenu } from '@orbit/ui';
 import { unreadCount } from '@/messages';
 import { accessiblePortals } from '@/portal-access';
 import { portalRolesFor, queueCounts } from '@/portal-role';
 import { BRAND } from '@/portals';
 import { workspaceFor } from '@/management/workspaces';
-import { ManageNav } from './ManageNav';
-import { manageNavGroups } from './nav-groups';
+import { manageNavSections } from './nav-groups';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,7 +39,7 @@ export default async function ManageLayout({ children }: { children: ReactNode }
             <div className="o-brand-co">{ctx.companyName}</div>
           </div>
         </div>
-        <ManageNav groups={manageNavGroups(ctx, ws, d.portals, d)} />
+        <SideMenu sections={manageNavSections(ctx, ws, d.portals, d)} />
         <div className="o-side-foot">
           <strong>{ctx.name}</strong>
           {ctx.title ?? (ctx.role === 'management' ? 'Management' : 'Company admin')}

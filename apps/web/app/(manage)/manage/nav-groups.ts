@@ -3,45 +3,48 @@ import type { Workspace } from '@/management/types';
 import { companyAdminItems } from '@/company-admin-nav';
 import { portalNavItems } from '@/portal-nav';
 import { portalModules } from '@/portals';
-import type { Group } from './ManageNav';
+import { toEntries, type MenuSection } from '@orbit/ui';
 
 type Counts = { waiting: number; unread: number; badges: Record<string, number>; roles: Record<string, string | null> };
 
 /**
- * Sidebar groups for the Management workspace:
- *   Management   - Overview, My approvals, Messages
- *   <Portal>     - its management view (charts), then the portal's own pages for this role
- *   Company admin - each portal's admin pages (company admins only)
+ * Sidebar for the Management workspace, as a short main menu with drop-downs:
+ *   Overview, My approvals, Messages
+ *   Portals: one drop-down per portal (its charts, then its pages for this role)
+ *   Company admin: People and portals, Company portals, then '<Portal> settings' drop-downs
  * People without the workspace get Messages and links into their portals.
  */
-export function manageNavGroups(ctx: SessionContext, ws: Workspace, portals: string[], c: Counts): Group[] {
+export function manageNavSections(ctx: SessionContext, ws: Workspace, portals: string[], c: Counts): MenuSection[] {
   const open = portals.filter((p) => portalModules[p]);
   const name = (p: string) => portalModules[p].manifest.name;
   if (!ws.roles.includes(ctx.role)) {
     return [
-      { title: 'Workspace', items: [{ href: '/manage/messages', label: 'Messages', badge: c.unread }] },
-      { title: 'Portals', items: open.map((p) => ({ href: `/${p}`, label: name(p) })) },
+      { entries: [{ href: '/manage/messages', label: 'Messages', badge: c.unread }] },
+      { title: 'Portals', entries: open.map((p) => ({ href: `/${p}`, label: name(p) })) },
     ];
   }
-  const groups: Group[] = [
+  const sections: MenuSection[] = [
     {
-      title: ws.title,
-      items: [
+      entries: [
         { href: '/manage', label: 'Overview' },
         { href: '/manage/approvals', label: 'My approvals', badge: c.waiting },
         { href: '/manage/messages', label: 'Messages', badge: c.unread },
       ],
     },
+    {
+      title: 'Portals',
+      entries: open.map((p) => ({
+        label: name(p),
+        items: [
+          ...(ws.modules[p] ? [{ href: `/manage/${p}`, label: 'Insights and charts' }] : []),
+          ...portalNavItems(p, ctx, { approvals: c.badges[p] }, c.roles[p])
+            .filter((n) => n.section === 'main')
+            .map((n) => ({ href: n.href, label: n.label, badge: n.badge })),
+        ],
+      })),
+    },
   ];
-  for (const p of open) {
-    const items = portalNavItems(p, ctx, { approvals: c.badges[p] }, c.roles[p]).filter((n) => n.section === 'main');
-    groups.push({
-      title: name(p),
-      items: [...(ws.modules[p] ? [{ href: `/manage/${p}`, label: 'Insights and charts' }] : []), ...items],
-    });
-  }
-  // One Company admin menu for every portal.
   const admin = companyAdminItems(ctx, open, c.roles);
-  if (admin.length) groups.push({ title: 'Company admin', items: admin });
-  return groups;
+  if (admin.length) sections.push({ title: 'Company admin', entries: toEntries(admin.map((n) => ({ ...n, menu: n.group === 'Company' ? undefined : `${n.group} settings` }))) });
+  return sections;
 }

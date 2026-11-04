@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-export type Item = { href: string; label: string; badge?: number };
+export type Item = { href: string; label: string; badge?: number; group?: string };
 export type Group = { title: string; items: Item[] };
 
 const KEY = 'orbit-nav-open';
@@ -59,7 +59,14 @@ export function ManageNav({ groups }: { groups: Group[] }) {
                 <i aria-hidden>{on ? '−' : '+'}</i>
               </button>
             )}
-            <nav className="o-nav">{g.items.map(link)}</nav>
+            <nav className="o-nav">
+              {g.items.map((it, j) => (
+                <span key={it.href} style={{ display: 'contents' }}>
+                  {it.group && it.group !== g.items[j - 1]?.group && <span className="o-nav-sub">{it.group}</span>}
+                  {link(it)}
+                </span>
+              ))}
+            </nav>
           </div>
         );
       })}

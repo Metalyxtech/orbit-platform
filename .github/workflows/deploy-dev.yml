@@ -17,6 +17,9 @@ concurrency:
 
 jobs:
   deploy:
+    # Skipped (not failed) until the repository variable AWS_DEPLOY_ROLE_DEV is set.
+    # Amplify still builds and deploys the app on every merge.
+    if: ${{ vars.AWS_DEPLOY_ROLE_DEV != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

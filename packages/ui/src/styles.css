@@ -366,7 +366,7 @@ h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
 .p-tpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
 .p-tpl { font: inherit; text-align: left; display: flex; flex-direction: column; gap: 4px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--sheet); cursor: pointer; position: relative; }
 .p-tpl span { font-size: 11px; color: var(--ink-3); }
-.p-tpl em { position: absolute; top: 8px; right: 8px; font-size: 10px; font-style: normal; color: var(--ok); font-weight: 700; }
+.p-tpl em { align-self: flex-start; margin-top: 4px; font-size: 10px; font-style: normal; color: var(--ok); background: var(--ok-tint); padding: 1px 6px; border-radius: var(--radius); font-weight: 700; }
 .p-tpl.on { border-color: var(--steel); box-shadow: inset 0 0 0 1px var(--steel); }
 .p-opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line-2); cursor: pointer; }
 .p-opt div { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
@@ -394,3 +394,6 @@ h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
   .o-nav-group.closed .o-nav { display: flex; }
   .o-side-scroll { flex-direction: row; overflow-x: auto; }
 }
+
+/* Sub-heading inside a menu group (Company admin: Company, Timesheet, Purchase) */
+.o-nav-sub { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #6f7881; padding: 10px 16px 2px 19px; }

@@ -1,5 +1,6 @@
 import type { SessionContext } from '@orbit/core';
 import type { Workspace } from '@/management/types';
+import { companyAdminItems } from '@/company-admin-nav';
 import { portalNavItems } from '@/portal-nav';
 import { portalModules } from '@/portals';
 import type { Group } from './ManageNav';
@@ -39,18 +40,8 @@ export function manageNavGroups(ctx: SessionContext, ws: Workspace, portals: str
       items: [...(ws.modules[p] ? [{ href: `/manage/${p}`, label: 'Insights and charts' }] : []), ...items],
     });
   }
-  if (ctx.role === 'company_admin') {
-    groups.push({
-      title: 'Company',
-      items: [
-        { href: '/manage/company/people', label: 'People and portals' },
-        { href: '/manage/company/portals', label: 'Company portals' },
-      ],
-    });
-    for (const p of open) {
-      const items = portalNavItems(p, ctx, {}, c.roles[p]).filter((n) => n.section === 'admin');
-      groups.push({ title: `${name(p)} admin`, items });
-    }
-  }
+  // One Company admin menu for every portal.
+  const admin = companyAdminItems(ctx, open, c.roles);
+  if (admin.length) groups.push({ title: 'Company admin', items: admin });
   return groups;
 }

@@ -8,6 +8,8 @@ export interface ShellNavItem {
   label: string;
   section: 'main' | 'admin';
   badge?: number;
+  /** Small heading shown above the first item of each group (admin section). */
+  group?: string;
 }
 
 export interface AppShellProps {
@@ -68,7 +70,14 @@ export function AppShell(props: AppShellProps) {
         {admin.length > 0 && (
           <>
             <div className="o-nav-title">Company admin</div>
-            <nav className="o-nav">{admin.map(link)}</nav>
+            <nav className="o-nav">
+              {admin.map((n, i) => (
+                <span key={n.href} style={{ display: 'contents' }}>
+                  {n.group && n.group !== admin[i - 1]?.group && <span className="o-nav-sub">{n.group}</span>}
+                  {link(n)}
+                </span>
+              ))}
+            </nav>
           </>
         )}
         <div className="o-side-foot">

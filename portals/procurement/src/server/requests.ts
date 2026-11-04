@@ -89,6 +89,9 @@ export async function requestDetail(tx: Tx, ctx: SessionContext, id: string) {
   const approved = stage === 'pr_approval' || stage === 'po_approval' ? await approvedLevels(tx, id, stage) : [];
   const pending = pendingLevel(cfg, stage, stage === 'po_approval' ? value : estValue(lines), approved);
   const owner = ownerRole(cfg, stage, pending);
+  const roleHolders: Record<string, string[]> = Object.fromEntries(
+    await Promise.all([...new Set(cfg.levels.map((l) => l.role))].map(async (role) => [role, await holdersOf(tx, ctx, role)] as const)),
+  );
   const chainKind = stage === 'po_approval' || (r.awardQuoteId && stage !== 'pr_approval') ? 'po' : 'pr';
   const chainValue = chainKind === 'po' ? value : estValue(lines);
   return {
@@ -158,21 +161,39 @@ export async function requestDetail(tx: Tx, ctx: SessionContext, id: string) {
     },
     approval: {
       kind: chainKind,
-      chain: chainFor(cfg, chainKind, chainValue).map((l) => ({ id: l.id, name: l.name, role: roleLabel(l.role), done: approved.includes(l.id) || (stage !== 'pr_approval' && stage !== 'po_approval' && ORDER_AFTER(stage, chainKind)) })),
+      chain: chainFor(cfg, chainKind, chainValue).map((l) => ({ id: l.id, name: l.name, role: roleLabel(l.role), done: approved.includes(l.id) })),
       pending: pending ? { id: pending.id, name: pending.name } : null,
     },
+    /** Both approval stages as the company set them up: switched off, not needed, done, now or later. */
+    approvals: (['pr', 'po'] as const).map((kind) => {
+      const st: Stage = kind === 'pr' ? 'pr_approval' : 'po_approval';
+      const enabled = cfg.flow[st];
+      const v = kind === 'pr' ? estValue(lines) : value;
+      const chain = chainFor(cfg, kind, v);
+      const doneIds = events.filter((e) => e.kind === 'approval' && e.stage === st).map((e) => e.levelId);
+      const order: Stage[] = ['draft', 'stock_check', 'pr_approval', 'rfq', 'po_approval', 'issue', 'receiving', 'inspection', 'invoice', 'closed'];
+      const past = stage === 'closed' || order.indexOf(stage) > order.indexOf(st);
+      const rejected = events.some((e) => e.kind === 'rejection' && e.stage === st);
+      const state = !enabled ? 'off' : rejected ? 'rejected' : chain.length === 0 && (past || stage === st) ? 'none' : past ? 'done' : stage === st ? 'now' : 'later';
+      return {
+        kind,
+        label: stageLabel(cfg, st),
+        state,
+        basis: kind === 'po' && !r.awardQuoteId ? 'estimate' : kind === 'po' ? 'awarded value' : 'estimate',
+        chain: chain.map((l) => ({
+          id: l.id,
+          name: l.name,
+          role: roleLabel(l.role),
+          state: doneIds.includes(l.id) ? 'done' : stage === st && pending?.id === l.id ? 'now' : 'next',
+          people: roleHolders[l.role] ?? [],
+        })),
+      };
+    }),
     owner: owner ? { role: owner, label: roleLabel(owner), people: await holdersOf(tx, ctx, owner) } : null,
     canAct: canAct(me, owner),
     canIssueStock: (me === 'store' || me === 'admin') && lines.some((l) => l.reserveState === 'reserved') && stage !== 'rejected',
     fullyReceived: fullyReceived(lines, received),
   };
-}
-
-/** True when the request is already past the approval stage of this kind. */
-function ORDER_AFTER(stage: Stage, kind: 'pr' | 'po') {
-  const order: Stage[] = ['draft', 'stock_check', 'pr_approval', 'rfq', 'po_approval', 'issue', 'receiving', 'inspection', 'invoice', 'closed'];
-  const at = order.indexOf(stage);
-  return at > order.indexOf(kind === 'pr' ? 'pr_approval' : 'po_approval');
 }
 
 export type RequestDetail = NonNullable<Awaited<ReturnType<typeof requestDetail>>>;

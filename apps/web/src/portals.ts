@@ -11,11 +11,23 @@ import { approvals } from '@orbit/portal-timesheet/server';
 
 type Screen = (props: { searchParams: Record<string, string | string[] | undefined> }) => Promise<ReactNode>;
 
+/** One thing waiting for the signed-in person (shown in the notification pop-up). */
+export interface InboxItem {
+  id: string;
+  portal: string;
+  title: string;
+  detail: string;
+  href: string;
+  urgent?: boolean;
+}
+
 export interface PortalModule {
   manifest: PortalManifest;
   routes: Record<string, Screen>;
   /** Number shown on the menu badge (things waiting for this person). */
   queueCount?: (tx: Tx, ctx: SessionContext) => Promise<number>;
+  /** The items behind that count, for the notification pop-up. */
+  inboxItems?: (tx: Tx, ctx: SessionContext) => Promise<InboxItem[]>;
 }
 
 /** Portal registry: add new portals here (copy portals/_template). */
@@ -24,8 +36,32 @@ export const portalModules: Record<string, PortalModule> = {
     manifest: timesheetManifest,
     routes: timesheetRoutes,
     queueCount: (tx, ctx) => (ctx.role === 'employee' ? Promise.resolve(0) : approvals.countMine(tx, ctx)),
+    inboxItems: async (tx, ctx) =>
+      ctx.role === 'employee'
+        ? []
+        : (await approvals.mine(tx, ctx)).map((r) => ({
+            id: `ts:${r.taskId}`,
+            portal: 'Timesheet',
+            title: `Approve ${r.employee}, week ${r.week}`,
+            detail: `${r.total.toFixed(1)} h · ${r.stepLabel}${r.overdue ? ' · overdue' : ''}`,
+            href: '/timesheet/approvals',
+            urgent: r.overdue,
+          })),
   },
-  procurement: { manifest: procurementManifest, routes: procurementRoutes, queueCount: (tx, ctx) => procRequests.countMyQueue(tx, ctx) },
+  procurement: {
+    manifest: procurementManifest,
+    routes: procurementRoutes,
+    queueCount: (tx, ctx) => procRequests.countMyQueue(tx, ctx),
+    inboxItems: async (tx, ctx) =>
+      (await procRequests.myQueue(tx, ctx)).map((r) => ({
+        id: `pr:${r.id}:${r.stage}`,
+        portal: 'Purchase',
+        title: `${r.number} ${r.title}`,
+        detail: `${r.stageLabel} · waiting ${r.daysInStage} d${r.late ? ' · past need-by' : ''}`,
+        href: `/procurement/request?id=${r.id}`,
+        urgent: r.late,
+      })),
+  },
 };
 
 export const BRAND = 'Orbit';

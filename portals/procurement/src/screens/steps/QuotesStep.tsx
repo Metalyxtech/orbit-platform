@@ -1,8 +1,7 @@
 'use client';
-import Link from 'next/link';
 import { useState } from 'react';
 import { Button } from '@orbit/ui';
-import { addQuoteAction, awardAction } from '../../actions';
+import { addQuoteAction, addSupplierAction, awardAction } from '../../actions';
 import type { RequestDetail, SupplierRow } from '../../server';
 import { fmtMoney } from '../ui';
 import { useStep } from './useStep';
@@ -18,6 +17,14 @@ export function QuotesStep({ d, suppliers }: { d: RequestDetail; suppliers: Supp
   const used = new Set(d.quotes.map((q) => q.supplier));
   const free = suppliers.filter((s) => !used.has(s.name));
   const enough = d.quotes.length >= d.cfg.minQuotes;
+  const [newSup, setNewSup] = useState({ open: suppliers.length === 0, name: '', categories: '', email: '' });
+  async function createSupplier() {
+    const ok = await run(
+      () => addSupplierAction({ name: newSup.name, categories: newSup.categories, email: newSup.email || null, phone: null, rating: null }),
+      `${newSup.name} added. Choose it below to enter the quote.`,
+    );
+    if (ok) setNewSup({ open: false, name: '', categories: '', email: '' });
+  }
   const best = d.quotes.length ? d.quotes.reduce((a, b) => (b.total < a.total ? b : a)) : null;
 
   async function add() {
@@ -52,12 +59,26 @@ export function QuotesStep({ d, suppliers }: { d: RequestDetail; suppliers: Supp
       ))}
       <div className="p-subcard">
         <strong style={{ fontSize: 13 }}>Add a quote</strong>
-        {suppliers.length === 0 ? (
-          <p className="faint" style={{ fontSize: 12 }}>
-            No suppliers yet. <Link href="/procurement/suppliers">Add suppliers</Link> first.
-          </p>
+        {newSup.open ? (
+          <div className="o-stack" style={{ gap: 8 }}>
+            <span className="faint" style={{ fontSize: 12 }}>
+              {suppliers.length === 0 ? 'No suppliers yet. Add the first one here.' : 'New supplier'}
+            </span>
+            <input className="o-input" placeholder="Supplier name *" value={newSup.name} onChange={(e) => setNewSup({ ...newSup, name: e.target.value })} aria-label="Supplier name" />
+            <input className="o-input" placeholder="Supplies (e.g. Rebar, couplers)" value={newSup.categories} onChange={(e) => setNewSup({ ...newSup, categories: e.target.value })} aria-label="Supplies" />
+            <input className="o-input" type="email" placeholder="Email (optional)" value={newSup.email} onChange={(e) => setNewSup({ ...newSup, email: e.target.value })} aria-label="Supplier email" />
+            <div className="o-row">
+              <Button variant="primary" disabled={busy || newSup.name.trim().length < 2} onClick={createSupplier}>
+                Add supplier
+              </Button>
+              {suppliers.length > 0 && <Button onClick={() => setNewSup({ ...newSup, open: false })}>Cancel</Button>}
+            </div>
+          </div>
         ) : (
           <>
+            <button type="button" className="o-dayline-add" style={{ marginTop: 0 }} onClick={() => setNewSup({ ...newSup, open: true })}>
+              + New supplier
+            </button>
             <label className="o-field">
               Supplier
               <select className="o-select" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>

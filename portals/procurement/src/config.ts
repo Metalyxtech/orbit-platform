@@ -1,5 +1,6 @@
 // Purchase portal configuration types, roles, stages and industry templates.
 // Pure data, safe to import from client components.
+import { MORE_TEMPLATES } from './industries';
 
 export type ProcRole = 'requester' | 'buyer' | 'store' | 'qc' | 'manager' | 'gm' | 'accounts' | 'admin';
 
@@ -178,6 +179,9 @@ export const TEMPLATES: Record<string, IndustryTemplate> = {
     ],
   },
 };
+
+// Extra industries live in industries.ts; merged here so every caller sees one list.
+Object.assign(TEMPLATES, MORE_TEMPLATES);
 
 const DEFAULT_LEVELS: ApprovalLevel[] = [
   { id: 'l1', name: 'Purchase manager', role: 'manager', min: 0, pr: true, po: true },

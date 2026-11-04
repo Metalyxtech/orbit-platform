@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { audit, writePortalRole, type ActionContext, type SessionContext } from '@orbit/core';
 import type { Tx } from '@orbit/db';
+import { checkLibrary, FIELD_LIBRARY, INDUSTRY_INFO } from '../industries';
 import { PROC_ROLES, TEMPLATES, configFromTemplate, type ProcConfig, type ProcRole, type StageKey } from '../config';
 import { purchaseTeam } from './team';
 import { PORTAL, loadConfig, requireAdmin, saveConfig } from './shared';
@@ -11,7 +12,17 @@ export async function adminConfig(tx: Tx, ctx: SessionContext) {
   requireAdmin(ctx);
   return {
     config: await loadConfig(tx, ctx.companyId),
-    templates: Object.entries(TEMPLATES).map(([id, t]) => ({ id, name: t.name, header: t.header.map((f) => f.label), line: t.line.map((f) => f.label), options: t.options.map((o) => o.label) })),
+    templates: Object.entries(TEMPLATES).map(([id, t]) => ({
+      id,
+      name: t.name,
+      sector: INDUSTRY_INFO[id]?.sector ?? 'Services and general',
+      desc: INDUSTRY_INFO[id]?.desc ?? '',
+      header: t.header.map((f) => f.label),
+      line: t.line.map((f) => f.label),
+      options: t.options.map((o) => o.label),
+    })),
+    checks: checkLibrary(TEMPLATES).map((o) => ({ id: o.id, label: o.label, desc: o.desc, from: o.from })),
+    fieldLibrary: FIELD_LIBRARY,
   };
 }
 
@@ -117,3 +128,19 @@ export async function setPurchaseRole(tx: Tx, ctx: ActionContext, raw: { members
 }
 
 export type StageKeyList = StageKey[];
+
+/** Adds an industry check from any industry to this company (switched on). */
+export async function addIndustryCheck(tx: Tx, ctx: ActionContext, raw: { id: string }) {
+  const { id } = z.object({ id: z.string().min(1).max(40) }).parse(raw);
+  const lib = checkLibrary(TEMPLATES).find((o) => o.id === id);
+  if (!lib) throw new Error('Unknown industry check');
+  await update(tx, ctx, 'check.add', (c) => (c.options.some((o) => o.id === id) ? c : { ...c, options: [...c.options, { ...lib, from: undefined, on: true } as ProcConfig['options'][number]] }));
+  return { ok: true as const };
+}
+
+/** Removes an industry check from this company. */
+export async function removeIndustryCheck(tx: Tx, ctx: ActionContext, raw: { id: string }) {
+  const { id } = z.object({ id: z.string().min(1).max(40) }).parse(raw);
+  await update(tx, ctx, 'check.remove', (c) => ({ ...c, options: c.options.filter((o) => o.id !== id) }));
+  return { ok: true as const };
+}

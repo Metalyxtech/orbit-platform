@@ -331,11 +331,11 @@ const Suppliers: Screen = async () => {
 
 const AdminWorkflow: Screen = async () => {
   const d = await query((tx, ctx) => admin.adminConfig(tx, ctx));
-  return <WorkflowClient config={d.config} templates={d.templates} />;
+  return <WorkflowClient config={d.config} templates={d.templates} checks={d.checks} />;
 };
 const AdminForm: Screen = async () => {
   const d = await query((tx, ctx) => admin.adminConfig(tx, ctx));
-  return <FormClient form={d.config.form} templates={d.templates} current={d.config.template} />;
+  return <FormClient form={d.config.form} templates={d.templates} current={d.config.template} library={d.fieldLibrary} />;
 };
 const AdminApprovals: Screen = async () => {
   const d = await query((tx, ctx) => admin.adminConfig(tx, ctx));

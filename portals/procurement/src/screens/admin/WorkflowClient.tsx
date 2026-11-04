@@ -1,14 +1,16 @@
 'use client';
 import { useState } from 'react';
 import { Button, TopBar } from '@orbit/ui';
-import { saveWorkflowAction } from '../../actions';
+import { addIndustryCheckAction, removeIndustryCheckAction, saveWorkflowAction } from '../../actions';
 import { PROC_ROLES, STAGES, WORK, type ProcConfig, type StageKey } from '../../config';
 import { TemplatePicker, type TemplateInfo } from './TemplatePicker';
 import { useSave } from './useSave';
 
 
 /** Admin > Purchase workflow: industry template, stage switches and owners, industry options. */
-export function WorkflowClient({ config, templates }: { config: ProcConfig; templates: TemplateInfo[] }) {
+export function WorkflowClient({ config, templates, checks }: { config: ProcConfig; templates: TemplateInfo[]; checks: { id: string; label: string; desc: string; from: string }[] }) {
+  const [addId, setAddId] = useState('');
+  const available = checks.filter((c) => !config.options.some((o) => o.id === c.id));
   const { busy, save } = useSave();
   const [flow, setFlow] = useState(config.flow);
   const [stageCfg, setStageCfg] = useState(config.stageCfg);
@@ -101,17 +103,40 @@ export function WorkflowClient({ config, templates }: { config: ProcConfig; temp
         </div>
 
         <div className="o-panel">
-          <h2>Industry options</h2>
-          {config.options.length === 0 && <p className="faint">This template has no industry options.</p>}
+          <div className="o-panel-head">
+            <h2>Industry checks</h2>
+            <span className="muted" style={{ fontSize: 12 }}>
+              Switch on, off, or add checks used in other industries
+            </span>
+          </div>
+          {config.options.length === 0 && <p className="faint">No industry checks yet. Add one below.</p>}
           {config.options.map((o) => (
-            <label key={o.id} className="p-opt">
-              <input type="checkbox" checked={options[o.id]} onChange={(e) => setOptions((x) => ({ ...x, [o.id]: e.target.checked }))} />
-              <div>
+            <div key={o.id} className="p-opt">
+              <input type="checkbox" checked={options[o.id] ?? o.on} onChange={(e) => setOptions((x) => ({ ...x, [o.id]: e.target.checked }))} aria-label={o.label} />
+              <div style={{ flex: 1 }}>
                 <strong>{o.label}</strong>
                 <span>{o.desc}</span>
               </div>
-            </label>
+              <button type="button" className="o-btn small" disabled={busy} onClick={() => save(() => removeIndustryCheckAction({ id: o.id }), `${o.label} removed.`)}>
+                Remove
+              </button>
+            </div>
           ))}
+          {available.length > 0 && (
+            <div className="o-row" style={{ marginTop: 12, gap: 8 }}>
+              <select className="o-select" style={{ maxWidth: 420 }} value={addId} onChange={(e) => setAddId(e.target.value)} aria-label="Add an industry check">
+                <option value="">Add a check from any industry…</option>
+                {available.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label} ({c.from})
+                  </option>
+                ))}
+              </select>
+              <Button disabled={!addId || busy} onClick={async () => (await save(() => addIndustryCheckAction({ id: addId }), 'Check added.')) && setAddId('')}>
+                Add check
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="o-panel">

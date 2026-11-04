@@ -22,6 +22,8 @@ export interface PortalNavItem {
   /** For portals with their own roles (see PortalManifest.portalRoles): who sees this item. */
   portalRoles?: string[];
   badge?: 'approvals';
+  /** Drop-down in the sidebar this page sits in (omitted = a main menu item). */
+  menu?: string;
 }
 
 /** A role inside one portal (for example Purchase: buyer, storekeeper), set per person by the company admin. */

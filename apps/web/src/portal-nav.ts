@@ -1,7 +1,7 @@
 import type { SessionContext } from '@orbit/core';
 import { portalModules } from './portals';
 
-export type NavItem = { href: string; label: string; section: 'main' | 'admin'; badge?: number };
+export type NavItem = { href: string; label: string; section: 'main' | 'admin'; badge?: number; menu?: string };
 
 /**
  * A portal's menu for this person, built from its manifest (roles filter, badges).
@@ -22,6 +22,7 @@ export function portalNavItems(
       label: n.label,
       section: n.section,
       badge: n.badge === 'approvals' ? badges.approvals || undefined : undefined,
+      menu: n.menu,
     }));
 }
 

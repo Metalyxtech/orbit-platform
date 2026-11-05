@@ -242,6 +242,7 @@ export async function listRequests(tx: Tx, ctx: SessionContext, opts: { filter?:
       priority: r.priority,
       late: OPEN_STAGES.slice(0, 6).includes(stage) && r.needBy < t,
       daysInStage: Math.max(0, Math.floor((Date.now() - r.stageAt.getTime()) / 864e5)),
+      stageAt: r.stageAt.toISOString(),
       createdAt: r.createdAt.toISOString(),
     };
   });

@@ -10,6 +10,7 @@ import { MoneyClient } from './admin/MoneyClient';
 import { RolesClient } from './admin/RolesClient';
 import { WorkflowClient } from './admin/WorkflowClient';
 import { NewRequestClient } from './NewRequestClient';
+import { PurchaseCharts } from './management/Charts';
 import { RequestView } from './RequestView';
 import { AddItemClient, StockEntryClient } from './StockClients';
 import { SuppliersClient } from './SuppliersClient';
@@ -103,6 +104,12 @@ const Dashboard: Screen = async () => {
             </div>
           </div>
         </div>
+        {['manager', 'gm', 'admin'].includes(d.me) && (
+          <section className="o-stack" style={{ gap: 12 }}>
+            <h2 style={{ margin: '8px 0 0' }}>Purchase analytics</h2>
+            <PurchaseCharts />
+          </section>
+        )}
       </div>
     </>
   );

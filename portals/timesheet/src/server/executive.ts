@@ -166,3 +166,35 @@ export async function projectsView(tx: Tx, ctx: SessionContext) {
   const [byProject, top] = await Promise.all([hoursByProject(tx, ctx, { month }), topOvertime(tx, ctx, { month })]);
   return { month, byProject, top };
 }
+
+const shiftMonth = (month: string, by: number) => {
+  const [y, m] = month.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + by, 1));
+  return d.toISOString().slice(0, 7);
+};
+const monthShort = (month: string) => new Date(`${month}-01T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
+
+/** Management overview charts: this month vs last, 6-month trend, weekly hours, people, projects, approvals. */
+export async function overviewCharts(tx: Tx, ctx: SessionContext) {
+  const month = currentMonth(ctx);
+  const months = Array.from({ length: 6 }, (_, i) => shiftMonth(month, i - 5));
+  const [byMonth, trend, people, byProject, levels] = await Promise.all([
+    Promise.all(months.map((m) => kpis(tx, ctx, { month: m }))),
+    weeklyTrend(tx, ctx, 12),
+    hoursByPersonFor(tx, ctx, 'month'),
+    hoursByProject(tx, ctx, { month }),
+    approvalsByLevel(tx, ctx),
+  ]);
+  const now = byMonth[5];
+  const before = byMonth[4];
+  return {
+    monthLabel: new Date(`${month}-01T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' }),
+    now,
+    before,
+    months: months.map((m, i) => ({ label: monthShort(m), regular: Math.max(0, byMonth[i].approvedHours - byMonth[i].overtimeHours), overtime: byMonth[i].overtimeHours, onTime: byMonth[i].onTimePct })),
+    trend,
+    people,
+    byProject,
+    levels,
+  };
+}

@@ -480,3 +480,11 @@ h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
 .h-who { text-align: right; font-size: 12px; }
 .h-who span { display: block; color: var(--ink-3); font-size: 11px; }
 @media (max-width: 767px) { .h-list > li { grid-template-columns: 1fr; gap: 4px; } .h-who { text-align: left; } }
+
+/* Comparison KPIs and chart grids (management dashboards) */
+.o-delta { font-size: 11px; margin-top: 4px; color: var(--ink-3); }
+.o-delta.up { color: var(--ok); }
+.o-delta.down { color: var(--bad); }
+.o-chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+.o-chart-grid .o-panel h2 { margin-bottom: 10px; }
+.o-chart-note { font-size: 11px; color: var(--ink-3); margin: 8px 0 0; }

@@ -8,6 +8,8 @@ export type ViewProps = { params?: Record<string, string | undefined> };
 export type ManagementModule = {
   /** Short numbers for the Overview page. */
   headline?: ComponentType;
+  /** Charts for the Overview page (comparison KPIs, pie and bar charts). Falls back to the headline. */
+  overview?: ComponentType;
   tabs: { id: string; label: string; View: ComponentType<ViewProps> }[];
   /** Full pages in the portal itself, shown as buttons (path is relative to the portal). */
   links?: { label: string; path: string }[];

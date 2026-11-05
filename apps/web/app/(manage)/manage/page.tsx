@@ -75,7 +75,7 @@ export default async function Overview() {
         {d.portals.map((p) => {
           const mod = workspaceFor(s.ctx).modules[p];
           if (!mod || !portalModules[p]) return null;
-          const Headline = mod.headline;
+          const Headline = mod.overview ?? mod.headline;
           return (
             <section key={p} className="o-stack" style={{ gap: 12 }}>
               <div className="o-row" style={{ justifyContent: 'space-between' }}>

@@ -50,3 +50,52 @@ export async function managementView(tx: Tx, ctx: SessionContext) {
     late: all.filter((r) => r.late),
   };
 }
+
+const shiftMonth = (month: string, by: number) => {
+  const [y, m] = month.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1 + by, 1)).toISOString().slice(0, 7);
+};
+const monthShort = (month: string) => new Date(`${month}-01T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
+
+/** Purchase charts for managers and management: month comparison, spend, pipeline, approvals. */
+export async function overviewCharts(tx: Tx, ctx: SessionContext) {
+  const m = await managementView(tx, ctx);
+  const all = await listRequests(tx, ctx, { filter: 'all' });
+  const month = today(ctx).slice(0, 7);
+  const months = Array.from({ length: 6 }, (_, i) => shiftMonth(month, i - 5));
+  const stat = (mo: string) => {
+    const raised = all.filter((r) => r.createdAt.slice(0, 7) === mo);
+    const ordered = all.filter((r) => r.poDate?.startsWith(mo));
+    const closed = all.filter((r) => r.stage === 'closed' && r.stageAt.slice(0, 7) === mo);
+    const toPo = ordered.map((r) => Math.max(0, (new Date(`${r.poDate}T00:00:00Z`).getTime() - new Date(r.createdAt.slice(0, 10) + 'T00:00:00Z').getTime()) / 864e5));
+    return {
+      label: monthShort(mo),
+      raised: raised.length,
+      requested: r2(raised.reduce((t, r) => t + r.value, 0)),
+      orderedValue: r2(ordered.reduce((t, r) => t + r.value, 0)),
+      orders: ordered.length,
+      closed: closed.length,
+      daysToPo: toPo.length ? Math.round((toPo.reduce((a, b) => a + b, 0) / toPo.length) * 10) / 10 : 0,
+    };
+  };
+  const series = months.map(stat);
+  const byOwner = new Map<string, { onTime: number; late: number }>();
+  for (const r of m.waiting) {
+    const k = r.owner ?? 'Nobody';
+    const v = byOwner.get(k) ?? { onTime: 0, late: 0 };
+    if (r.daysInStage > 2) v.late++;
+    else v.onTime++;
+    byOwner.set(k, v);
+  }
+  return {
+    currency: m.currency,
+    now: series[5],
+    before: series[4],
+    months: series,
+    pipeline: m.pipeline,
+    bySupplier: m.bySupplier,
+    byProject: m.byProject,
+    approvers: [...byOwner.entries()].map(([label, v]) => ({ label, ...v })),
+    stock: { value: m.kpis.stockValue, low: m.low.length },
+  };
+}

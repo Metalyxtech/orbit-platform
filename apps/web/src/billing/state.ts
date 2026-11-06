@@ -12,12 +12,14 @@ import {
   cycleOf,
   planId,
   planOf,
+  portalName,
   priceFor,
   type Bundle,
   type Currency,
   type Cycle,
   type TierId,
 } from './plans';
+import { fitPortalsToPlan } from './portals';
 import * as rz from './razorpay';
 
 const pgCode = (err: unknown) => (err as { code?: string; cause?: { code?: string } })?.code ?? (err as { cause?: { code?: string } })?.cause?.code;
@@ -142,8 +144,7 @@ export async function startCheckout(tx: Tx, ctx: ActionContext, raw: z.input<typ
   const id = planId(input.bundle, input.tier);
   const plan = planOf(id)!;
   if (state.usage.users > plan.users) throw new Error(`${plan.name} includes ${plan.users} people and you have ${state.usage.users}. Pick a larger team size.`);
-  const outside = state.usage.portals.filter((p) => !plan.portals.includes(p));
-  if (outside.length) throw new Error(`Your company already uses ${outside.map((p) => (p === 'procurement' ? 'Purchase' : 'Timesheet')).join(' and ')}. Choose a plan that includes it, or Timesheet + Purchase.`);
+  // A plan without a portal the company uses is allowed: that portal is paused once payment is confirmed.
   if (state.status === 'active' && !state.cancelAtPeriodEnd && state.plan === id && state.cycle === input.cycle) throw new Error('You are already on this plan.');
   const rzPlan = await razorpayPlanId(tx, input.bundle, input.tier, input.cycle, currency);
   // Trial days left are honoured: the first charge happens when the trial ends.
@@ -177,9 +178,10 @@ export async function confirmCheckout(tx: Tx, ctx: ActionContext, raw: z.input<t
   if (!(await rz.verifyCheckoutSignature(input.paymentId, input.subscriptionId, input.signature))) throw new Error('The payment could not be verified. Nothing was charged twice; contact Orbit if money left your account.');
   const live = await rz.fetchSubscription(input.subscriptionId);
   await applyRazorpay(tx, ctx.companyId, live);
+  const fit = await fitPortalsToPlan(tx, ctx, sub.plan);
   await tx.insert(billingEvents).values({ companyId: ctx.companyId, type: 'checkout.completed', razorpayId: input.paymentId, data: { subscription: input.subscriptionId } });
   await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'billing.subscribe', entity: 'company_subscriptions', entityId: ctx.companyId, data: { summary: [`Subscribed to ${planOf(sub.plan)?.name} (${cycleOf(sub.cycle).label})`] }, requestId: ctx.requestId });
-  return { status: live.status };
+  return { status: live.status, paused: fit.paused.map(portalName), resumed: fit.resumed.map(portalName) };
 }
 
 /** Stores what Razorpay says about the subscription (checkout return and webhooks). */

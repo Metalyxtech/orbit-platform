@@ -12,7 +12,8 @@ export class PaymentsNotConfigured extends Error {
 
 async function keys() {
   try {
-    return { id: await getSecret('razorpayKeyId'), secret: await getSecret('razorpayKeySecret') };
+    // Trim: a key pasted with a space or line break is otherwise rejected by Razorpay.
+    return { id: (await getSecret('razorpayKeyId')).trim(), secret: (await getSecret('razorpayKeySecret')).trim() };
   } catch {
     throw new PaymentsNotConfigured();
   }
@@ -33,6 +34,7 @@ async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown): Pr
   const data = (await res.json().catch(() => ({}))) as T & { error?: { description?: string } };
   if (!res.ok) {
     console.error(JSON.stringify({ razorpay: path, status: res.status, error: data.error }));
+    if (res.status === 401) throw new Error('Razorpay did not accept Orbit’s payment keys. Orbit is fixing this; please try again later.');
     throw new Error(data.error?.description ? `Payment provider: ${data.error.description}` : 'The payment provider did not respond. Try again in a minute.');
   }
   return data;
@@ -89,7 +91,7 @@ export async function verifyWebhookSignature(rawBody: string, signature: string 
   if (!signature || !/^[0-9a-f]+$/i.test(signature)) return false;
   let secret: string;
   try {
-    secret = await getSecret('razorpayWebhookSecret');
+    secret = (await getSecret('razorpayWebhookSecret')).trim();
   } catch {
     return false;
   }

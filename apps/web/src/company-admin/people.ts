@@ -2,6 +2,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { activateRequestedPortals, audit, legacyPortal, portalRoleFor, readMemberPortals, readPortalRoles, requestMemberPortals, setMemberPortal, writePortalRole, type ActionContext, type SessionContext } from '@orbit/core';
 import { companyPortals, memberships, users, type Tx } from '@orbit/db';
+import { assertWithinPlan } from '../billing/state';
 import { portalModules } from '../portals';
 
 const requireAdmin = (ctx: SessionContext) => {
@@ -103,6 +104,7 @@ const addInput = z.object({
 export async function addPerson(tx: Tx, ctx: ActionContext, raw: z.input<typeof addInput>) {
   requireAdmin(ctx);
   const input = addInput.parse(raw);
+  await assertWithinPlan(tx, ctx, 'user');
   const cps = await tx.select({ portal: companyPortals.portal }).from(companyPortals).where(and(eq(companyPortals.companyId, ctx.companyId), eq(companyPortals.enabled, true)));
   const allowed = cps.map((c) => c.portal);
   const bad = input.portals.find((p) => !allowed.includes(p));

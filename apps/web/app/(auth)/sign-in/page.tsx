@@ -17,7 +17,7 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
         Continue
       </a>
       <p className="faint" style={{ fontSize: 12, marginTop: 16 }}>
-        New company? <a href="/auth/login?hint=sign-up">Create an account</a> and register your company.
+        New company? <a href="/auth/login?hint=sign-up">Create an account</a> and register your company. <a href="/pricing">See plans and pricing</a>.
       </p>
       {dev && (
         <div style={{ marginTop: 20, borderTop: '1px solid var(--line)', paddingTop: 12 }}>

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { getSession, query } from '@orbit/core/next';
 import { approvals } from '@orbit/portal-timesheet/server';
 import { NotificationCenter, SideMenu } from '@orbit/ui';
+import { BillingBanner } from '@/billing/BillingBanner';
 import { unreadCount } from '@/messages';
 import { accessiblePortals } from '@/portal-access';
 import { portalRolesFor, queueCounts } from '@/portal-role';
@@ -52,6 +53,7 @@ export default async function ManageLayout({ children }: { children: ReactNode }
         </div>
       </aside>
       <div className="o-main">
+        <BillingBanner role={ctx.role} />
         {ctx.companyStage === 'sandbox' && (
           <div className="o-banner info" style={{ borderRadius: 0 }}>
             Sandbox company: emails only go to verified test addresses.

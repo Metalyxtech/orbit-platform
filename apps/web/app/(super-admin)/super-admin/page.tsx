@@ -18,7 +18,10 @@ export default async function Companies() {
   return (
     <>
       <header className="o-top">
-        <strong>Companies</strong>
+        <strong style={{ flex: 1 }}>Companies</strong>
+        <Link className="o-btn small primary" href="/super-admin/companies/new">
+          Add company
+        </Link>
       </header>
       <div className="o-page">
         <KpiStrip

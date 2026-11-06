@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { readMemberPortals } from '@orbit/core';
 import { getSession, query } from '@orbit/core/next';
 import { accessiblePortals } from '@/portal-access';
+import { requireAgreement } from '@/legal/gate';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +10,7 @@ export default async function Home() {
   const s = await getSession();
   if (s.state === 'signed_out') redirect('/sign-in');
   if (s.state === 'pending') redirect('/pending');
+  await requireAgreement(s);
   if (s.state === 'no_company') redirect(s.isSuperAdmin ? '/super-admin' : '/register');
   // Management (GM / CEO) start in the Management workspace, above every portal.
   if (s.state === 'ok' && s.ctx.role === 'management') redirect('/manage');

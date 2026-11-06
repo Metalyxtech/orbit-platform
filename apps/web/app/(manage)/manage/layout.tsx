@@ -10,6 +10,7 @@ import { portalRolesFor, queueCounts } from '@/portal-role';
 import { BRAND } from '@/portals';
 import { workspaceFor } from '@/management/workspaces';
 import { manageNavSections } from './nav-groups';
+import { requireAgreement } from '@/legal/gate';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,7 @@ export const dynamic = 'force-dynamic';
 export default async function ManageLayout({ children }: { children: ReactNode }) {
   const s = await getSession();
   if (s.state !== 'ok') redirect('/');
+  await requireAgreement(s);
   // Everyone can read and send messages here; the overview and approvals are for management and admins.
   const ws = workspaceFor(s.ctx);
   const d = await query(async (tx, ctx) => {
@@ -48,6 +50,15 @@ export default async function ManageLayout({ children }: { children: ReactNode }
           <div>
             <a href="/auth/sign-out" style={{ color: '#9aa3ab', fontSize: 12 }}>
               Sign out
+            </a>
+          </div>
+          <div style={{ fontSize: 11, marginTop: 6 }}>
+            <a href="/legal/terms" target="_blank" rel="noreferrer" style={{ color: '#9aa3ab' }}>
+              Terms
+            </a>
+            <span style={{ color: '#5d666e' }}> · </span>
+            <a href="/legal/privacy" target="_blank" rel="noreferrer" style={{ color: '#9aa3ab' }}>
+              Privacy
             </a>
           </div>
         </div>

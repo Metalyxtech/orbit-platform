@@ -7,6 +7,7 @@ import { companies, companyPortals, memberships, withTenant } from '@orbit/db';
 import { COMPANY_COOKIE, getDb, getSession } from '@orbit/core/next';
 import { requestMemberPortals } from '@orbit/core';
 import { activeCompany } from './company-directory';
+import { fileUnderCompany } from './legal/state';
 import { portalModules } from './portals';
 
 /** Portal ids ticked on a form, limited to portals that exist. */
@@ -46,6 +47,7 @@ export async function registerCompanyAction(form: FormData) {
       role: 'company_admin',
       title: input.title || 'Company admin',
     });
+    await fileUnderCompany(tx, s.userId, company.id);
     // Requested portals start switched off; Super Admin switches them on when approving.
     await tx.insert(companyPortals).values(portals.map((portal) => ({ companyId: company.id, portal, enabled: false })));
   });
@@ -94,6 +96,7 @@ export async function joinCompanyAction(form: FormData) {
       })
       .returning({ id: memberships.id });
     if (m) await requestMemberPortals(tx, company.id, m.id, ok);
+    await fileUnderCompany(tx, s.userId, company.id);
     return true;
   });
   if (!offered) redirect('/register?error=no_portal');

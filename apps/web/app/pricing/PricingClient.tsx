@@ -69,6 +69,9 @@ export function PricingClient() {
             <li key={t}>{t}</li>
           ))}
         </ul>
+        <p className="faint" style={{ fontSize: 12, textAlign: 'center' }}>
+          <Link href="/legal/terms">Terms and Conditions</Link> · <Link href="/legal/privacy">Privacy Policy</Link>
+        </p>
       </div>
     </main>
   );

@@ -15,6 +15,7 @@ export function companyAdminItems(ctx: Pick<SessionContext, 'role'>, portals: st
     { href: '/manage/company/portals', label: 'Company portals', group: 'Company' },
     { href: '/manage/company/billing', label: 'Plan and billing', group: 'Company' },
     { href: '/manage/company/history', label: 'Change history', group: 'Company' },
+    { href: '/manage/company/legal', label: 'Terms and privacy', group: 'Company' },
   ];
   for (const p of portals.filter((x) => portalModules[x])) {
     const group = portalModules[p].manifest.name;

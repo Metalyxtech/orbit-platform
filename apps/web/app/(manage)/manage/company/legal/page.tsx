@@ -83,6 +83,16 @@ export default async function Legal({ searchParams }: { searchParams: Promise<{ 
                             <div className="faint" style={{ fontSize: 11 }}>
                               {p.signedName} · {when(p.signedAt)}
                             </div>
+                            <div className="o-row" style={{ gap: 8, fontSize: 11 }}>
+                              {p.copies.map(
+                                (c) =>
+                                  c.id && (
+                                    <Link key={c.doc} href={`/manage/company/legal/copy/${c.id}`}>
+                                      {c.doc === 'terms' ? 'Terms copy' : 'Privacy copy'}
+                                    </Link>
+                                  ),
+                              )}
+                            </div>
                           </>
                         ) : (
                           <span className="o-chip warn" title="Asked to sign at their next sign-in">Not yet</span>

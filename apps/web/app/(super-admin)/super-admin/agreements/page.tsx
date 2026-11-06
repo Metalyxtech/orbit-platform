@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { KpiStrip } from '@orbit/ui';
 import { DOCUMENTS, LEGAL_DOCS, type LegalDoc } from '@/legal/documents';
 import { allSignatures } from '@/legal/state';
@@ -64,6 +65,7 @@ export default async function Agreements({ searchParams }: { searchParams: Promi
                   <th>Document</th>
                   <th>Signature</th>
                   <th>IP address</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -88,6 +90,11 @@ export default async function Agreements({ searchParams }: { searchParams: Promi
                       </td>
                       <td style={{ fontStyle: 'italic' }}>{r.signedName}</td>
                       <td className="faint" style={{ fontSize: 12 }}>{r.ip ?? '-'}</td>
+                      <td>
+                        <Link className="o-btn small" href={`/super-admin/agreements/${r.id}`}>
+                          Signed copy
+                        </Link>
+                      </td>
                     </tr>
                   );
                 })}

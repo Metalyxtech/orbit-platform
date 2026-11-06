@@ -541,3 +541,13 @@ h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
 .b-cycle { flex-wrap: wrap; }
 .b-steps { display: flex; flex-direction: column; gap: 10px; }
 .b-step { font-size: 12px; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* Printing (signed copies, documents): only the page content, on white. */
+@media print {
+  .o-side, .o-top, .no-print, .o-toast { display: none !important; }
+  .o-shell { display: block !important; }
+  .o-main { margin: 0 !important; overflow: visible !important; }
+  .o-page { padding: 0 !important; }
+  body { background: #fff !important; }
+  .o-panel { border: 0 !important; box-shadow: none !important; }
+}

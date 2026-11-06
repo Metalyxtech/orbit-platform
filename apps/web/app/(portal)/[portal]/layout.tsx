@@ -11,6 +11,7 @@ import { portalNavItems } from '@/portal-nav';
 import { portalRolesFor, queueCounts } from '@/portal-role';
 import { BRAND, portalModules } from '@/portals';
 import { switchCompanyAction } from '@/session-actions';
+import { requireAgreement } from '@/legal/gate';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,7 @@ export default async function PortalLayout({ children, params }: { children: Rea
   const { portal } = await params;
   const mod = portalModules[portal];
   if (!mod) notFound();
+  await requireAgreement(await getSession());
 
   const { ctx, enabled, waiting, unread, roles } = await query(async (tx, ctx) => ({
     ctx,

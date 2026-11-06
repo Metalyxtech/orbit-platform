@@ -5,6 +5,7 @@ import { isManager } from '@/management/workspaces';
 import { accessiblePortals } from '@/portal-access';
 import { portalModules } from '@/portals';
 import { AuthCard } from '../AuthCard';
+import { requireAgreement } from '@/legal/gate';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +13,7 @@ export const dynamic = 'force-dynamic';
 export default async function Portals() {
   const s = await getSession();
   if (s.state !== 'ok') redirect('/');
+  await requireAgreement(s);
   const { open, waiting } = await query(async (tx, ctx) => {
     const open = await accessiblePortals(tx, ctx);
     const rows = await readMemberPortals(tx, [ctx.membershipId]);

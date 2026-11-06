@@ -10,6 +10,9 @@ export function AuthCard({ title, children }: { title: string; children: ReactNo
         </div>
         <h1 style={{ marginBottom: 12 }}>{title}</h1>
         {children}
+        <p className="faint" style={{ fontSize: 11, marginTop: 20, marginBottom: 0, textAlign: 'center' }}>
+          <a href="/legal/terms">Terms and Conditions</a> · <a href="/legal/privacy">Privacy Policy</a>
+        </p>
       </div>
     </main>
   );

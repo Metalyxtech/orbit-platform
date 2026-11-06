@@ -7,6 +7,7 @@ const items = [
   { href: '/super-admin', label: 'Companies' },
   { href: '/super-admin/subscriptions', label: 'Subscriptions' },
   { href: '/super-admin/people', label: 'People' },
+  { href: '/super-admin/agreements', label: 'Agreements' },
 ];
 
 export function SuperNav({ requests, payments = 0 }: { requests: number; payments?: number }) {

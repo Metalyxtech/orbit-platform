@@ -4,6 +4,7 @@ import { joinableCompanies } from '@/company-directory';
 import { portalModules } from '@/portals';
 import { joinCompanyAction, registerCompanyAction } from '@/session-actions';
 import { AuthCard } from '../AuthCard';
+import { requireAgreement } from '@/legal/gate';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,6 +37,7 @@ export default async function Register({ searchParams }: { searchParams: Promise
   const s = await getSession();
   if (s.state === 'signed_out') redirect('/sign-in');
   if (s.state !== 'no_company') redirect('/');
+  await requireAgreement(s);
   const error = errors[(await searchParams).error ?? ''];
   const list = await joinableCompanies();
   return (

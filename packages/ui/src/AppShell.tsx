@@ -100,6 +100,15 @@ export function AppShell(props: AppShellProps) {
               Sign out
             </a>
           </div>
+          <div style={{ fontSize: 11, marginTop: 6 }}>
+            <a href="/legal/terms" target="_blank" rel="noreferrer" style={{ color: '#9aa3ab' }}>
+              Terms
+            </a>
+            <span style={{ color: '#5d666e' }}> · </span>
+            <a href="/legal/privacy" target="_blank" rel="noreferrer" style={{ color: '#9aa3ab' }}>
+              Privacy
+            </a>
+          </div>
         </div>
       </aside>
       <div className="o-main">{props.children}</div>

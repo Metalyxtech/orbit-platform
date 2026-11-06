@@ -26,6 +26,21 @@ export const companySubscriptions = pgTable('company_subscriptions', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** Billing settings Orbit (Super Admin) sets per company: currency, whether plans are shown, trial length. */
+export const companyBilling = pgTable('company_billing', {
+  companyId: uuid('company_id')
+    .primaryKey()
+    .references(() => companies.id),
+  /** INR for Indian clients, USD for foreign clients. */
+  currency: text('currency').notNull().default('INR'),
+  /** Released (true): the company admin sees plans and can subscribe. Hidden (false): Orbit handles it. */
+  showPlans: boolean('show_plans').notNull().default(true),
+  trialDays: integer('trial_days'),
+  /** Super Admin's last look at this company's payments; newer confirmations show as new. */
+  seenAt: timestamp('seen_at', { withTimezone: true }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** Payments and subscription events, for the billing history. */
 export const billingEvents = pgTable(
   'billing_events',

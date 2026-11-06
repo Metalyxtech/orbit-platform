@@ -2,12 +2,12 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button, Chip, ConfirmDialog, DataTable, EmptyState, useToast } from '@orbit/ui';
-import { BundlePicker, CycleSwitch, PlanCards, TRUST } from '@/billing/PlanCards';
-import { cycleOf, inr, planOf, priceFor, tierOf, type Bundle, type Cycle, type TierId } from '@/billing/plans';
+import { BundlePicker, CycleSwitch, PlanCards, trustFor } from '@/billing/PlanCards';
+import { cycleOf, money, planOf, priceFor, taxNote, tierOf, type Bundle, type Cycle, type TierId } from '@/billing/plans';
 import type { BillingState } from '@/billing/state';
 import { cancelPlanAction, confirmCheckoutAction, startCheckoutAction } from './actions';
 
-type History = { id: string; type: string; amount: number | null; ref: string | null; at: string };
+type History = { id: string; type: string; amount: number | null; currency: string | null; ref: string | null; at: string };
 type RzResponse = { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string };
 declare global {
   interface Window {
@@ -53,6 +53,9 @@ export function BillingClient({ state, company, history }: { state: BillingState
   const [busy, setBusy] = useState(false);
   const current = state.plan ? planOf(state.plan) : undefined;
   const paid = state.status === 'active' || state.status === 'past_due';
+  const cur = state.currency;
+  const m = (v: number) => money(v, cur);
+  const tax = cur === 'USD' ? '' : ' + GST';
 
   async function pay(tier: TierId) {
     setPick(null);
@@ -133,7 +136,7 @@ export function BillingClient({ state, company, history }: { state: BillingState
             {state.status === 'active' &&
               (state.cancelAtPeriodEnd
                 ? `${current?.name}, ${cycleOf(state.cycle ?? 'monthly').label.toLowerCase()}. Ends on ${date(state.currentPeriodEnd)}; it will not renew.`
-                : `${current?.name}, ${cycleOf(state.cycle ?? 'monthly').label.toLowerCase()}, ${current ? inr(priceFor(current.bundle, current.tier, (state.cycle as Cycle) ?? 'monthly')) : ''} + GST. Renews on ${date(state.currentPeriodEnd)}.`)}
+                : `${current?.name}, ${cycleOf(state.cycle ?? 'monthly').label.toLowerCase()}, ${current ? m(priceFor(current.bundle, current.tier, (state.cycle as Cycle) ?? 'monthly', cur)) : ''}{tax}. Renews on ${date(state.currentPeriodEnd)}.`)}
             {state.status === 'past_due' && 'Razorpay could not take the last payment and is retrying. Update your payment method from the link Razorpay emailed you.'}
             {state.status === 'cancelled' && 'Your subscription has ended. Choose a plan to continue.'}
           </p>
@@ -151,10 +154,23 @@ export function BillingClient({ state, company, history }: { state: BillingState
         </div>
       </div>
 
+      {!state.showPlans ? (
+        <div className="o-panel">
+          <h2 style={{ margin: 0 }}>Your plan is arranged by the Orbit team</h2>
+          <p className="muted" style={{ fontSize: 13, margin: '6px 0 0' }}>
+            Orbit has set up your subscription for you. To change your plan or team size, write to{' '}
+            <a href="mailto:sales@metalyxtech.com?subject=Orbit%20plan">sales@metalyxtech.com</a>.
+          </p>
+        </div>
+      ) : (
+        <>
       <h2 style={{ margin: '8px 0 0' }}>{paid ? 'Change plan' : 'Choose your plan'}</h2>
+      <p className="muted" style={{ fontSize: 13, margin: 0 }}>
+        Prices in {cur === 'USD' ? 'US dollars' : 'Indian rupees'} · {taxNote(cur)}
+      </p>
       <div className="b-steps">
         <span className="b-step">1. Portals</span>
-        <BundlePicker bundle={bundle} onChange={setBundle} />
+        <BundlePicker bundle={bundle} onChange={setBundle} currency={cur} />
       </div>
       <div className="b-steps">
         <span className="b-step">2. How often to pay</span>
@@ -165,6 +181,7 @@ export function BillingClient({ state, company, history }: { state: BillingState
         <PlanCards
           bundle={bundle}
           cycle={cycle}
+          currency={cur}
           action={(tier) => {
             const t = tierOf(tier)!;
             const id = `${bundle}_${tier}`;
@@ -186,10 +203,12 @@ export function BillingClient({ state, company, history }: { state: BillingState
         />
       </div>
       <ul className="b-trust">
-        {TRUST.map((t) => (
+        {trustFor(cur, state.trialDays).map((t) => (
           <li key={t}>{t}</li>
         ))}
       </ul>
+        </>
+      )}
 
       <div className="o-panel flush">
         <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
@@ -207,7 +226,7 @@ export function BillingClient({ state, company, history }: { state: BillingState
           columns={[
             { key: 'd', header: 'Date', render: (r) => date(r.at) },
             { key: 't', header: 'Event', render: (r) => EVENT[r.type] ?? r.type },
-            { key: 'a', header: 'Amount', num: true, render: (r) => (r.amount ? inr(r.amount / 100) : '-') },
+            { key: 'a', header: 'Amount', num: true, render: (r) => (r.amount ? money(r.amount / 100, r.currency === 'USD' ? 'USD' : r.currency === 'INR' ? 'INR' : cur) : '-') },
             { key: 'r', header: 'Reference', render: (r) => <span className="faint" style={{ fontSize: 11 }}>{r.ref}</span> },
           ]}
         />
@@ -222,8 +241,8 @@ export function BillingClient({ state, company, history }: { state: BillingState
       >
         {pick && (
           <>
-            {inr(priceFor(bundle, pick, cycle))} + GST per {cycleOf(cycle).per}, for up to {tierOf(pick)?.users} people.
-            {state.status === 'trial' && state.trialDaysLeft > 0 ? ` Your card or UPI is set up now; the first charge is on ${date(state.trialEndsAt)} when the trial ends.` : ' You pay now through Razorpay.'}{' '}
+            {m(priceFor(bundle, pick, cycle, cur))}{tax} per {cycleOf(cycle).per}, for up to {tierOf(pick)?.users} people.
+            {state.status === 'trial' && state.trialDaysLeft > 0 ? ` Your ${cur === 'USD' ? 'card' : 'card or UPI'} is set up now; the first charge is on ${date(state.trialEndsAt)} when the trial ends.` : ' You pay now through Razorpay.'}{' '}
             Cancel any time.
           </>
         )}

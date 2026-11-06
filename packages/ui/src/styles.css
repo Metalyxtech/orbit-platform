@@ -132,6 +132,7 @@ h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
 .o-banner.bad { border-color: var(--bad); background: var(--bad-tint); }
 .o-banner.hivis { border-color: var(--hivis); background: var(--hivis-tint); }
 .o-banner.info { border-color: var(--steel); background: var(--steel-tint); }
+.o-banner.ok { border-color: var(--ok); background: var(--ok-tint); }
 .o-kpis { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--sheet); border: 1px solid var(--line); border-radius: var(--radius); }
 .o-kpi { padding: 14px 16px; border-right: 1px solid var(--line-2); }
 .o-kpi:last-child { border-right: 0; }

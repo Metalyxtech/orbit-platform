@@ -1,45 +1,14 @@
 'use server';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { activateRequestedPortals, audit, Effects, newEvent, setMemberPortal, uuidv7 } from '@orbit/core';
-import { getDb, getSession } from '@orbit/core/next';
-import { companies, companyPortals, memberships, withTenant, workflowDefinitionColumns, workflowDefinitions, type Tx } from '@orbit/db';
+import { getDb } from '@orbit/core/next';
+import { companies, companyPortals, memberships, withTenant } from '@orbit/db';
 import { portalModules } from '@/portals';
 import { confirmed, removeMembership, REMOVE_WORD } from './remove-member';
+import { requireSuperAdmin, setPortal } from './guard';
 import { timesheetManifest } from '@orbit/portal-timesheet/manifest';
-
-async function requireSuperAdmin() {
-  const s = await getSession();
-  const isSuper = (s.state === 'ok' && s.ctx.isSuperAdmin) || ((s.state === 'no_company' || s.state === 'pending') && s.isSuperAdmin);
-  if (!isSuper) throw new Error('Super Admin only');
-  return s.state === 'ok' ? s.ctx.userId : s.state === 'no_company' ? s.userId : '00000000-0000-0000-0000-000000000000';
-}
-
-async function defaultWorkflowId(portal: string) {
-  if (portal !== timesheetManifest.id) return null;
-  const db = await getDb();
-  const [wf] = await db
-    .select(workflowDefinitionColumns)
-    .from(workflowDefinitions)
-    .where(eq(workflowDefinitions.key, timesheetManifest.defaultWorkflowKey))
-    .orderBy(desc(workflowDefinitions.version))
-    .limit(1);
-  return wf?.id ?? null;
-}
-
-/** Switches one portal on or off for a company. Switching on keeps an existing workflow choice. */
-async function setPortal(tx: Tx, companyId: string, portal: string, enabled: boolean) {
-  const [row] = await tx
-    .select({ workflowDefinitionId: companyPortals.workflowDefinitionId })
-    .from(companyPortals)
-    .where(and(eq(companyPortals.companyId, companyId), eq(companyPortals.portal, portal)));
-  const workflowDefinitionId = row?.workflowDefinitionId ?? (enabled ? await defaultWorkflowId(portal) : null);
-  await tx
-    .insert(companyPortals)
-    .values({ companyId, portal, enabled, workflowDefinitionId })
-    .onConflictDoUpdate({ target: [companyPortals.companyId, companyPortals.portal], set: { enabled, workflowDefinitionId } });
-}
 
 /**
  * Approves a registered company: activates it, its first admin and every portal it asked for.

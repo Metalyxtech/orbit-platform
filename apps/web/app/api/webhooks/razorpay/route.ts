@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   }
   const evt = JSON.parse(raw) as {
     event: string;
-    payload: { subscription?: { entity: RzSubscription }; payment?: { entity: { id: string; amount: number; status: string } } };
+    payload: { subscription?: { entity: RzSubscription }; payment?: { entity: { id: string; amount: number; currency?: string; status: string } } };
   };
   const sub = evt.payload.subscription?.entity;
   const companyId = sub?.notes?.company_id;
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
       type: evt.event,
       razorpayId: pay?.id ?? sub.id,
       amount: pay?.amount ?? null,
-      data: { status: sub.status, current_end: sub.current_end },
+      data: { status: sub.status, current_end: sub.current_end, currency: pay?.currency ?? sub.notes?.currency ?? null },
     });
   });
   return NextResponse.json({ ok: true });

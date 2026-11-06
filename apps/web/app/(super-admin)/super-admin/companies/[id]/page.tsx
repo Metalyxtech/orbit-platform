@@ -17,9 +17,11 @@ import {
 import { ROLE_LABEL, companyStatusChip, fmtDate, loadMemberPortals, loadPeople, loadPortals, memberStatusChip, requireSuperAdminPage } from '../../data';
 import { RemoveMemberButton } from '../../RemoveMemberButton';
 import { MemberPortals } from '../../MemberPortals';
+import { loadCompanyBilling } from '../../billing-data';
+import { BillingPanel } from './BillingPanel';
 
 /** Super Admin > Companies > one company: profile, portals and people. */
-export default async function CompanyPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function CompanyPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ added?: string }> }) {
   const me = await requireSuperAdminPage();
   const id = z.uuid().safeParse((await params).id);
   if (!id.success) notFound();
@@ -39,6 +41,8 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
   const admins = people.filter((p) => p.role === 'company_admin');
   const registeredBy = [...admins].sort((a, b) => a.joinedAt.getTime() - b.joinedAt.getTime())[0];
   const active = people.filter((p) => p.status === 'active');
+  const billing = await loadCompanyBilling(c.id, me.userId);
+  const added = (await searchParams).added === '1';
 
   const details: [string, React.ReactNode][] = [
     ['Company name', c.name],
@@ -85,6 +89,11 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
         </form>
       </header>
       <div className="o-page">
+        {added && (
+          <div className="o-banner ok">
+            {c.name} is set up. {admins[0] ? `${admins[0].name} can now sign in with ${admins[0].email} and will open the Company admin portal.` : ''}
+          </div>
+        )}
         {c.status === 'suspended' && <div className="o-banner bad">This company is blocked. Its people see "Access blocked" when they sign in.</div>}
         {c.status === 'pending' && <div className="o-banner">This company is waiting for your approval. Approving it activates its first admin and the Timesheet portal.</div>}
 
@@ -104,6 +113,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
           </div>
 
           <div className="o-stack" style={{ gap: 16 }}>
+            <BillingPanel companyId={c.id} b={billing} />
             <div className="o-panel">
               <div className="o-panel-head">
                 <h2>Stage</h2>

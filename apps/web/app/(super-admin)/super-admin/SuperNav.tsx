@@ -5,10 +5,11 @@ import { usePathname } from 'next/navigation';
 const items = [
   { href: '/super-admin/requests', label: 'Requests' },
   { href: '/super-admin', label: 'Companies' },
+  { href: '/super-admin/subscriptions', label: 'Subscriptions' },
   { href: '/super-admin/people', label: 'People' },
 ];
 
-export function SuperNav({ requests }: { requests: number }) {
+export function SuperNav({ requests, payments = 0 }: { requests: number; payments?: number }) {
   const pathname = usePathname();
   const active = (href: string) =>
     href === '/super-admin' ? pathname === href || pathname.startsWith('/super-admin/companies') : pathname.startsWith(href);
@@ -18,6 +19,11 @@ export function SuperNav({ requests }: { requests: number }) {
         <Link key={i.href} href={i.href} aria-current={active(i.href) ? 'page' : undefined}>
           {i.label}
           {i.href.endsWith('/requests') && requests > 0 ? <span className="o-badge">{requests}</span> : null}
+          {i.href.endsWith('/subscriptions') && payments > 0 ? (
+            <span className="o-badge" title="New payment confirmations">
+              {payments}
+            </span>
+          ) : null}
         </Link>
       ))}
     </nav>

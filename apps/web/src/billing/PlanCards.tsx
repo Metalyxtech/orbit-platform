@@ -1,9 +1,10 @@
 'use client';
 import type { ReactNode } from 'react';
-import { BUNDLES, CYCLES, MONTHLY, TIERS, TRIAL_DAYS, bundleSaving, cycleOf, inr, perMonthFor, priceFor, savingFor, type Bundle, type Cycle, type TierId } from './plans';
+import { BUNDLES, CYCLES, TIERS, TRIAL_DAYS, bundleSaving, cycleOf, money, monthly, perMonthFor, priceFor, savingFor, taxNote, type Bundle, type Currency, type Cycle, type TierId } from './plans';
 
 /** Step 1: which portals. */
-export function BundlePicker({ bundle, onChange }: { bundle: Bundle; onChange: (b: Bundle) => void }) {
+export function BundlePicker({ bundle, onChange, currency = 'INR' }: { bundle: Bundle; onChange: (b: Bundle) => void; currency?: Currency }) {
+  const m = (v: number) => money(v, currency);
   return (
     <div className="b-bundles" role="radiogroup" aria-label="Portals">
       {BUNDLES.map((b) => (
@@ -13,7 +14,7 @@ export function BundlePicker({ bundle, onChange }: { bundle: Bundle; onChange: (
             <strong>{b.name}</strong>
             <small>{b.desc}</small>
           </span>
-          <em>{b.id === 'both' ? `Save ${inr(bundleSaving('growth'))}/mo` : `from ${inr(MONTHLY[b.id].starter)}/mo`}</em>
+          <em>{b.id === 'both' ? `Save ${m(bundleSaving('growth', currency))}/mo` : `from ${m(monthly(b.id, 'starter', currency))}/mo`}</em>
         </button>
       ))}
     </div>
@@ -40,13 +41,16 @@ export function PlanCards({
   cycle,
   action,
   enterprise,
+  currency = 'INR',
 }: {
   bundle: Bundle;
   cycle: Cycle;
+  currency?: Currency;
   action: (tier: TierId) => ReactNode;
   enterprise: ReactNode;
 }) {
   const c = cycleOf(cycle);
+  const m = (v: number) => money(v, currency);
   return (
     <div className="b-plans">
       {TIERS.map((t) => (
@@ -55,15 +59,15 @@ export function PlanCards({
           <h3>{t.name}</h3>
           <p className="b-tag">{t.tagline}</p>
           <div className="b-price">
-            <strong>{inr(perMonthFor(bundle, t.id, cycle))}</strong>
+            <strong>{m(perMonthFor(bundle, t.id, cycle, currency))}</strong>
             <span>/ month</span>
           </div>
           <p className="b-billed">
-            {c.months === 1 ? 'Billed monthly · GST extra' : `${inr(priceFor(bundle, t.id, cycle))} per ${c.per} · save ${inr(savingFor(bundle, t.id, cycle))}`}
+            {c.months === 1 ? `Billed monthly · ${taxNote(currency)}` : `${m(priceFor(bundle, t.id, cycle, currency))} per ${c.per} · save ${m(savingFor(bundle, t.id, cycle, currency))}`}
           </p>
           {bundle === 'both' && (
             <p className="b-combo">
-              {inr(MONTHLY.timesheet[t.id] + MONTHLY.purchase[t.id])} separately · you save {inr(bundleSaving(t.id))}/mo
+              {m(monthly('timesheet', t.id, currency) + monthly('purchase', t.id, currency))} separately · you save {m(bundleSaving(t.id, currency))}/mo
             </p>
           )}
           <ul>
@@ -93,10 +97,12 @@ export function PlanCards({
   );
 }
 
-export const TRUST = [
-  `${TRIAL_DAYS}-day free trial, no card needed`,
+/** Reassurance list under the plans; payment methods and tax differ for India and abroad. */
+export const trustFor = (currency: Currency = 'INR', trialDays = TRIAL_DAYS) => [
+  `${trialDays}-day free trial, no card needed`,
   'Pay monthly, quarterly, half-yearly or yearly',
-  'UPI, cards, net banking and UPI AutoPay through Razorpay',
+  currency === 'USD' ? 'International cards through Razorpay, charged in US dollars' : 'UPI, cards, net banking and UPI AutoPay through Razorpay',
   'Change plan or cancel any time',
-  'GST invoice every cycle',
+  currency === 'USD' ? 'Invoice every cycle' : 'GST invoice every cycle',
 ];
+export const TRUST = trustFor();

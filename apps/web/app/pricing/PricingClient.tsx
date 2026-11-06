@@ -1,12 +1,13 @@
 'use client';
 import Link from 'next/link';
 import { useState } from 'react';
-import { BundlePicker, CycleSwitch, PlanCards, TRUST } from '@/billing/PlanCards';
-import { TIERS, TRIAL_DAYS, type Bundle, type Cycle } from '@/billing/plans';
+import { BundlePicker, CycleSwitch, PlanCards, trustFor } from '@/billing/PlanCards';
+import { TIERS, TRIAL_DAYS, taxNote, type Bundle, type Currency, type Cycle } from '@/billing/plans';
 
 export function PricingClient() {
   const [cycle, setCycle] = useState<Cycle>('yearly');
   const [bundle, setBundle] = useState<Bundle>('both');
+  const [currency, setCurrency] = useState<Currency>('INR');
   return (
     <main className="b-public">
       <header className="b-public-head">
@@ -28,9 +29,21 @@ export function PricingClient() {
         <p>Take one portal or both. Pay monthly, quarterly, half-yearly or yearly. Try everything free for {TRIAL_DAYS} days.</p>
       </section>
       <div className="b-public-body">
+        <div className="b-steps" style={{ alignItems: 'center' }}>
+          <span className="b-step">Where is your company?</span>
+          <div className="b-cycle" role="group" aria-label="Currency">
+            <button type="button" aria-pressed={currency === 'INR'} onClick={() => setCurrency('INR')}>
+              India (₹)
+            </button>
+            <button type="button" aria-pressed={currency === 'USD'} onClick={() => setCurrency('USD')}>
+              Outside India ($)
+            </button>
+          </div>
+          <span className="muted" style={{ fontSize: 12 }}>{taxNote(currency)}</span>
+        </div>
         <div className="b-steps">
           <span className="b-step">1. Choose portals</span>
-          <BundlePicker bundle={bundle} onChange={setBundle} />
+          <BundlePicker bundle={bundle} onChange={setBundle} currency={currency} />
         </div>
         <div className="b-steps" style={{ alignItems: 'center' }}>
           <span className="b-step">2. How often to pay</span>
@@ -39,6 +52,7 @@ export function PricingClient() {
         <PlanCards
           bundle={bundle}
           cycle={cycle}
+          currency={currency}
           action={(tier) => (
             <Link className={`o-btn block${TIERS.find((t) => t.id === tier)?.popular ? ' primary' : ''}`} href="/auth/login?hint=sign-up">
               Start {TRIAL_DAYS}-day free trial
@@ -51,7 +65,7 @@ export function PricingClient() {
           }
         />
         <ul className="b-trust">
-          {TRUST.map((t) => (
+          {trustFor(currency).map((t) => (
             <li key={t}>{t}</li>
           ))}
         </ul>

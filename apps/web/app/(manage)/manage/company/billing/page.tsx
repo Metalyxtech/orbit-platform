@@ -18,7 +18,7 @@ export default async function Billing() {
       <BillingClient
         state={d.state}
         company={s.ctx.companyName}
-        history={d.history.map((h) => ({ id: h.id, type: h.type, amount: h.amount, ref: h.razorpayId, at: h.createdAt.toISOString() }))}
+        history={d.history.map((h) => ({ id: h.id, type: h.type, amount: h.amount, currency: ((h.data ?? {}) as { currency?: string }).currency ?? null, ref: h.razorpayId, at: h.createdAt.toISOString() }))}
       />
     </>
   );

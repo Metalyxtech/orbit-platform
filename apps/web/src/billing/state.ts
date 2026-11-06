@@ -1,31 +1,62 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { audit, type ActionContext, type SessionContext } from '@orbit/core';
-import { billingEvents, billingPlans, companies, companyPortals, companySubscriptions, memberships, type Tx } from '@orbit/db';
-import { BILLING_LAUNCH, BUNDLES, CYCLES, TIERS, TRIAL_DAYS, TRIAL_LIMITS, cycleOf, planId, planOf, priceFor, type Bundle, type Cycle, type TierId } from './plans';
+import { billingEvents, billingPlans, companies, companyBilling, companyPortals, companySubscriptions, memberships, type Tx } from '@orbit/db';
+import {
+  BILLING_LAUNCH,
+  BUNDLES,
+  CYCLES,
+  TIERS,
+  TRIAL_DAYS,
+  TRIAL_LIMITS,
+  cycleOf,
+  planId,
+  planOf,
+  priceFor,
+  type Bundle,
+  type Currency,
+  type Cycle,
+  type TierId,
+} from './plans';
 import * as rz from './razorpay';
 
 const pgCode = (err: unknown) => (err as { code?: string; cause?: { code?: string } })?.code ?? (err as { cause?: { code?: string } })?.cause?.code;
-/** Migration 0011 not run yet: every company is on the free trial. */
-const missing = (err: unknown) => pgCode(err) === '42P01' || /relation "(company_subscriptions|billing_\w+)" does not exist/.test(String(err));
+/** Migrations 0011/0012 not run yet: every company is on the free trial. */
+export const missing = (err: unknown) => pgCode(err) === '42P01' || /relation "(company_subscriptions|company_billing|billing_\w+)" does not exist/.test(String(err));
 
 const DAY = 864e5;
 const PAID = ['active', 'authenticated'];
 
 export type BillingStatus = 'trial' | 'trial_ended' | 'active' | 'past_due' | 'cancelled' | 'pending_payment';
 
+/** Orbit's billing settings for a company: currency, plans released or hidden, trial length. */
+export async function billingSettings(tx: Tx, companyId: string): Promise<{ currency: Currency; showPlans: boolean; trialDays: number }> {
+  try {
+    const [row] = await tx.transaction((sp) => sp.select().from(companyBilling).where(eq(companyBilling.companyId, companyId)));
+    return { currency: row?.currency === 'USD' ? 'USD' : 'INR', showPlans: row?.showPlans ?? true, trialDays: row?.trialDays ?? TRIAL_DAYS };
+  } catch (err) {
+    if (missing(err)) return { currency: 'INR', showPlans: true, trialDays: TRIAL_DAYS };
+    throw err;
+  }
+}
+
 /** The company's plan, status, limits and usage. Never throws for a missing table. */
-export async function billingState(tx: Tx, ctx: SessionContext) {
-  const [company] = await tx.select({ createdAt: companies.createdAt }).from(companies).where(eq(companies.id, ctx.companyId));
+export async function billingState(tx: Tx, ctx: Pick<SessionContext, 'companyId'>) {
+  return billingStateFor(tx, ctx.companyId);
+}
+
+export async function billingStateFor(tx: Tx, companyId: string) {
+  const [company] = await tx.select({ createdAt: companies.createdAt }).from(companies).where(eq(companies.id, companyId));
   let sub: typeof companySubscriptions.$inferSelect | undefined;
   try {
-    [sub] = await tx.transaction((sp) => sp.select().from(companySubscriptions).where(eq(companySubscriptions.companyId, ctx.companyId)));
+    [sub] = await tx.transaction((sp) => sp.select().from(companySubscriptions).where(eq(companySubscriptions.companyId, companyId)));
   } catch (err) {
     if (!missing(err)) throw err;
   }
+  const settings = await billingSettings(tx, companyId);
   const now = Date.now();
   const trialStart = Math.max((company?.createdAt ?? new Date()).getTime(), new Date(BILLING_LAUNCH).getTime());
-  const trialEnds = sub?.trialEndsAt ?? new Date(trialStart + TRIAL_DAYS * DAY);
+  const trialEnds = sub?.trialEndsAt ?? new Date(trialStart + settings.trialDays * DAY);
   const periodEnd = sub?.currentPeriodEnd ?? null;
   const plan = sub ? planOf(sub.plan) : undefined;
   let status: BillingStatus;
@@ -38,12 +69,15 @@ export async function billingState(tx: Tx, ctx: SessionContext) {
   const onPlan = status === 'active' || status === 'past_due';
   const limits = onPlan && plan ? { users: plan.users, portals: plan.portals } : TRIAL_LIMITS;
   const [users, enabled] = await Promise.all([
-    tx.select({ id: memberships.id }).from(memberships).where(and(eq(memberships.companyId, ctx.companyId), eq(memberships.status, 'active'))),
-    tx.select({ p: companyPortals.portal }).from(companyPortals).where(and(eq(companyPortals.companyId, ctx.companyId), eq(companyPortals.enabled, true))),
+    tx.select({ id: memberships.id }).from(memberships).where(and(eq(memberships.companyId, companyId), eq(memberships.status, 'active'))),
+    tx.select({ p: companyPortals.portal }).from(companyPortals).where(and(eq(companyPortals.companyId, companyId), eq(companyPortals.enabled, true))),
   ]);
   const portals = enabled.map((p) => p.p);
   return {
     status,
+    currency: settings.currency,
+    showPlans: settings.showPlans,
+    trialDays: settings.trialDays,
     plan: plan?.id ?? null,
     planName: plan?.name ?? null,
     bundle: plan?.bundle ?? null,
@@ -77,14 +111,14 @@ const requireAdmin = (ctx: SessionContext) => {
 };
 
 /** The Razorpay plan for a bundle, tier and cycle, created on first use. */
-async function razorpayPlanId(tx: Tx, b: Bundle, t: TierId, cycle: Cycle) {
-  const key = `${planId(b, t)}_${cycle}`;
+async function razorpayPlanId(tx: Tx, b: Bundle, t: TierId, cycle: Cycle, currency: Currency) {
+  const key = `${planId(b, t)}_${cycle}_${currency}`;
   const p = planOf(planId(b, t))!;
   const c = cycleOf(cycle);
-  const amount = priceFor(b, t, cycle) * 100;
+  const amount = priceFor(b, t, cycle, currency) * 100; // paise or cents
   const [row] = await tx.select().from(billingPlans).where(eq(billingPlans.key, key));
   if (row && row.amount === amount) return row.razorpayPlanId;
-  const created = await rz.createPlan({ period: c.rz.period, interval: c.rz.interval, name: `Orbit ${p.name} (${c.label})`, amount, description: `Up to ${p.users} people` });
+  const created = await rz.createPlan({ period: c.rz.period, interval: c.rz.interval, name: `Orbit ${p.name} (${c.label})`, amount, currency, description: `Up to ${p.users} people` });
   await tx
     .insert(billingPlans)
     .values({ key, razorpayPlanId: created.id, amount })
@@ -103,19 +137,21 @@ export async function startCheckout(tx: Tx, ctx: ActionContext, raw: z.input<typ
   requireAdmin(ctx);
   const input = startInput.parse(raw);
   const state = await billingState(tx, ctx);
+  if (!state.showPlans) throw new Error('Your plan is arranged by the Orbit team. Contact Orbit to change it.');
+  const currency = state.currency;
   const id = planId(input.bundle, input.tier);
   const plan = planOf(id)!;
   if (state.usage.users > plan.users) throw new Error(`${plan.name} includes ${plan.users} people and you have ${state.usage.users}. Pick a larger team size.`);
   const outside = state.usage.portals.filter((p) => !plan.portals.includes(p));
   if (outside.length) throw new Error(`Your company already uses ${outside.map((p) => (p === 'procurement' ? 'Purchase' : 'Timesheet')).join(' and ')}. Choose a plan that includes it, or Timesheet + Purchase.`);
   if (state.status === 'active' && !state.cancelAtPeriodEnd && state.plan === id && state.cycle === input.cycle) throw new Error('You are already on this plan.');
-  const rzPlan = await razorpayPlanId(tx, input.bundle, input.tier, input.cycle);
+  const rzPlan = await razorpayPlanId(tx, input.bundle, input.tier, input.cycle, currency);
   // Trial days left are honoured: the first charge happens when the trial ends.
   const startAt = state.status === 'trial' && state.trialDaysLeft > 0 ? Math.floor(new Date(state.trialEndsAt).getTime() / 1000) : undefined;
   const sub = await rz.createSubscription({
     planId: rzPlan,
     totalCount: cycleOf(input.cycle).rz.totalCount,
-    notes: { company_id: ctx.companyId, company: ctx.companyName, plan: id, cycle: input.cycle },
+    notes: { company_id: ctx.companyId, company: ctx.companyName, plan: id, cycle: input.cycle, currency },
     startAt,
   });
   await tx
@@ -125,9 +161,9 @@ export async function startCheckout(tx: Tx, ctx: ActionContext, raw: z.input<typ
       target: companySubscriptions.companyId,
       set: { plan: id, cycle: input.cycle, status: 'created', razorpaySubscriptionId: sub.id, cancelAtPeriodEnd: false, updatedAt: new Date() },
     });
-  const amount = priceFor(input.bundle, input.tier, input.cycle);
-  await tx.insert(billingEvents).values({ companyId: ctx.companyId, type: 'checkout.started', razorpayId: sub.id, amount: amount * 100, data: { plan: id, cycle: input.cycle } });
-  return { subscriptionId: sub.id, keyId: await rz.publicKeyId(), planName: plan.name, amount, cycle: cycleOf(input.cycle).label, email: ctx.email, name: ctx.name };
+  const amount = priceFor(input.bundle, input.tier, input.cycle, currency);
+  await tx.insert(billingEvents).values({ companyId: ctx.companyId, type: 'checkout.started', razorpayId: sub.id, amount: amount * 100, data: { plan: id, cycle: input.cycle, currency } });
+  return { subscriptionId: sub.id, keyId: await rz.publicKeyId(), planName: plan.name, amount, currency, cycle: cycleOf(input.cycle).label, email: ctx.email, name: ctx.name };
 }
 
 const confirmInput = z.object({ paymentId: z.string().min(5).max(80), subscriptionId: z.string().min(5).max(80), signature: z.string().min(10).max(200) });

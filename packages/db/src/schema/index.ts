@@ -4,3 +4,4 @@ export * from './messages';
 export * from './forms';
 export * from './portal-roles';
 export * from './procurement';
+export * from './billing';

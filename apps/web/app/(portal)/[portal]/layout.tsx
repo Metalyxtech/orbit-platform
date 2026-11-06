@@ -2,6 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { getSession, query } from '@orbit/core/next';
 import { AppShell } from '@orbit/ui';
+import { BillingBanner } from '@/billing/BillingBanner';
 import { unreadCount } from '@/messages';
 import { isManager, workspaceFor } from '@/management/workspaces';
 import { accessiblePortals } from '@/portal-access';
@@ -52,6 +53,7 @@ export default async function PortalLayout({ children, params }: { children: Rea
       user={{ name: ctx.name, title: ctx.title }}
       signOutHref="/auth/sign-out"
     >
+      <BillingBanner role={ctx.role} />
       {ctx.companyStage === 'sandbox' && (
         <div className="o-banner info" style={{ borderRadius: 0 }}>
           Sandbox company: emails only go to verified test addresses.

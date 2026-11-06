@@ -33,7 +33,7 @@ const portalInput = z.object({ portal: z.string().refine((p) => !!portalModules[
 export async function requestCompanyPortal(tx: Tx, ctx: ActionContext, raw: { portal: string }) {
   requireAdmin(ctx);
   const { portal } = portalInput.parse(raw);
-  await assertWithinPlan(tx, ctx, 'portal');
+  await assertWithinPlan(tx, ctx, 'portal', portal);
   await tx.insert(companyPortals).values({ companyId: ctx.companyId, portal, enabled: false }).onConflictDoNothing();
   await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'company_portal.request', entity: 'company_portals', entityId: ctx.companyId, data: { portal }, requestId: ctx.requestId });
   return { ok: true as const };

@@ -16,7 +16,7 @@ export const companySubscriptions = pgTable('company_subscriptions', {
     .primaryKey()
     .references(() => companies.id),
   plan: text('plan').notNull(),
-  cycle: text('cycle').$type<'monthly' | 'yearly'>().notNull(),
+  cycle: text('cycle').notNull(), // monthly | quarterly | halfyearly | yearly
   /** created | authenticated | active | pending | halted | cancelled | completed (Razorpay states). */
   status: text('status').notNull(),
   razorpaySubscriptionId: text('razorpay_subscription_id').unique(),

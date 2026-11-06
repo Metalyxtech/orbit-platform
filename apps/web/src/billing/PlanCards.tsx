@@ -1,49 +1,77 @@
 'use client';
 import type { ReactNode } from 'react';
-import { inr, perMonth, PLANS, priceOf, yearlySaving, type Cycle, type Plan } from './plans';
+import { BUNDLES, CYCLES, MONTHLY, TIERS, TRIAL_DAYS, bundleSaving, cycleOf, inr, perMonthFor, priceFor, savingFor, type Bundle, type Cycle, type TierId } from './plans';
 
-/** Monthly / yearly switch shown above the plan cards. */
-export function CycleSwitch({ cycle, onChange }: { cycle: Cycle; onChange: (c: Cycle) => void }) {
+/** Step 1: which portals. */
+export function BundlePicker({ bundle, onChange }: { bundle: Bundle; onChange: (b: Bundle) => void }) {
   return (
-    <div className="b-cycle" role="group" aria-label="Billing cycle">
-      <button type="button" aria-pressed={cycle === 'monthly'} onClick={() => onChange('monthly')}>
-        Monthly
-      </button>
-      <button type="button" aria-pressed={cycle === 'yearly'} onClick={() => onChange('yearly')}>
-        Yearly <span className="b-save">2 months free</span>
-      </button>
+    <div className="b-bundles" role="radiogroup" aria-label="Portals">
+      {BUNDLES.map((b) => (
+        <button key={b.id} type="button" role="radio" aria-checked={bundle === b.id} className={`b-bundle${bundle === b.id ? ' on' : ''}`} onClick={() => onChange(b.id)}>
+          <span className="b-radio" aria-hidden />
+          <span>
+            <strong>{b.name}</strong>
+            <small>{b.desc}</small>
+          </span>
+          <em>{b.id === 'both' ? `Save ${inr(bundleSaving('growth'))}/mo` : `from ${inr(MONTHLY[b.id].starter)}/mo`}</em>
+        </button>
+      ))}
     </div>
   );
 }
 
-/** The plan cards: used on Plan and billing (company admin) and on the public pricing page. */
-export function PlanCards({ cycle, action, enterprise }: { cycle: Cycle; action: (p: Plan) => ReactNode; enterprise: ReactNode }) {
+/** Step 2: how often to pay. */
+export function CycleSwitch({ cycle, onChange }: { cycle: Cycle; onChange: (c: Cycle) => void }) {
+  return (
+    <div className="b-cycle" role="group" aria-label="Billing cycle">
+      {CYCLES.map((c) => (
+        <button key={c.id} type="button" aria-pressed={cycle === c.id} onClick={() => onChange(c.id)}>
+          {c.label}
+          {c.badge && <span className="b-save">{c.badge}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Step 3: team size, priced for the chosen portals and cycle. */
+export function PlanCards({
+  bundle,
+  cycle,
+  action,
+  enterprise,
+}: {
+  bundle: Bundle;
+  cycle: Cycle;
+  action: (tier: TierId) => ReactNode;
+  enterprise: ReactNode;
+}) {
+  const c = cycleOf(cycle);
   return (
     <div className="b-plans">
-      {PLANS.map((p) => (
-        <article key={p.id} className={`b-plan${p.popular ? ' popular' : ''}`}>
-          {p.popular && <span className="b-ribbon">Most popular</span>}
-          <h3>{p.name}</h3>
-          <p className="b-tag">{p.tagline}</p>
+      {TIERS.map((t) => (
+        <article key={t.id} className={`b-plan${t.popular ? ' popular' : ''}`}>
+          {t.popular && <span className="b-ribbon">Most popular</span>}
+          <h3>{t.name}</h3>
+          <p className="b-tag">{t.tagline}</p>
           <div className="b-price">
-            <strong>{inr(perMonth(p, cycle))}</strong>
+            <strong>{inr(perMonthFor(bundle, t.id, cycle))}</strong>
             <span>/ month</span>
           </div>
           <p className="b-billed">
-            {cycle === 'yearly' ? (
-              <>
-                {inr(priceOf(p, cycle))} billed yearly · save {inr(yearlySaving(p))}
-              </>
-            ) : (
-              'Billed monthly · GST extra'
-            )}
+            {c.months === 1 ? 'Billed monthly · GST extra' : `${inr(priceFor(bundle, t.id, cycle))} per ${c.per} · save ${inr(savingFor(bundle, t.id, cycle))}`}
           </p>
+          {bundle === 'both' && (
+            <p className="b-combo">
+              {inr(MONTHLY.timesheet[t.id] + MONTHLY.purchase[t.id])} separately · you save {inr(bundleSaving(t.id))}/mo
+            </p>
+          )}
           <ul>
-            {p.features.map((f) => (
+            {t.features.map((f) => (
               <li key={f}>{f}</li>
             ))}
           </ul>
-          <div className="b-cta">{action(p)}</div>
+          <div className="b-cta">{action(t.id)}</div>
         </article>
       ))}
       <article className="b-plan enterprise">
@@ -52,7 +80,7 @@ export function PlanCards({ cycle, action, enterprise }: { cycle: Cycle; action:
         <div className="b-price">
           <strong>Custom</strong>
         </div>
-        <p className="b-billed">Volume pricing and invoicing</p>
+        <p className="b-billed">Volume pricing, invoicing and bank transfer</p>
         <ul>
           <li>Unlimited people and portals</li>
           <li>Several companies under one account</li>
@@ -65,4 +93,10 @@ export function PlanCards({ cycle, action, enterprise }: { cycle: Cycle; action:
   );
 }
 
-export const TRUST = ['30-day free trial, no card needed', 'Cancel any time', 'GST invoice every cycle', 'Pay by UPI, card or net banking through Razorpay'];
+export const TRUST = [
+  `${TRIAL_DAYS}-day free trial, no card needed`,
+  'Pay monthly, quarterly, half-yearly or yearly',
+  'UPI, cards, net banking and UPI AutoPay through Razorpay',
+  'Change plan or cancel any time',
+  'GST invoice every cycle',
+];

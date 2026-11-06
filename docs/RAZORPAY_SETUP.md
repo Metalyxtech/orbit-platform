@@ -1,6 +1,7 @@
 # Razorpay subscriptions: setup
 
-Orbit bills companies through Razorpay Subscriptions. Plans and prices live in
+Orbit bills companies through Razorpay Subscriptions (7-day free trial; Timesheet, Purchase or both;
+monthly, quarterly, half-yearly or yearly). Plans and prices live in
 `apps/web/src/billing/plans.ts`; Orbit creates the matching Razorpay plans on first use.
 
 ## 1. Keys (Razorpay Dashboard)

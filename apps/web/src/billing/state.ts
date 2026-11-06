@@ -2,7 +2,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { audit, type ActionContext, type SessionContext } from '@orbit/core';
 import { billingEvents, billingPlans, companies, companyPortals, companySubscriptions, memberships, type Tx } from '@orbit/db';
-import { PLANS, TRIAL_DAYS, TRIAL_LIMITS, planById, priceOf, type Cycle, type PlanId } from './plans';
+import { BILLING_LAUNCH, BUNDLES, CYCLES, TIERS, TRIAL_DAYS, TRIAL_LIMITS, cycleOf, planId, planOf, priceFor, type Bundle, type Cycle, type TierId } from './plans';
 import * as rz from './razorpay';
 
 const pgCode = (err: unknown) => (err as { code?: string; cause?: { code?: string } })?.code ?? (err as { cause?: { code?: string } })?.cause?.code;
@@ -24,9 +24,10 @@ export async function billingState(tx: Tx, ctx: SessionContext) {
     if (!missing(err)) throw err;
   }
   const now = Date.now();
-  const trialEnds = sub?.trialEndsAt ?? new Date((company?.createdAt ?? new Date()).getTime() + TRIAL_DAYS * DAY);
+  const trialStart = Math.max((company?.createdAt ?? new Date()).getTime(), new Date(BILLING_LAUNCH).getTime());
+  const trialEnds = sub?.trialEndsAt ?? new Date(trialStart + TRIAL_DAYS * DAY);
   const periodEnd = sub?.currentPeriodEnd ?? null;
-  const plan = sub ? planById(sub.plan) : undefined;
+  const plan = sub ? planOf(sub.plan) : undefined;
   let status: BillingStatus;
   if (sub && PAID.includes(sub.status) && (!periodEnd || periodEnd.getTime() > now - 3 * DAY)) status = 'active';
   else if (sub && (sub.status === 'pending' || sub.status === 'halted')) status = 'past_due';
@@ -36,13 +37,17 @@ export async function billingState(tx: Tx, ctx: SessionContext) {
   else status = trialEnds.getTime() > now ? 'trial' : 'trial_ended';
   const onPlan = status === 'active' || status === 'past_due';
   const limits = onPlan && plan ? { users: plan.users, portals: plan.portals } : TRIAL_LIMITS;
-  const [users, portals] = await Promise.all([
+  const [users, enabled] = await Promise.all([
     tx.select({ id: memberships.id }).from(memberships).where(and(eq(memberships.companyId, ctx.companyId), eq(memberships.status, 'active'))),
     tx.select({ p: companyPortals.portal }).from(companyPortals).where(and(eq(companyPortals.companyId, ctx.companyId), eq(companyPortals.enabled, true))),
   ]);
+  const portals = enabled.map((p) => p.p);
   return {
     status,
     plan: plan?.id ?? null,
+    planName: plan?.name ?? null,
+    bundle: plan?.bundle ?? null,
+    tier: plan?.tier ?? null,
     cycle: (sub?.cycle as Cycle | undefined) ?? null,
     razorpayStatus: sub?.status ?? null,
     trialEndsAt: trialEnds.toISOString(),
@@ -50,34 +55,36 @@ export async function billingState(tx: Tx, ctx: SessionContext) {
     currentPeriodEnd: periodEnd?.toISOString() ?? null,
     cancelAtPeriodEnd: sub?.cancelAtPeriodEnd ?? false,
     limits,
-    usage: { users: users.length, portals: portals.length },
+    usage: { users: users.length, portals },
     /** Can the company keep adding people and portals? */
     usable: status === 'trial' || status === 'active' || status === 'past_due',
   };
 }
 export type BillingState = Awaited<ReturnType<typeof billingState>>;
 
-/** Throws when adding one more person or portal would go over the plan. */
-export async function assertWithinPlan(tx: Tx, ctx: SessionContext, what: 'user' | 'portal') {
+/** Throws when adding one more person, or a portal outside the plan, is not allowed. */
+export async function assertWithinPlan(tx: Tx, ctx: SessionContext, what: 'user' | 'portal', portal?: string) {
   const s = await billingState(tx, ctx);
   if (!s.usable) throw new Error('Your Orbit plan has ended. Choose a plan in Plan and billing to keep adding people and portals.');
-  const used = what === 'user' ? s.usage.users : s.usage.portals;
-  const cap = what === 'user' ? s.limits.users : s.limits.portals;
-  if (used >= cap) throw new Error(`Your plan includes ${cap} ${what === 'user' ? 'people' : cap === 1 ? 'portal' : 'portals'}. Upgrade in Plan and billing to add more.`);
+  if (what === 'user' && s.usage.users >= s.limits.users) throw new Error(`Your plan includes ${s.limits.users} people. Upgrade in Plan and billing to add more.`);
+  if (what === 'portal' && portal && !s.limits.portals.includes(portal)) {
+    throw new Error(`Your ${s.planName ?? ''} plan does not include this portal. Switch to a plan with it in Plan and billing.`);
+  }
 }
 
 const requireAdmin = (ctx: SessionContext) => {
   if (ctx.role !== 'company_admin') throw new Error('Only the company admin can manage the subscription');
 };
 
-/** The Razorpay plan for a plan and cycle, created on first use. */
-async function razorpayPlanId(tx: Tx, id: PlanId, cycle: Cycle) {
-  const key = `${id}_${cycle}`;
-  const p = planById(id)!;
-  const amount = priceOf(p, cycle) * 100;
+/** The Razorpay plan for a bundle, tier and cycle, created on first use. */
+async function razorpayPlanId(tx: Tx, b: Bundle, t: TierId, cycle: Cycle) {
+  const key = `${planId(b, t)}_${cycle}`;
+  const p = planOf(planId(b, t))!;
+  const c = cycleOf(cycle);
+  const amount = priceFor(b, t, cycle) * 100;
   const [row] = await tx.select().from(billingPlans).where(eq(billingPlans.key, key));
   if (row && row.amount === amount) return row.razorpayPlanId;
-  const created = await rz.createPlan({ period: cycle, name: `Orbit ${p.name} (${cycle})`, amount, description: p.tagline });
+  const created = await rz.createPlan({ period: c.rz.period, interval: c.rz.interval, name: `Orbit ${p.name} (${c.label})`, amount, description: `Up to ${p.users} people` });
   await tx
     .insert(billingPlans)
     .values({ key, razorpayPlanId: created.id, amount })
@@ -85,34 +92,42 @@ async function razorpayPlanId(tx: Tx, id: PlanId, cycle: Cycle) {
   return created.id;
 }
 
-const startInput = z.object({ plan: z.enum(PLANS.map((p) => p.id) as [PlanId, ...PlanId[]]), cycle: z.enum(['monthly', 'yearly']) });
+const startInput = z.object({
+  bundle: z.enum(BUNDLES.map((b) => b.id) as [Bundle, ...Bundle[]]),
+  tier: z.enum(TIERS.map((t) => t.id) as [TierId, ...TierId[]]),
+  cycle: z.enum(CYCLES.map((c) => c.id) as [Cycle, ...Cycle[]]),
+});
 
 /** Creates the Razorpay subscription; the browser then opens Razorpay Checkout with its id. */
 export async function startCheckout(tx: Tx, ctx: ActionContext, raw: z.input<typeof startInput>) {
   requireAdmin(ctx);
   const input = startInput.parse(raw);
   const state = await billingState(tx, ctx);
-  const plan = planById(input.plan)!;
-  if (state.usage.users > plan.users) throw new Error(`${plan.name} includes ${plan.users} people and you have ${state.usage.users}. Pick a larger plan.`);
-  if (state.status === 'active' && !state.cancelAtPeriodEnd && state.plan === input.plan && state.cycle === input.cycle) throw new Error('You are already on this plan.');
-  const planId = await razorpayPlanId(tx, input.plan, input.cycle);
+  const id = planId(input.bundle, input.tier);
+  const plan = planOf(id)!;
+  if (state.usage.users > plan.users) throw new Error(`${plan.name} includes ${plan.users} people and you have ${state.usage.users}. Pick a larger team size.`);
+  const outside = state.usage.portals.filter((p) => !plan.portals.includes(p));
+  if (outside.length) throw new Error(`Your company already uses ${outside.map((p) => (p === 'procurement' ? 'Purchase' : 'Timesheet')).join(' and ')}. Choose a plan that includes it, or Timesheet + Purchase.`);
+  if (state.status === 'active' && !state.cancelAtPeriodEnd && state.plan === id && state.cycle === input.cycle) throw new Error('You are already on this plan.');
+  const rzPlan = await razorpayPlanId(tx, input.bundle, input.tier, input.cycle);
   // Trial days left are honoured: the first charge happens when the trial ends.
   const startAt = state.status === 'trial' && state.trialDaysLeft > 0 ? Math.floor(new Date(state.trialEndsAt).getTime() / 1000) : undefined;
   const sub = await rz.createSubscription({
-    planId,
-    totalCount: input.cycle === 'yearly' ? 10 : 120,
-    notes: { company_id: ctx.companyId, company: ctx.companyName, plan: input.plan, cycle: input.cycle },
+    planId: rzPlan,
+    totalCount: cycleOf(input.cycle).rz.totalCount,
+    notes: { company_id: ctx.companyId, company: ctx.companyName, plan: id, cycle: input.cycle },
     startAt,
   });
   await tx
     .insert(companySubscriptions)
-    .values({ companyId: ctx.companyId, plan: input.plan, cycle: input.cycle, status: 'created', razorpaySubscriptionId: sub.id, trialEndsAt: new Date(state.trialEndsAt) })
+    .values({ companyId: ctx.companyId, plan: id, cycle: input.cycle, status: 'created', razorpaySubscriptionId: sub.id, trialEndsAt: new Date(state.trialEndsAt) })
     .onConflictDoUpdate({
       target: companySubscriptions.companyId,
-      set: { plan: input.plan, cycle: input.cycle, status: 'created', razorpaySubscriptionId: sub.id, cancelAtPeriodEnd: false, updatedAt: new Date() },
+      set: { plan: id, cycle: input.cycle, status: 'created', razorpaySubscriptionId: sub.id, cancelAtPeriodEnd: false, updatedAt: new Date() },
     });
-  await tx.insert(billingEvents).values({ companyId: ctx.companyId, type: 'checkout.started', razorpayId: sub.id, amount: priceOf(plan, input.cycle) * 100, data: { plan: input.plan, cycle: input.cycle } });
-  return { subscriptionId: sub.id, keyId: await rz.publicKeyId(), planName: plan.name, amount: priceOf(plan, input.cycle), cycle: input.cycle, email: ctx.email, name: ctx.name };
+  const amount = priceFor(input.bundle, input.tier, input.cycle);
+  await tx.insert(billingEvents).values({ companyId: ctx.companyId, type: 'checkout.started', razorpayId: sub.id, amount: amount * 100, data: { plan: id, cycle: input.cycle } });
+  return { subscriptionId: sub.id, keyId: await rz.publicKeyId(), planName: plan.name, amount, cycle: cycleOf(input.cycle).label, email: ctx.email, name: ctx.name };
 }
 
 const confirmInput = z.object({ paymentId: z.string().min(5).max(80), subscriptionId: z.string().min(5).max(80), signature: z.string().min(10).max(200) });
@@ -127,7 +142,7 @@ export async function confirmCheckout(tx: Tx, ctx: ActionContext, raw: z.input<t
   const live = await rz.fetchSubscription(input.subscriptionId);
   await applyRazorpay(tx, ctx.companyId, live);
   await tx.insert(billingEvents).values({ companyId: ctx.companyId, type: 'checkout.completed', razorpayId: input.paymentId, data: { subscription: input.subscriptionId } });
-  await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'billing.subscribe', entity: 'company_subscriptions', entityId: ctx.companyId, data: { summary: [`Subscribed to ${planById(sub.plan)?.name} (${sub.cycle})`] }, requestId: ctx.requestId });
+  await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'billing.subscribe', entity: 'company_subscriptions', entityId: ctx.companyId, data: { summary: [`Subscribed to ${planOf(sub.plan)?.name} (${cycleOf(sub.cycle).label})`] }, requestId: ctx.requestId });
   return { status: live.status };
 }
 

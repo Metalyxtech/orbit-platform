@@ -49,8 +49,8 @@ export interface RzSubscription {
   notes?: Record<string, string>;
 }
 
-export const createPlan = (input: { period: 'monthly' | 'yearly'; name: string; amount: number; description: string }) =>
-  call<{ id: string }>('POST', '/plans', { period: input.period, interval: 1, item: { name: input.name, amount: input.amount, currency: 'INR', description: input.description } });
+export const createPlan = (input: { period: 'monthly' | 'yearly'; interval: number; name: string; amount: number; description: string }) =>
+  call<{ id: string }>('POST', '/plans', { period: input.period, interval: input.interval, item: { name: input.name, amount: input.amount, currency: 'INR', description: input.description } });
 
 export const createSubscription = (input: { planId: string; totalCount: number; notes: Record<string, string>; startAt?: number }) =>
   call<RzSubscription>('POST', '/subscriptions', {

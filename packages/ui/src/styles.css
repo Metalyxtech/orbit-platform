@@ -526,3 +526,17 @@ h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
 .b-hero p { max-width: 620px; margin: 0; color: #c9cfd5; }
 .b-public-body { max-width: 1180px; margin: -8px auto 0; padding: 24px 16px 48px; display: flex; flex-direction: column; gap: 20px; }
 .b-cta .o-btn { width: 100%; display: flex; justify-content: center; text-align: center; }
+.b-bundles { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.b-bundle { font: inherit; text-align: left; display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--sheet); cursor: pointer; position: relative; }
+.b-bundle:hover { border-color: var(--steel); }
+.b-bundle.on { border: 2px solid var(--steel); padding: 13px 15px; background: var(--steel-tint); }
+.b-bundle > span:nth-child(2) { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+.b-bundle strong { font-size: 15px; }
+.b-bundle small { font-size: 12px; color: var(--ink-2); }
+.b-bundle em { font-style: normal; font-size: 11px; font-weight: 700; color: var(--ok); white-space: nowrap; }
+.b-radio { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--ink-3); margin-top: 2px; flex: none; }
+.b-bundle.on .b-radio { border-color: var(--steel); box-shadow: inset 0 0 0 3px var(--sheet); background: var(--steel); }
+.b-combo { font-size: 11px; color: var(--ok); margin: -8px 0 12px; }
+.b-cycle { flex-wrap: wrap; }
+.b-steps { display: flex; flex-direction: column; gap: 10px; }
+.b-step { font-size: 12px; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.06em; }

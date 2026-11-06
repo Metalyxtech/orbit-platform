@@ -3,7 +3,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button, Chip, ConfirmDialog, DataTable, EmptyState, useToast } from '@orbit/ui';
 import { BundlePicker, CycleSwitch, PlanCards, trustFor } from '@/billing/PlanCards';
-import { cycleOf, money, planOf, priceFor, taxNote, tierOf, type Bundle, type Cycle, type TierId } from '@/billing/plans';
+import { cycleOf, money, planOf, portalName, portalsOutside, priceFor, taxNote, tierOf, type Bundle, type Cycle, type TierId } from '@/billing/plans';
 import type { BillingState } from '@/billing/state';
 import { cancelPlanAction, confirmCheckoutAction, startCheckoutAction } from './actions';
 
@@ -82,7 +82,9 @@ export function BillingClient({ state, company, history }: { state: BillingState
         const done = await confirmCheckoutAction({ paymentId: r.razorpay_payment_id, subscriptionId: r.razorpay_subscription_id, signature: r.razorpay_signature });
         setBusy(false);
         if (!done.ok) return toast(done.error, 'bad');
-        toast(`You are on ${res.data.planName}. Thank you!`);
+        const paused = done.data.paused.length ? ` ${done.data.paused.join(' and ')} is paused; your data is kept.` : '';
+        const resumed = done.data.resumed.length ? ` ${done.data.resumed.join(' and ')} is back on.` : '';
+        toast(`You are on ${res.data.planName}. Thank you!${paused}${resumed}`);
         router.refresh();
       },
     });
@@ -244,6 +246,12 @@ export function BillingClient({ state, company, history }: { state: BillingState
             {m(priceFor(bundle, pick, cycle, cur))}{tax} per {cycleOf(cycle).per}, for up to {tierOf(pick)?.users} people.
             {state.status === 'trial' && state.trialDaysLeft > 0 ? ` Your ${cur === 'USD' ? 'card' : 'card or UPI'} is set up now; the first charge is on ${date(state.trialEndsAt)} when the trial ends.` : ' You pay now through Razorpay.'}{' '}
             Cancel any time.
+            {portalsOutside(`${bundle}_${pick}`, used).length > 0 && (
+              <p className="o-banner hivis" style={{ margin: '10px 0 0' }}>
+                This plan does not include {portalsOutside(`${bundle}_${pick}`, used).map(portalName).join(' and ')}. It will be paused for everyone in
+                your company once you subscribe. Its data is kept, and it comes back if you later choose a plan that includes it.
+              </p>
+            )}
           </>
         )}
       </ConfirmDialog>

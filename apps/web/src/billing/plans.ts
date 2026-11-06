@@ -72,6 +72,15 @@ export function planOf(id: string) {
   return { id: id as PlanId, bundle: bundle.id, tier: tier.id, name: `${bundle.name} ${tier.name}`, users: tier.users, portals: bundle.portals };
 }
 
+/** Display name of a portal id. */
+export const portalName = (p: string) => (p === 'procurement' ? 'Purchase' : p === 'timesheet' ? 'Timesheet' : p);
+
+/** Portals in use that a plan does not include: they are paused when the company moves to it. */
+export function portalsOutside(id: string, inUse: string[]) {
+  const plan = planOf(id);
+  return plan ? inUse.filter((p) => !plan.portals.includes(p)) : [];
+}
+
 /** Amount charged each cycle, in the client's currency. */
 export function priceFor(b: Bundle, t: TierId, cycle: Cycle, cur: Currency = 'INR') {
   const c = cycleOf(cycle);

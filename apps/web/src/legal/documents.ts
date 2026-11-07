@@ -4,8 +4,20 @@
 // Safe to import from client components. Have a lawyer review before relying on this text.
 
 export type LegalDoc = 'terms' | 'privacy';
+// ---- Fill these in before real customers sign (empty values are left out of the text). ----
+/** Registered legal name, e.g. "Metalyxtech Private Limited". */
 export const LEGAL_PROVIDER = 'Metalyxtech';
+/** Email for legal, privacy and account questions. */
 export const LEGAL_CONTACT = 'sales@metalyxtech.com';
+/** Registered office address. */
+export const LEGAL_ADDRESS = '';
+/** GSTIN, shown so Indian customers can claim input tax credit. */
+export const LEGAL_GSTIN = '';
+/** City whose courts handle disputes, e.g. "Kochi". */
+export const LEGAL_CITY = '';
+// -------------------------------------------------------------------------------------------
+
+const office = [LEGAL_ADDRESS && `Registered office: ${LEGAL_ADDRESS}.`, LEGAL_GSTIN && `GSTIN: ${LEGAL_GSTIN}.`].filter(Boolean).join(' ');
 
 export interface LegalDocument {
   id: LegalDoc;
@@ -102,8 +114,8 @@ export const TERMS: LegalDocument = {
     {
       heading: '12. Law and contact',
       body: [
-        'These Terms are governed by the laws of India, and the courts of India have jurisdiction, unless the Customer and Orbit agree otherwise in writing.',
-        'Questions about these Terms: ' + LEGAL_CONTACT + '.',
+        `These Terms are governed by the laws of India, and the courts ${LEGAL_CITY ? `at ${LEGAL_CITY} have exclusive` : 'of India have'} jurisdiction, unless the Customer and Orbit agree otherwise in writing.`,
+        `Questions about these Terms: ${LEGAL_CONTACT}.${office ? ` ${office}` : ''}`,
       ],
     },
   ],
@@ -177,3 +189,12 @@ export const PRIVACY: LegalDocument = {
 
 export const DOCUMENTS: Record<LegalDoc, LegalDocument> = { terms: TERMS, privacy: PRIVACY };
 export const LEGAL_DOCS = [TERMS, PRIVACY];
+
+/**
+ * Older versions. When you change a document and its version, move the old one here unchanged,
+ * so signed copies made before the new copies existed can still be shown.
+ */
+export const ARCHIVE: LegalDocument[] = [];
+
+/** The text of one document version, current or archived. */
+export const documentVersion = (id: string, version: string) => [...LEGAL_DOCS, ...ARCHIVE].find((d) => d.id === id && d.version === version);

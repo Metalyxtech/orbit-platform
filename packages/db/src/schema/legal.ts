@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { companies, users } from './platform';
 
 /**
@@ -27,3 +27,16 @@ export const legalAcceptances = pgTable(
   },
   (t) => [index('legal_acceptances_user').on(t.userId, t.document), index('legal_acceptances_company').on(t.companyId, t.acceptedAt)],
 );
+
+/**
+ * The exact text a person signed (a "signed copy"), with its SHA-256 fingerprint. One row per
+ * acceptance; readable by whoever can read the acceptance. Migration 0014.
+ */
+export const legalCopies = pgTable('legal_copies', {
+  acceptanceId: uuid('acceptance_id')
+    .primaryKey()
+    .references(() => legalAcceptances.id),
+  content: jsonb('content').notNull(),
+  contentHash: text('content_hash').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});

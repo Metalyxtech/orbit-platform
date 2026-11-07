@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@orbit/core/next';
 import { joinableCompanies } from '@/company-directory';
-import { portalModules } from '@/portals';
+import { standardPortals } from '@/portals';
 import { joinCompanyAction, registerCompanyAction } from '@/session-actions';
 import { AuthCard } from '../AuthCard';
 import { requireAgreement } from '@/legal/gate';
@@ -16,7 +16,7 @@ const errors: Record<string, string> = {
   no_portal: 'That company does not use the portal you chose. Check with your company admin.',
 };
 
-const portalList = Object.values(portalModules).map((m) => m.manifest);
+const portalList = standardPortals().map((m) => m.manifest);
 
 function PortalPicker({ hint }: { hint: string }) {
   return (

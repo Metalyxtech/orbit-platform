@@ -15,7 +15,9 @@ export type CompanyPortalState = 'on' | 'requested' | 'none';
 export async function companyPortalList(tx: Tx, ctx: SessionContext) {
   requireAdmin(ctx);
   const rows = await tx.select({ portal: companyPortals.portal, enabled: companyPortals.enabled }).from(companyPortals).where(eq(companyPortals.companyId, ctx.companyId));
-  return Object.values(portalModules).map((m) => {
+  // A custom portal is listed only once Orbit has switched it on for this company.
+  const shown = Object.values(portalModules).filter((m) => !m.manifest.custom || rows.some((r) => r.portal === m.manifest.id && r.enabled));
+  return shown.map((m) => {
     const row = rows.find((r) => r.portal === m.manifest.id);
     return {
       id: m.manifest.id,
@@ -27,7 +29,7 @@ export async function companyPortalList(tx: Tx, ctx: SessionContext) {
   });
 }
 
-const portalInput = z.object({ portal: z.string().refine((p) => !!portalModules[p], 'Unknown portal') });
+const portalInput = z.object({ portal: z.string().refine((p) => !!portalModules[p] && !portalModules[p].manifest.custom, 'Unknown portal') });
 
 /** Asks Orbit to add a portal for the company. It switches on when Super Admin approves. */
 export async function requestCompanyPortal(tx: Tx, ctx: ActionContext, raw: { portal: string }) {

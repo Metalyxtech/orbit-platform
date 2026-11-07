@@ -5,7 +5,9 @@ import { Button, Chip, ConfirmDialog, DataTable, EmptyState, useToast } from '@o
 import { BundlePicker, CycleSwitch, PlanCards, trustFor } from '@/billing/PlanCards';
 import { cycleOf, money, planOf, portalName, portalsOutside, priceFor, taxNote, tierOf, type Bundle, type Cycle, type TierId } from '@/billing/plans';
 import type { BillingState } from '@/billing/state';
-import { cancelPlanAction, confirmCheckoutAction, startCheckoutAction } from './actions';
+import { cancelPlanAction, confirmCheckoutAction, startCheckoutAction, startCustomCheckoutAction } from './actions';
+
+type CustomDeal = { label: string; monthlyPrice: number | null; yearlyPrice: number | null; maxUsers: number | null };
 
 type History = { id: string; type: string; amount: number | null; currency: string | null; ref: string | null; at: string };
 type RzResponse = { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string };
@@ -40,7 +42,8 @@ function loadCheckout(): Promise<boolean> {
   });
 }
 
-export function BillingClient({ state, company, history }: { state: BillingState; company: string; history: History[] }) {
+export function BillingClient({ state, company, history, custom }: { state: BillingState; company: string; history: History[]; custom?: CustomDeal | null }) {
+  const [customPick, setCustomPick] = useState<'monthly' | 'yearly' | null>(null);
   const router = useRouter();
   const toast = useToast();
   const [cycle, setCycle] = useState<Cycle>((state.cycle as Cycle | null) ?? 'yearly');
@@ -52,15 +55,29 @@ export function BillingClient({ state, company, history }: { state: BillingState
   const [cancel, setCancel] = useState(false);
   const [busy, setBusy] = useState(false);
   const current = state.plan ? planOf(state.plan) : undefined;
+  // Name and price of the plan the company is on (standard or its custom plan).
+  const planLabel = state.planName ?? current?.name ?? null;
+  const planPrice = current
+    ? priceFor(current.bundle, current.tier, (state.cycle as Cycle) ?? 'monthly', state.currency)
+    : state.plan === 'custom' && custom
+      ? state.cycle === 'yearly'
+        ? custom.yearlyPrice
+        : custom.monthlyPrice
+      : null;
   const paid = state.status === 'active' || state.status === 'past_due';
   const cur = state.currency;
   const m = (v: number) => money(v, cur);
   const tax = cur === 'USD' ? '' : ' + GST';
 
-  async function pay(tier: TierId) {
+  function pay(tier: TierId) {
     setPick(null);
+    return run(() => startCheckoutAction({ bundle, tier, cycle }));
+  }
+
+  /** Starts a subscription (standard or custom) and opens Razorpay Checkout. */
+  async function run(start: () => ReturnType<typeof startCheckoutAction>) {
     setBusy(true);
-    const res = await startCheckoutAction({ bundle, tier, cycle });
+    const res = await start();
     if (!res.ok) {
       setBusy(false);
       return toast(res.error, 'bad');
@@ -128,7 +145,7 @@ export function BillingClient({ state, company, history }: { state: BillingState
       <div className="b-current o-panel">
         <div>
           <div className="o-row" style={{ gap: 8 }}>
-            <h2 style={{ margin: 0 }}>{current && paid ? `${current.name} plan` : state.status === 'trial' ? 'Free trial' : 'No active plan'}</h2>
+            <h2 style={{ margin: 0 }}>{planLabel && paid ? `${planLabel}${current ? ' plan' : ''}` : state.status === 'trial' ? 'Free trial' : 'No active plan'}</h2>
             {statusChip}
           </div>
           <p className="muted" style={{ fontSize: 13, margin: '6px 0 0' }}>
@@ -137,8 +154,8 @@ export function BillingClient({ state, company, history }: { state: BillingState
             {state.status === 'pending_payment' && 'Checkout was started but not paid. Choose the plan again to pay.'}
             {state.status === 'active' &&
               (state.cancelAtPeriodEnd
-                ? `${current?.name}, ${cycleOf(state.cycle ?? 'monthly').label.toLowerCase()}. Ends on ${date(state.currentPeriodEnd)}; it will not renew.`
-                : `${current?.name}, ${cycleOf(state.cycle ?? 'monthly').label.toLowerCase()}, ${current ? m(priceFor(current.bundle, current.tier, (state.cycle as Cycle) ?? 'monthly', cur)) : ''}{tax}. Renews on ${date(state.currentPeriodEnd)}.`)}
+                ? `${planLabel}, ${cycleOf(state.cycle ?? 'monthly').label.toLowerCase()}. Ends on ${date(state.currentPeriodEnd)}; it will not renew.`
+                : `${planLabel}, ${cycleOf(state.cycle ?? 'monthly').label.toLowerCase()}${planPrice ? `, ${m(planPrice)}${tax}` : ''}. Renews on ${date(state.currentPeriodEnd)}.`)}
             {state.status === 'past_due' && 'Razorpay could not take the last payment and is retrying. Update your payment method from the link Razorpay emailed you.'}
             {state.status === 'cancelled' && 'Your subscription has ended. Choose a plan to continue.'}
           </p>
@@ -156,7 +173,39 @@ export function BillingClient({ state, company, history }: { state: BillingState
         </div>
       </div>
 
-      {!state.showPlans ? (
+      {custom ? (
+        <div className="o-panel">
+          <h2 style={{ margin: 0 }}>Your custom plan: {custom.label}</h2>
+          <p className="muted" style={{ fontSize: 13, margin: '6px 0 12px' }}>
+            Agreed with Orbit for {company}
+            {custom.maxUsers ? `, up to ${custom.maxUsers} people` : ''}. Prices in {cur === 'USD' ? 'US dollars' : 'Indian rupees'} · {taxNote(cur)}.
+          </p>
+          {!custom.monthlyPrice && !custom.yearlyPrice ? (
+            <p style={{ fontSize: 13, margin: 0 }}>Orbit will share your price shortly.</p>
+          ) : (
+            <div className="o-row" style={{ gap: 12, flexWrap: 'wrap' }}>
+              {(['monthly', 'yearly'] as const).map((c) => {
+                const price = c === 'yearly' ? custom.yearlyPrice : custom.monthlyPrice;
+                if (!price) return null;
+                const current = paid && !state.cancelAtPeriodEnd && state.plan === 'custom' && state.cycle === c;
+                return (
+                  <div key={c} className="o-panel" style={{ flex: '1 1 240px', margin: 0 }}>
+                    <div style={{ fontSize: 13 }} className="muted">
+                      {c === 'yearly' ? 'Yearly' : 'Monthly'}
+                    </div>
+                    <div style={{ fontSize: 24, fontWeight: 700, margin: '4px 0 10px' }}>
+                      {m(price)} <span style={{ fontSize: 13, fontWeight: 400 }}>/ {c === 'yearly' ? 'year' : 'month'}</span>
+                    </div>
+                    <Button block variant="primary" disabled={busy || current} onClick={() => setCustomPick(c)}>
+                      {current ? 'Current plan' : paid ? `Switch to ${c}` : `Subscribe ${c}`}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : !state.showPlans ? (
         <div className="o-panel">
           <h2 style={{ margin: 0 }}>Your plan is arranged by the Orbit team</h2>
           <p className="muted" style={{ fontSize: 13, margin: '6px 0 0' }}>
@@ -252,6 +301,25 @@ export function BillingClient({ state, company, history }: { state: BillingState
                 your company once you subscribe. Its data is kept, and it comes back if you later choose a plan that includes it.
               </p>
             )}
+          </>
+        )}
+      </ConfirmDialog>
+      <ConfirmDialog
+        open={!!customPick}
+        title={custom && customPick ? `${custom.label}, ${customPick}` : ''}
+        confirmLabel="Continue to payment"
+        onCancel={() => setCustomPick(null)}
+        onConfirm={() => {
+          const c = customPick;
+          setCustomPick(null);
+          if (c) void run(() => startCustomCheckoutAction({ cycle: c }));
+        }}
+      >
+        {custom && customPick && (
+          <>
+            {m((customPick === 'yearly' ? custom.yearlyPrice : custom.monthlyPrice) ?? 0)}
+            {tax} per {customPick === 'yearly' ? 'year' : 'month'}.
+            {state.status === 'trial' && state.trialDaysLeft > 0 ? ` The first charge is on ${date(state.trialEndsAt)} when the trial ends.` : ' You pay now through Razorpay.'} Cancel any time.
           </>
         )}
       </ConfirmDialog>

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getSession, query } from '@orbit/core/next';
 import { billingHistory, billingState } from '@/billing/state';
+import { findCustomPlan } from '@/custom/plan';
 import { BillingClient } from './BillingClient';
 
 export const dynamic = 'force-dynamic';
@@ -9,7 +10,14 @@ export const dynamic = 'force-dynamic';
 export default async function Billing() {
   const s = await getSession();
   if (s.state !== 'ok' || s.ctx.role !== 'company_admin') redirect('/manage');
-  const d = await query(async (tx, ctx) => ({ state: await billingState(tx, ctx), history: await billingHistory(tx, ctx) }));
+  const d = await query(async (tx, ctx) => {
+    const plan = await findCustomPlan(tx, ctx.companyId);
+    return {
+      state: await billingState(tx, ctx),
+      history: await billingHistory(tx, ctx),
+      custom: plan?.enabled ? { label: plan.label, monthlyPrice: plan.monthlyPrice, yearlyPrice: plan.yearlyPrice, maxUsers: plan.maxUsers } : null,
+    };
+  });
   return (
     <>
       <header className="o-top">
@@ -18,6 +26,7 @@ export default async function Billing() {
       <BillingClient
         state={d.state}
         company={s.ctx.companyName}
+        custom={d.custom}
         history={d.history.map((h) => ({ id: h.id, type: h.type, amount: h.amount, currency: ((h.data ?? {}) as { currency?: string }).currency ?? null, ref: h.razorpayId, at: h.createdAt.toISOString() }))}
       />
     </>

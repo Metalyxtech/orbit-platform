@@ -1,6 +1,7 @@
 'use server';
 import { revalidatePath } from 'next/cache';
 import { runAction } from '@orbit/core/next';
+import { startCustomCheckout } from '@/billing/custom-checkout';
 import { cancelPlan, confirmCheckout, startCheckout } from '@/billing/state';
 
 type In<F> = F extends (tx: never, ctx: never, input: infer I) => unknown ? I : never;
@@ -17,4 +18,7 @@ export async function cancelPlanAction() {
   const res = await runAction((tx, ctx) => cancelPlan(tx, ctx));
   revalidatePath('/manage', 'layout');
   return res;
+}
+export async function startCustomCheckoutAction(input: In<typeof startCustomCheckout>) {
+  return runAction((tx, ctx) => startCustomCheckout(tx, ctx, input));
 }

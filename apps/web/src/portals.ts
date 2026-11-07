@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import type { SessionContext } from '@orbit/core';
 import type { PortalManifest } from '@orbit/core/portals';
 import type { Tx } from '@orbit/db';
+import { custom1Manifest } from '@orbit/portal-custom-1/manifest';
+import { custom1Routes } from '@orbit/portal-custom-1/routes';
 import { procurementManifest } from '@orbit/portal-procurement/manifest';
 import { procurementRoutes } from '@orbit/portal-procurement/routes';
 import { requests as procRequests } from '@orbit/portal-procurement/server';
@@ -62,6 +64,13 @@ export const portalModules: Record<string, PortalModule> = {
         urgent: r.late,
       })),
   },
+  // Custom portals: one per custom customer, each in its own folder (portals/custom-*).
+  'custom-1': { manifest: custom1Manifest, routes: custom1Routes },
 };
+
+/** Built for one customer: hidden from sign-up, plans and portal requests (Super Admin turns it on). */
+export const isCustomPortal = (id: string) => !!portalModules[id]?.manifest.custom;
+/** The normal portals every customer can choose. */
+export const standardPortals = () => Object.values(portalModules).filter((m) => !m.manifest.custom);
 
 export const BRAND = 'Orbit';

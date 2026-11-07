@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { TRIAL_DAYS } from '@/billing/plans';
-import { portalModules } from '@/portals';
+import { standardPortals } from '@/portals';
 import { createCompanyAction } from '../../billing-actions';
 import { requireSuperAdminPage } from '../../data';
 import { TIMEZONES } from '../../new-company';
@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 export default async function NewCompany({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   await requireSuperAdminPage();
   const error = (await searchParams).error;
-  const portals = Object.values(portalModules).map((m) => m.manifest);
+  const portals = standardPortals().map((m) => m.manifest);
   return (
     <>
       <header className="o-top">

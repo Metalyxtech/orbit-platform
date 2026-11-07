@@ -20,6 +20,7 @@ import {
   type TierId,
 } from './plans';
 import { fitPortalsToPlan } from './portals';
+import { getCustomPlan } from '../custom/plan';
 import * as rz from './razorpay';
 
 const pgCode = (err: unknown) => (err as { code?: string; cause?: { code?: string } })?.code ?? (err as { cause?: { code?: string } })?.cause?.code;
@@ -59,19 +60,26 @@ export async function billingStateFor(tx: Tx, companyId: string) {
   else if (sub && (sub.status === 'cancelled' || sub.status === 'completed')) status = 'cancelled';
   else status = trialEnds.getTime() > now ? 'trial' : 'trial_ended';
   const onPlan = status === 'active' || status === 'past_due';
-  const limits = onPlan && plan ? { users: plan.users, portals: plan.portals } : TRIAL_LIMITS;
   const [users, enabled] = await Promise.all([
     tx.select({ id: memberships.id }).from(memberships).where(and(eq(memberships.companyId, companyId), eq(memberships.status, 'active'))),
     tx.select({ p: companyPortals.portal }).from(companyPortals).where(and(eq(companyPortals.companyId, companyId), eq(companyPortals.enabled, true))),
   ]);
   const portals = enabled.map((p) => p.p);
+  // A custom deal (plan "custom"): its own name and people limit; every portal Orbit switched on.
+  const custom = sub?.plan === 'custom' ? await getCustomPlan(tx, companyId) : null;
+  const limits =
+    onPlan && plan
+      ? { users: plan.users, portals: plan.portals }
+      : onPlan && sub?.plan === 'custom'
+        ? { users: custom?.maxUsers ?? 100_000, portals: [...new Set([...TRIAL_LIMITS.portals, ...portals])] }
+        : TRIAL_LIMITS;
   return {
     status,
     currency: settings.currency,
     showPlans: settings.showPlans,
     trialDays: settings.trialDays,
-    plan: plan?.id ?? null,
-    planName: plan?.name ?? null,
+    plan: plan?.id ?? (sub?.plan === 'custom' ? 'custom' : null),
+    planName: plan?.name ?? (sub?.plan === 'custom' ? (custom?.label ?? 'Custom plan') : null),
     bundle: plan?.bundle ?? null,
     tier: plan?.tier ?? null,
     cycle: (sub?.cycle as Cycle | undefined) ?? null,
@@ -170,7 +178,7 @@ export async function confirmCheckout(tx: Tx, ctx: ActionContext, raw: z.input<t
   await applyRazorpay(tx, ctx.companyId, live);
   const fit = await fitPortalsToPlan(tx, ctx, sub.plan);
   await tx.insert(billingEvents).values({ companyId: ctx.companyId, type: 'checkout.completed', razorpayId: input.paymentId, data: { subscription: input.subscriptionId } });
-  await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'billing.subscribe', entity: 'company_subscriptions', entityId: ctx.companyId, data: { summary: [`Subscribed to ${planOf(sub.plan)?.name} (${cycleOf(sub.cycle).label})`] }, requestId: ctx.requestId });
+  await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'billing.subscribe', entity: 'company_subscriptions', entityId: ctx.companyId, data: { summary: [`Subscribed to ${planOf(sub.plan)?.name ?? 'the custom plan'} (${sub.plan === 'custom' ? sub.cycle : cycleOf(sub.cycle).label})`] }, requestId: ctx.requestId });
   return { status: live.status, paused: fit.paused.map(portalName), resumed: fit.resumed.map(portalName) };
 }
 

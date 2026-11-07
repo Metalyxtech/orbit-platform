@@ -2,6 +2,7 @@ import { and, desc, eq, gt, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { billingEvents, companyBilling, type Tx } from '@orbit/db';
 import { cycleOf, priceFor, type Currency, type Cycle } from './plans';
+import { customPrice, getCustomPlan } from '../custom/plan';
 import { billingSettings, billingStateFor, missing } from './state';
 
 // Super Admin side of billing: settings per company and the payments Orbit has received.
@@ -65,13 +66,19 @@ export async function companyBillingSummary(tx: Tx, companyId: string) {
     if (!missing(err)) throw err;
   }
   const currency: Currency = settings.currency;
-  const price = state.bundle && state.tier && state.cycle ? priceFor(state.bundle, state.tier, state.cycle as Cycle, currency) : null;
+  const custom = state.plan === 'custom' ? await getCustomPlan(tx, companyId) : null;
+  const price =
+    state.bundle && state.tier && state.cycle
+      ? priceFor(state.bundle, state.tier, state.cycle as Cycle, currency)
+      : custom && (state.cycle === 'monthly' || state.cycle === 'yearly')
+        ? customPrice(custom, state.cycle)
+        : null;
   const lastPayment = events.find((e) => CONFIRMATIONS.includes(e.type) && e.amount) ?? events.find((e) => CONFIRMATIONS.includes(e.type)) ?? null;
   return {
     state,
     settings,
     price,
-    per: state.cycle ? cycleOf(state.cycle).per : null,
+    per: state.cycle ? (custom ? (state.cycle === 'yearly' ? 'year' : 'month') : cycleOf(state.cycle).per) : null,
     events,
     lastPayment,
     newCount: fresh,

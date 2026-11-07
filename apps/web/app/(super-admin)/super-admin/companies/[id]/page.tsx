@@ -19,6 +19,8 @@ import { RemoveMemberButton } from '../../RemoveMemberButton';
 import { MemberPortals } from '../../MemberPortals';
 import { loadCompanyBilling } from '../../billing-data';
 import { BillingPanel } from './BillingPanel';
+import { CustomPanel } from './CustomPanel';
+import { companyCustomWork } from '../../custom-data';
 
 /** Super Admin > Companies > one company: profile, portals and people. */
 export default async function CompanyPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ added?: string }> }) {
@@ -42,6 +44,8 @@ export default async function CompanyPage({ params, searchParams }: { params: Pr
   const registeredBy = [...admins].sort((a, b) => a.joinedAt.getTime() - b.joinedAt.getTime())[0];
   const active = people.filter((p) => p.status === 'active');
   const billing = await loadCompanyBilling(c.id, me.userId);
+  // Before migration 0015 the custom tables are missing: the panel is simply left out.
+  const custom = await companyCustomWork(c.id, me.userId).catch(() => null);
   const added = (await searchParams).added === '1';
 
   const details: [string, React.ReactNode][] = [
@@ -114,6 +118,7 @@ export default async function CompanyPage({ params, searchParams }: { params: Pr
 
           <div className="o-stack" style={{ gap: 16 }}>
             <BillingPanel companyId={c.id} b={billing} />
+            {custom && <CustomPanel companyId={c.id} plan={custom.plan} requests={custom.requests} currency={billing.settings.currency} />}
             <div className="o-panel">
               <div className="o-panel-head">
                 <h2>Stage</h2>

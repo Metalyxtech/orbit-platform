@@ -3,12 +3,14 @@ import { useState } from 'react';
 import { Button } from '@orbit/ui';
 import { addQuoteAction, addSupplierAction, awardAction } from '../../actions';
 import type { RequestDetail, SupplierRow } from '../../server';
+import { AttachQuoteFiles, QUOTE_FILE_TYPES, QuoteFileLinks, uploadQuoteFiles } from '../QuoteFiles';
 import { fmtMoney } from '../ui';
 import { useStep } from './useStep';
 
 /** Sourcing: enter quotes, then award the chosen supplier once enough quotes are in. */
 export function QuotesStep({ d, suppliers }: { d: RequestDetail; suppliers: SupplierRow[] }) {
-  const { busy, run } = useStep();
+  const { busy, run, toast } = useStep();
+  const [files, setFiles] = useState<File[]>([]);
   const cur = d.cfg.money.currency;
   const [supplierId, setSupplierId] = useState('');
   const [rates, setRates] = useState<(number | null)[]>(d.lines.map(() => null));
@@ -28,13 +30,18 @@ export function QuotesStep({ d, suppliers }: { d: RequestDetail; suppliers: Supp
   const best = d.quotes.length ? d.quotes.reduce((a, b) => (b.total < a.total ? b : a)) : null;
 
   async function add() {
-    const ok = await run(
-      () => addQuoteAction({ id: d.request.id, supplierId, rates: rates.map((r) => r ?? 0), leadDays, terms: terms || null }),
-      'Quote added.',
-    );
+    let failed: string[] = [];
+    const ok = await run(async () => {
+      const res = await addQuoteAction({ id: d.request.id, supplierId, rates: rates.map((r) => r ?? 0), leadDays, terms: terms || null });
+      // The supplier's quotation document goes with the quote.
+      if (res.ok && files.length) failed = await uploadQuoteFiles(res.data.quoteId, files);
+      return res;
+    }, files.length ? 'Quote and quotation added.' : 'Quote added.');
     if (ok) {
       setSupplierId('');
       setRates(d.lines.map(() => null));
+      setFiles([]);
+      if (failed.length) toast(`Quote added, but not uploaded: ${failed.join(', ')}. Use "Attach quotation" to try again.`, 'bad');
     }
   }
 
@@ -50,8 +57,10 @@ export function QuotesStep({ d, suppliers }: { d: RequestDetail; suppliers: Supp
             <div className="faint" style={{ fontSize: 11 }}>
               {q.leadDays != null ? `${q.leadDays} days` : ''} {q.terms ? `· ${q.terms}` : ''} {best?.id === q.id ? '· Lowest' : ''}
             </div>
+            <QuoteFileLinks files={q.files} />
           </div>
           <strong>{fmtMoney(cur, q.total)}</strong>
+          <AttachQuoteFiles quoteId={q.id} />
           <Button size="small" variant="primary" disabled={!enough || busy} onClick={() => run(() => awardAction({ id: d.request.id, quoteId: q.id }), `Awarded to ${q.supplier}.`)}>
             Award
           </Button>
@@ -116,6 +125,10 @@ export function QuotesStep({ d, suppliers }: { d: RequestDetail; suppliers: Supp
                 <input className="o-input" value={terms} onChange={(e) => setTerms(e.target.value)} />
               </label>
             </div>
+            <label className="o-field">
+              Supplier&apos;s quotation (PDF or photo, optional)
+              <input className="o-input" type="file" multiple accept={QUOTE_FILE_TYPES} onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 10))} />
+            </label>
             <Button block disabled={busy || !supplierId} onClick={add}>
               Add quote
             </Button>

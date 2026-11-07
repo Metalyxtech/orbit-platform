@@ -1,7 +1,7 @@
 'use server';
 // Server actions for the Purchase portal: each runs as the signed-in member in one RLS transaction.
 import { runAction } from '@orbit/core/next';
-import { admin, requests, stock, suppliers } from './server';
+import { admin, quoteFiles, requests, stock, suppliers } from './server';
 
 type In<F> = F extends (tx: never, ctx: never, input: infer I) => unknown ? I : never;
 
@@ -22,6 +22,12 @@ export async function rejectAction(input: { id: string; note?: string }) {
 }
 export async function addQuoteAction(input: In<typeof requests.addQuote>) {
   return runAction((tx, ctx) => requests.addQuote(tx, ctx, input));
+}
+export async function startQuoteUploadAction(input: In<typeof quoteFiles.startQuoteUpload>) {
+  return runAction((tx, ctx) => quoteFiles.startQuoteUpload(tx, ctx, input));
+}
+export async function confirmQuoteUploadAction(input: { fileId: string }) {
+  return runAction((tx, ctx) => quoteFiles.confirmQuoteUpload(tx, ctx, input));
 }
 export async function awardAction(input: { id: string; quoteId: string }) {
   return runAction((tx, ctx) => requests.award(tx, ctx, input));

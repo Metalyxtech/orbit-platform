@@ -2,6 +2,7 @@
 import { Chip, TopBar } from '@orbit/ui';
 import type { RequestDetail, SupplierRow } from '../server';
 import { showValue } from './FieldInput';
+import { QuoteFileLinks } from './QuoteFiles';
 import { ApprovalStep } from './steps/ApprovalStep';
 import { InspectStep } from './steps/InspectStep';
 import { InvoiceStep } from './steps/InvoiceStep';
@@ -158,6 +159,16 @@ export function RequestView({ d, suppliers }: { d: RequestDetail; suppliers: Sup
                           </td>
                         ))}
                       </tr>
+                      {d.quotes.some((q) => q.files.length > 0) && (
+                        <tr>
+                          <td>Quotation</td>
+                          {d.quotes.map((q) => (
+                            <td key={q.id} className="num">
+                              {q.files.length ? <QuoteFileLinks files={q.files} /> : <span className="faint">-</span>}
+                            </td>
+                          ))}
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>

@@ -22,6 +22,7 @@ import {
   variancePct,
   withinTolerance,
 } from '../engine';
+import { filesForRequest } from './quote-file-store';
 import { holdersOf } from './team';
 import { loadConfig, moneyText, myRole, myRoles, nextNumber, peopleById, requireRole, today } from './shared';
 
@@ -79,6 +80,8 @@ export async function requestDetail(tx: Tx, ctx: SessionContext, id: string) {
     tx.select().from(procReceipts).where(eq(procReceipts.requestId, id)).orderBy(asc(procReceipts.createdAt)),
     tx.select().from(procEvents).where(eq(procEvents.requestId, id)).orderBy(asc(procEvents.createdAt)),
   ]);
+  // After the parallel reads: its savepoint must not interleave with them on the same transaction.
+  const files = quotes.length ? await filesForRequest(tx, ctx.companyId, id) : [];
   const itemIds = lines.map((l) => l.itemId).filter((x): x is string => !!x);
   const items = itemIds.length ? await tx.select().from(procItems).where(inArray(procItems.id, itemIds)) : [];
   const people = await peopleById(tx, [r.requesterId, ...events.map((e) => e.byId), ...receipts.map((g) => g.byId)]);
@@ -139,7 +142,15 @@ export async function requestDetail(tx: Tx, ctx: SessionContext, id: string) {
         received: received[i],
       };
     }),
-    quotes: quotes.map(({ q, supplier }) => ({ id: q.id, supplier, rates: q.rates, leadDays: q.leadDays, terms: q.terms, total: quoteValue(lines, q.rates) })),
+    quotes: quotes.map(({ q, supplier }) => ({
+      id: q.id,
+      supplier,
+      rates: q.rates,
+      leadDays: q.leadDays,
+      terms: q.terms,
+      total: quoteValue(lines, q.rates),
+      files: files.filter((f) => f.quoteId === q.id),
+    })),
     receipts: receipts.map((g) => ({
       id: g.id,
       deliveryNote: g.deliveryNote,
@@ -305,6 +316,17 @@ async function begin(tx: Tx, ctx: ActionContext, id: string, stage: Stage) {
   return { cfg, me, r, lines, pending };
 }
 
+/** For quote documents: throws unless the request is collecting quotes and this person owns that step. */
+export async function assertQuoteStep(tx: Tx, ctx: ActionContext, requestId: string) {
+  await begin(tx, ctx, requestId, 'rfq');
+}
+
+/** Adds a line to a request's timeline (used by quote documents). */
+export async function logOnRequest(tx: Tx, ctx: ActionContext, requestId: string, text: string) {
+  const [r] = await tx.select().from(procRequests).where(and(eq(procRequests.id, requestId), eq(procRequests.companyId, ctx.companyId)));
+  if (r) await log(tx, ctx, r, text);
+}
+
 const fieldValue = z.union([z.string().max(500), z.number(), z.boolean(), z.null()]);
 const createInput = z.object({
   title: z.string().trim().min(3, 'Give the request a title').max(200),
@@ -449,9 +471,12 @@ export async function addQuote(tx: Tx, ctx: ActionContext, raw: z.input<typeof q
   if (lines.some((l, i) => buyOf(l) > 0 && !(input.rates[i] > 0))) throw new Error('Enter a rate for every line being bought');
   const [s] = await tx.select({ name: procSuppliers.name }).from(procSuppliers).where(and(eq(procSuppliers.id, input.supplierId), eq(procSuppliers.companyId, ctx.companyId)));
   if (!s) throw new Error('Supplier not found');
-  await tx.insert(procQuotes).values({ companyId: ctx.companyId, requestId: r.id, supplierId: input.supplierId, rates: input.rates, leadDays: input.leadDays, terms: input.terms, byId: ctx.membershipId });
+  const [q] = await tx
+    .insert(procQuotes)
+    .values({ companyId: ctx.companyId, requestId: r.id, supplierId: input.supplierId, rates: input.rates, leadDays: input.leadDays, terms: input.terms, byId: ctx.membershipId })
+    .returning({ id: procQuotes.id });
   await log(tx, ctx, r, `Quote received from ${s.name}: ${moneyText(cfg, quoteValue(lines, input.rates))}`);
-  return { ok: true as const };
+  return { ok: true as const, quoteId: q.id };
 }
 
 export async function award(tx: Tx, ctx: ActionContext, raw: { id: string; quoteId: string }) {

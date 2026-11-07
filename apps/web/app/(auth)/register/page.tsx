@@ -12,7 +12,7 @@ const errors: Record<string, string> = {
   not_found: 'That company is not available to join right now. Ask your company admin.',
   choose: 'Choose your company from the list.',
   exists: 'A company with that name is already registered. Use "Join your company" above instead.',
-  portals: 'Choose at least one portal.',
+  portals: 'Choose at least one portal, or a custom portal.',
   no_portal: 'That company does not use the portal you chose. Check with your company admin.',
 };
 
@@ -93,6 +93,13 @@ export default async function Register({ searchParams }: { searchParams: Promise
           </select>
         </label>
         <PortalPicker hint="The portals your company needs. Orbit reviews and switches them on." />
+        <fieldset className="o-field" style={{ border: 0, padding: 0, margin: 0 }}>
+          <label className="o-row" style={{ gap: 8, fontSize: 13, color: 'var(--ink)' }}>
+            <input type="checkbox" name="custom" />A custom portal built for our company
+          </label>
+          <textarea className="o-input" name="customDetails" rows={2} maxLength={2000} placeholder="What should it do? (optional; you can send your forms after sign-up)" />
+          <span className="faint" style={{ fontSize: 11 }}>Choose only this if you do not need Timesheet or Purchase. Orbit replies with a price.</span>
+        </fieldset>
         <button className="o-btn block" type="submit">
           Register company
         </button>

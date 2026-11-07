@@ -20,7 +20,9 @@ export const newCompanyInput = z.object({
   adminName: z.string().trim().min(2, 'Enter the admin’s name').max(120),
   adminEmail: z.email('Enter a valid admin email').transform((e) => e.trim().toLowerCase()),
   adminTitle: z.string().trim().max(100).optional(),
-  portals: z.array(z.string()).min(1, 'Choose at least one portal'),
+  portals: z.array(z.string()),
+  /** Only a custom portal: no Timesheet or Purchase. */
+  customOnly: z.boolean().default(false),
   trialDays: z.coerce.number().int().min(0).max(90).default(TRIAL_DAYS),
   showPlans: z.boolean(),
 });
@@ -38,6 +40,7 @@ export function readNewCompanyForm(form: FormData): NewCompanyInput {
     adminEmail: v('adminEmail'),
     adminTitle: v('adminTitle') || undefined,
     portals: form.getAll('portals').map(String),
+    customOnly: form.get('customOnly') === 'on',
     trialDays: v('trialDays') || TRIAL_DAYS,
     showPlans: v('showPlans') !== 'hide',
   };
@@ -46,8 +49,8 @@ export function readNewCompanyForm(form: FormData): NewCompanyInput {
 /** Creates the company, its admin (signs in with that email), its portals and billing settings. Returns the company id. */
 export async function createCompany(db: Db, superUserId: string, raw: NewCompanyInput) {
   const input = newCompanyInput.parse(raw);
-  const portals = [...new Set(input.portals)].filter((p) => portalModules[p]);
-  if (!portals.length) throw new Error('Choose at least one portal');
+  const portals = input.customOnly ? [] : [...new Set(input.portals)].filter((p) => portalModules[p] && !portalModules[p].manifest.custom);
+  if (!portals.length && !input.customOnly) throw new Error('Choose at least one portal, or Custom portal only');
   const [dupe] = await db.select({ id: companies.id }).from(companies).where(sql`lower(btrim(${companies.name})) = lower(${input.name})`).limit(1);
   if (dupe) throw new Error(`A company called ${input.name} already exists`);
   const slug = `${input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${Date.now().toString(36)}`;

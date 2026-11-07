@@ -22,6 +22,7 @@ export async function saveCustomPlanAction(companyId: string, form: FormData) {
       yearlyPrice: String(form.get('yearlyPrice') ?? ''),
       maxUsers: String(form.get('maxUsers') ?? ''),
       note: String(form.get('note') ?? ''),
+      allowInstallments: form.get('allowInstallments') === 'on',
     });
     await audit(tx, {
       companyId: id,
@@ -59,6 +60,7 @@ export async function sendQuoteAction(companyId: string, requestId: string, form
       yearly: String(form.get('yearly') ?? ''),
       credit: String(form.get('credit') ?? ''),
       note: String(form.get('note') ?? ''),
+      installments: form.get('installments') === 'on',
     }),
   );
   revalidatePath('/super-admin', 'layout');

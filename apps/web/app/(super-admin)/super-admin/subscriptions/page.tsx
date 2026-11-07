@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { KpiStrip } from '@orbit/ui';
 import { eventCurrency } from '@/billing/admin';
 import { cycleOf, money } from '@/billing/plans';
+import { customCycleLabel } from '@/custom/plan';
 import { markPaymentsSeenAction, setPlansShownAction } from '../billing-actions';
 import { loadSubscriptions } from '../billing-data';
 import { EVENT_LABEL, STATUS_LABEL } from '../billing-labels';
@@ -92,7 +93,7 @@ export default async function Subscriptions() {
                       </td>
                       <td>
                         {r.state.planName ?? '-'}
-                        {r.state.cycle && <div className="faint" style={{ fontSize: 11 }}>{cycleOf(r.state.cycle).label}</div>}
+                        {r.state.cycle && <div className="faint" style={{ fontSize: 11 }}>{r.state.plan === 'custom' ? customCycleLabel(r.state.cycle) : cycleOf(r.state.cycle).label}</div>}
                       </td>
                       <td className="num">{r.price != null ? `${money(r.price, cur)} / ${r.per}` : '-'}</td>
                       <td>{r.state.currentPeriodEnd ? `${r.state.cancelAtPeriodEnd ? 'Ends' : 'Renews'} ${fmtDate(new Date(r.state.currentPeriodEnd))}` : '-'}</td>

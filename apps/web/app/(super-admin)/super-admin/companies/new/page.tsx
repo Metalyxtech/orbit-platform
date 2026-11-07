@@ -97,6 +97,10 @@ export default async function NewCompany({ searchParams }: { searchParams: Promi
                   {p.name}
                 </label>
               ))}
+              <label className="o-row" style={{ gap: 8, fontSize: 13, color: 'var(--ink)', marginTop: 6 }}>
+                <input type="checkbox" name="customOnly" />
+                Custom portal only (no Timesheet or Purchase): the admin sends their forms in Custom portals
+              </label>
             </fieldset>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
               <label className="o-field">

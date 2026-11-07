@@ -2,10 +2,10 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button, ConfirmDialog, useToast } from '@orbit/ui';
-import { money, type Currency } from '@/billing/plans';
+import { installmentOf, money, type Currency } from '@/billing/plans';
 import { decideQuoteAction } from './actions';
 
-type Quote = { label: string; monthly: number | null; yearly: number | null; credit: number; note: string | null; approved: boolean | null; decidedAt: string | null };
+type Quote = { label: string; monthly: number | null; yearly: number | null; credit: number; installments: boolean; note: string | null; approved: boolean | null; decidedAt: string | null };
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '');
 
 /** Orbit's price for a custom request, with Approve / Decline for the company admin. */
@@ -42,6 +42,12 @@ export function QuoteBox({ requestId, quote, currency, waiting }: { requestId: s
                 · first payment <strong>{m(first)}</strong> after a {m(quote.credit)} credit for the unused part of your current yearly plan
               </>
             )}
+          </li>
+        )}
+        {quote.yearly && quote.installments && (
+          <li>
+            Or the yearly price paid monthly: {m(installmentOf(quote.yearly))}
+            {tax} × 12 months (12-month term)
           </li>
         )}
         {quote.monthly && (

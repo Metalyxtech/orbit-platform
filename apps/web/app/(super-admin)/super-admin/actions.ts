@@ -7,6 +7,7 @@ import { getDb } from '@orbit/core/next';
 import { companies, companyPortals, memberships, withTenant } from '@orbit/db';
 import { portalModules } from '@/portals';
 import { confirmed, removeMembership, REMOVE_WORD } from './remove-member';
+import { hasCustomRequest } from '@/custom/requests';
 import { requireSuperAdmin, setPortal } from './guard';
 import { timesheetManifest } from '@orbit/portal-timesheet/manifest';
 
@@ -29,7 +30,9 @@ export async function approveCompanyAction(companyId: string) {
     const requested = (await tx.select({ portal: companyPortals.portal }).from(companyPortals).where(eq(companyPortals.companyId, id))).map(
       (r) => r.portal,
     );
-    for (const portal of requested.length ? requested : [timesheetManifest.id]) await setPortal(tx, id, portal, true);
+    // No portal asked for: Timesheet, unless the company signed up for a custom portal only.
+    const fallback = (await hasCustomRequest(tx, id)) ? [] : [timesheetManifest.id];
+    for (const portal of requested.length ? requested : fallback) await setPortal(tx, id, portal, true);
     await audit(tx, { companyId: id, actorId: null, action: 'company.approve', entity: 'companies', entityId: id, data: { portals: requested } });
   });
   revalidatePath('/super-admin', 'layout');

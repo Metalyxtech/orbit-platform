@@ -1,11 +1,13 @@
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { customPlans, type Tx } from '@orbit/db';
+import { installmentOf } from '../billing/plans';
 
 // A custom customer's deal, set by Super Admin: switched on, label, monthly / yearly price, people.
 
 export type CustomPlan = typeof customPlans.$inferSelect;
-export type CustomCycle = 'monthly' | 'yearly';
+/** monthly, yearly, or yearly paid monthly (12 payments over a 12-month term). */
+export type CustomCycle = 'monthly' | 'yearly' | 'yearly_monthly';
 
 /** The company's custom deal, or null when it is a normal customer. */
 export async function getCustomPlan(tx: Tx, companyId: string): Promise<CustomPlan | null> {
@@ -22,7 +24,11 @@ export async function markCreditUsed(tx: Tx, companyId: string) {
 }
 
 /** The price for one cycle in the company's currency (whole rupees or dollars), or null if not offered. */
-export const customPrice = (p: Pick<CustomPlan, 'monthlyPrice' | 'yearlyPrice'>, cycle: CustomCycle) => (cycle === 'yearly' ? p.yearlyPrice : p.monthlyPrice);
+export const customPrice = (p: Pick<CustomPlan, 'monthlyPrice' | 'yearlyPrice' | 'allowInstallments'>, cycle: CustomCycle) =>
+  cycle === 'yearly' ? p.yearlyPrice : cycle === 'yearly_monthly' ? (p.allowInstallments && p.yearlyPrice ? installmentOf(p.yearlyPrice) : null) : p.monthlyPrice;
+
+/** Words for a custom plan's cycle. */
+export const customCycleLabel = (cycle: string) => (cycle === 'yearly' ? 'Yearly' : cycle === 'yearly_monthly' ? 'Yearly, paid monthly' : 'Monthly');
 
 const money = z.preprocess((v) => (v === '' || v == null ? null : Number(v)), z.number().int().positive().max(100_000_000).nullable());
 export const customPlanInput = z.object({
@@ -32,12 +38,13 @@ export const customPlanInput = z.object({
   yearlyPrice: money,
   maxUsers: z.preprocess((v) => (v === '' || v == null ? null : Number(v)), z.number().int().positive().max(1_000_000).nullable()),
   note: z.string().trim().max(2000).optional(),
+  allowInstallments: z.boolean().default(false),
 });
 
 /** Super Admin saves the deal. */
 export async function saveCustomPlan(tx: Tx, companyId: string, raw: z.input<typeof customPlanInput>) {
   const v = customPlanInput.parse(raw);
-  const values = { enabled: v.enabled, label: v.label, monthlyPrice: v.monthlyPrice, yearlyPrice: v.yearlyPrice, maxUsers: v.maxUsers, note: v.note || null };
+  const values = { enabled: v.enabled, label: v.label, monthlyPrice: v.monthlyPrice, yearlyPrice: v.yearlyPrice, maxUsers: v.maxUsers, note: v.note || null, allowInstallments: v.allowInstallments && !!v.yearlyPrice };
   await tx
     .insert(customPlans)
     .values({ companyId, ...values })

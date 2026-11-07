@@ -127,6 +127,13 @@
       "when": 1794900000000,
       "tag": "0017_custom_quotes",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795000000000,
+      "tag": "0018_custom_installments",
+      "breakpoints": true
     }
   ]
 }

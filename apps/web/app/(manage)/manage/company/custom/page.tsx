@@ -86,6 +86,7 @@ export default async function CustomRequirements() {
                         monthly: r.quoteMonthly,
                         yearly: r.quoteYearly,
                         credit: r.quoteCredit,
+                        installments: r.quoteInstallments,
                         note: r.quoteNote,
                         approved: r.quoteApproved,
                         decidedAt: r.decidedAt?.toISOString() ?? null,

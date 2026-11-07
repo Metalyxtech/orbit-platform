@@ -7,6 +7,7 @@ import { companies, companyPortals, memberships, withTenant } from '@orbit/db';
 import { COMPANY_COOKIE, getDb, getSession } from '@orbit/core/next';
 import { requestMemberPortals } from '@orbit/core';
 import { activeCompany } from './company-directory';
+import { requestFromSignUp } from './custom/requests';
 import { fileUnderCompany } from './legal/state';
 import { portalModules } from './portals';
 
@@ -37,7 +38,9 @@ export async function registerCompanyAction(form: FormData) {
   if (s.state !== 'no_company') redirect('/');
   const input = registerSchema.parse(Object.fromEntries(form));
   const portals = pickedPortals(form);
-  if (portals.length === 0) redirect('/register?error=portals');
+  // A custom portal alone is fine (companies that need neither Timesheet nor Purchase).
+  const custom = form.get('custom') === 'on';
+  if (portals.length === 0 && !custom) redirect('/register?error=portals');
   const db = await getDb();
   if (await companyByName(input.name)) redirect('/register?error=exists');
   const slug = `${input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${Date.now().toString(36)}`;
@@ -47,15 +50,19 @@ export async function registerCompanyAction(form: FormData) {
     .values({ name: input.name, slug, timezone: input.timezone, emailDomains: domain ? [domain] : [] })
     .returning();
   await withTenant(db, { companyId: company.id, userId: s.userId }, async (tx) => {
-    await tx.insert(memberships).values({
-      companyId: company.id,
-      userId: s.userId,
-      role: 'company_admin',
-      title: input.title || 'Company admin',
-    });
+    const [m] = await tx
+      .insert(memberships)
+      .values({
+        companyId: company.id,
+        userId: s.userId,
+        role: 'company_admin',
+        title: input.title || 'Company admin',
+      })
+      .returning({ id: memberships.id });
     await fileUnderCompany(tx, s.userId, company.id);
     // Requested portals start switched off; Super Admin switches them on when approving.
-    await tx.insert(companyPortals).values(portals.map((portal) => ({ companyId: company.id, portal, enabled: false })));
+    if (portals.length) await tx.insert(companyPortals).values(portals.map((portal) => ({ companyId: company.id, portal, enabled: false })));
+    if (custom) await requestFromSignUp(tx, { companyId: company.id, membershipId: m.id, name: s.name, details: String(form.get('customDetails') ?? '') });
   });
   redirect('/pending');
 }

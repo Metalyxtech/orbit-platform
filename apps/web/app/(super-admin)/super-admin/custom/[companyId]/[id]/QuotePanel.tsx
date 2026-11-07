@@ -1,9 +1,9 @@
 'use client';
 import { useState } from 'react';
-import { money } from '@/billing/plans';
+import { installmentOf, money } from '@/billing/plans';
 import type { SubscriptionSnapshot } from '@/custom/quotes';
 
-type Quote = { label: string | null; monthly: number | null; yearly: number | null; credit: number; note: string | null; quotedAt: string | null; approved: boolean | null; decidedAt: string | null };
+type Quote = { label: string | null; monthly: number | null; yearly: number | null; credit: number; installments: boolean; note: string | null; quotedAt: string | null; approved: boolean | null; decidedAt: string | null };
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-');
 
 /**
@@ -17,6 +17,7 @@ export function QuotePanel({ snap, quote, company, action }: { snap: Subscriptio
   const [yearly, setYearly] = useState(quote.yearly ? String(quote.yearly) : '');
   const [monthly, setMonthly] = useState(quote.monthly ? String(quote.monthly) : '');
   const [credit, setCredit] = useState(String(quote.quotedAt ? quote.credit : snap.unused));
+  const [installments, setInstallments] = useState(quote.quotedAt ? quote.installments : true);
   const y = Number(yearly) || 0;
   const c = Math.min(Number(credit) || 0, y);
   return (
@@ -71,11 +72,20 @@ export function QuotePanel({ snap, quote, company, action }: { snap: Subscriptio
           Credit off the first yearly payment ({cur === 'USD' ? '$' : '₹'})
           <input className="o-input" name="credit" type="number" min={0} value={credit} onChange={(e) => setCredit(e.target.value)} />
         </label>
+        <label className="o-row" style={{ gap: 8, fontSize: 13 }}>
+          <input type="checkbox" name="installments" checked={installments} onChange={(e) => setInstallments(e.target.checked)} />
+          Also let them pay the yearly price monthly (12 payments, 12-month term)
+        </label>
         <div className="o-panel" style={{ margin: 0, background: 'var(--steel-tint)', fontSize: 13 }}>
           {y > 0 && (
             <div>
               Yearly: first payment <strong>{m(y - c)}</strong>
               {c > 0 && ` (${m(y)} − ${m(c)} credit)`}, then {m(y)} every year.
+            </div>
+          )}
+          {y > 0 && installments && (
+            <div>
+              Yearly, paid monthly: {m(installmentOf(y))} × 12 months{snap.paid && snap.periodEnd ? `, first payment when their paid period ends (${day(snap.periodEnd)})` : ''}.
             </div>
           )}
           {Number(monthly) > 0 && <div>Monthly: {m(Number(monthly))} every month{snap.paid && snap.periodEnd ? `, starting when their paid period ends (${day(snap.periodEnd)})` : ''}.</div>}

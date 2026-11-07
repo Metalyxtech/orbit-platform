@@ -26,5 +26,7 @@ export default async function Home() {
   }));
   // One portal and nothing pending: straight in. Otherwise the chooser shows what is open and what waits.
   if (open.length === 1 && !waiting) redirect(`/${open[0]}`);
+  // A company admin with no portal yet (e.g. waiting for a custom portal) works in Company admin.
+  if (!open.length && !waiting && s.state === 'ok' && s.ctx.role === 'company_admin') redirect('/manage/company/custom');
   redirect(open.length || waiting ? '/portals' : '/pending?reason=portals');
 }

@@ -9,14 +9,9 @@ const missing = (err: unknown) => {
   return code === '42P01' || /relation "messages" does not exist/.test(String(err));
 };
 
-/** Runs a messages query in a savepoint; before migration 0008 it returns the fallback instead of failing. */
-async function guarded<T>(tx: Tx, fallback: T, fn: (sp: Tx) => Promise<T>): Promise<{ ok: boolean; data: T }> {
-  try {
-    return { ok: true, data: await tx.transaction(fn) };
-  } catch (err) {
-    if (missing(err)) return { ok: false, data: fallback };
-    throw err;
-  }
+/** Runs a messages query. Migration 0008 has run everywhere, so no savepoint (it cost two round trips per page). */
+async function guarded<T>(tx: Tx, _fallback: T, fn: (sp: Tx) => Promise<T>): Promise<{ ok: boolean; data: T }> {
+  return { ok: true, data: await fn(tx) };
 }
 
 export type MessageRow = {

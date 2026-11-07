@@ -1,14 +1,14 @@
 import type { ReactNode } from 'react';
-import { loadRequests, requireSuperAdminPage } from './data';
+import { requireSuperAdminPage } from './data';
 import { SuperNav } from './SuperNav';
-import { countNewPayments } from './billing-data';
+import { superAdminBadges } from './badges';
 
 export const dynamic = 'force-dynamic';
 
 /** Super Admin shell: its own sidebar, so new sections slot in as menu items. */
 export default async function SuperAdminLayout({ children }: { children: ReactNode }) {
   const me = await requireSuperAdminPage();
-  const [{ total }, payments] = await Promise.all([loadRequests(me.userId), countNewPayments(me.userId)]);
+  const { requests: total, payments } = await superAdminBadges(me.userId);
   return (
     <div className="o-shell">
       <aside className="o-side">

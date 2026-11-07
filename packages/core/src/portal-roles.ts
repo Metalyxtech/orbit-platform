@@ -5,21 +5,14 @@ const pgCode = (err: unknown) => (err as { code?: string; cause?: { code?: strin
 /** Migration 0010 not run: the portal_roles table is missing. */
 const missingTable = (err: unknown) => pgCode(err) === '42P01' || /relation "portal_roles" does not exist/.test(String(err));
 
-/** membershipId -> stored role for one portal. Empty before migration 0010. */
+/** membershipId -> stored role for one portal (read on every page, so no savepoint). */
 export async function readPortalRoles(tx: Tx, portal: string, membershipIds: string[]): Promise<Map<string, string>> {
   if (membershipIds.length === 0) return new Map();
-  try {
-    const rows = await tx.transaction((sp) =>
-      sp
-        .select({ membershipId: portalRoles.membershipId, role: portalRoles.role })
-        .from(portalRoles)
-        .where(and(eq(portalRoles.portal, portal), inArray(portalRoles.membershipId, membershipIds))),
-    );
-    return new Map(rows.map((r) => [r.membershipId, r.role]));
-  } catch (err) {
-    if (missingTable(err)) return new Map();
-    throw err;
-  }
+  const rows = await tx
+    .select({ membershipId: portalRoles.membershipId, role: portalRoles.role })
+    .from(portalRoles)
+    .where(and(eq(portalRoles.portal, portal), inArray(portalRoles.membershipId, membershipIds)));
+  return new Map(rows.map((r) => [r.membershipId, r.role]));
 }
 
 /** Saves a person's role in a portal. Returns false before migration 0010. */

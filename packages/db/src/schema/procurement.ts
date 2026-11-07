@@ -189,3 +189,27 @@ export const procEvents = pgTable(
   },
   (t) => [index('proc_events_request').on(t.companyId, t.requestId, t.createdAt)],
 );
+
+/** Supplier quotation documents (PDF, photos) attached to a quote. Stored in S3 under the company prefix. Migration 0016. */
+export const procQuoteFiles = pgTable(
+  'proc_quote_files',
+  {
+    id: id(),
+    companyId: companyId(),
+    requestId: uuid('request_id')
+      .notNull()
+      .references(() => procRequests.id),
+    quoteId: uuid('quote_id')
+      .notNull()
+      .references(() => procQuotes.id),
+    s3Key: text('s3_key').notNull(),
+    fileName: text('file_name').notNull(),
+    contentType: text('content_type').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    /** False until the browser finished uploading. */
+    uploaded: boolean('uploaded').notNull().default(false),
+    byId: uuid('by_id').references(() => memberships.id),
+    createdAt: at(),
+  },
+  (t) => [index('proc_quote_files_request').on(t.companyId, t.requestId)],
+);

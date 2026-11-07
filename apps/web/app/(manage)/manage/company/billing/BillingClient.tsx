@@ -7,7 +7,7 @@ import { cycleOf, money, planOf, portalName, portalsOutside, priceFor, taxNote, 
 import type { BillingState } from '@/billing/state';
 import { cancelPlanAction, confirmCheckoutAction, startCheckoutAction, startCustomCheckoutAction } from './actions';
 
-type CustomDeal = { label: string; monthlyPrice: number | null; yearlyPrice: number | null; maxUsers: number | null };
+type CustomDeal = { label: string; monthlyPrice: number | null; yearlyPrice: number | null; maxUsers: number | null; credit: number };
 
 type History = { id: string; type: string; amount: number | null; currency: string | null; ref: string | null; at: string };
 type RzResponse = { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string };
@@ -101,7 +101,9 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
         if (!done.ok) return toast(done.error, 'bad');
         const paused = done.data.paused.length ? ` ${done.data.paused.join(' and ')} is paused; your data is kept.` : '';
         const resumed = done.data.resumed.length ? ` ${done.data.resumed.join(' and ')} is back on.` : '';
-        toast(`You are on ${res.data.planName}. Thank you!${paused}${resumed}`);
+        // Switching from a plan already paid for: the new one starts when that period ends (no double payment).
+        const starts = res.data.paidUntil ? ` It starts on ${date(res.data.paidUntil)}, when your current paid period ends.` : '';
+        toast(`You are on ${res.data.planName}. Thank you!${starts}${paused}${resumed}`);
         router.refresh();
       },
     });
@@ -196,6 +198,11 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
                     <div style={{ fontSize: 24, fontWeight: 700, margin: '4px 0 10px' }}>
                       {m(price)} <span style={{ fontSize: 13, fontWeight: 400 }}>/ {c === 'yearly' ? 'year' : 'month'}</span>
                     </div>
+                    {c === 'yearly' && custom.credit > 0 && (
+                      <p style={{ fontSize: 12, margin: '-4px 0 10px' }}>
+                        First payment <strong>{m(Math.max(0, price - custom.credit))}</strong> after your {m(custom.credit)} credit for the unused part of your current plan.
+                      </p>
+                    )}
                     <Button block variant="primary" disabled={busy || current} onClick={() => setCustomPick(c)}>
                       {current ? 'Current plan' : paid ? `Switch to ${c}` : `Subscribe ${c}`}
                     </Button>
@@ -293,7 +300,11 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
         {pick && (
           <>
             {m(priceFor(bundle, pick, cycle, cur))}{tax} per {cycleOf(cycle).per}, for up to {tierOf(pick)?.users} people.
-            {state.status === 'trial' && state.trialDaysLeft > 0 ? ` Your ${cur === 'USD' ? 'card' : 'card or UPI'} is set up now; the first charge is on ${date(state.trialEndsAt)} when the trial ends.` : ' You pay now through Razorpay.'}{' '}
+            {state.status === 'trial' && state.trialDaysLeft > 0
+              ? ` Your ${cur === 'USD' ? 'card' : 'card or UPI'} is set up now; the first charge is on ${date(state.trialEndsAt)} when the trial ends.`
+              : paid && state.currentPeriodEnd && new Date(state.currentPeriodEnd).getTime() > Date.now()
+                ? ` Your current plan runs until ${date(state.currentPeriodEnd)}, which you have already paid for; the first charge for this plan is then.`
+                : ' You pay now through Razorpay.'}{' '}
             Cancel any time.
             {portalsOutside(`${bundle}_${pick}`, used).length > 0 && (
               <p className="o-banner hivis" style={{ margin: '10px 0 0' }}>
@@ -319,7 +330,14 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
           <>
             {m((customPick === 'yearly' ? custom.yearlyPrice : custom.monthlyPrice) ?? 0)}
             {tax} per {customPick === 'yearly' ? 'year' : 'month'}.
-            {state.status === 'trial' && state.trialDaysLeft > 0 ? ` The first charge is on ${date(state.trialEndsAt)} when the trial ends.` : ' You pay now through Razorpay.'} Cancel any time.
+            {customPick === 'yearly' && custom.credit > 0
+              ? ` You pay ${m(Math.max(0, (custom.yearlyPrice ?? 0) - custom.credit))}${tax} now (after your ${m(custom.credit)} credit), then the full yearly price from next year. Your current plan stops today.`
+              : state.status === 'trial' && state.trialDaysLeft > 0
+                ? ` The first charge is on ${date(state.trialEndsAt)} when the trial ends.`
+                : paid && state.currentPeriodEnd && new Date(state.currentPeriodEnd).getTime() > Date.now()
+                  ? ` Your current plan runs until ${date(state.currentPeriodEnd)}, which you have already paid for; the first charge for this plan is then.`
+                  : ' You pay now through Razorpay.'}{' '}
+            Cancel any time.
           </>
         )}
       </ConfirmDialog>

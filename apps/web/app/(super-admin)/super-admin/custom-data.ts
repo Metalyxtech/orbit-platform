@@ -1,6 +1,7 @@
 import { getDb } from '@orbit/core/next';
 import { withTenant } from '@orbit/db';
 import { getCustomPlan } from '@/custom/plan';
+import { subscriptionSnapshot } from '@/custom/quotes';
 import { companyRequests } from '@/custom/requests';
 import { loadCompanies } from './data';
 
@@ -18,5 +19,9 @@ export async function allCustomRequests(superUserId: string) {
 /** One company's custom deal and requests, for its company page. */
 export async function companyCustomWork(companyId: string, superUserId: string) {
   const db = await getDb();
-  return withTenant(db, { companyId, userId: superUserId }, async (tx) => ({ plan: await getCustomPlan(tx, companyId), requests: await companyRequests(tx, companyId) }));
+  return withTenant(db, { companyId, userId: superUserId }, async (tx) => ({
+    plan: await getCustomPlan(tx, companyId),
+    requests: await companyRequests(tx, companyId),
+    subscription: await subscriptionSnapshot(tx, companyId),
+  }));
 }

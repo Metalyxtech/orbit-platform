@@ -36,11 +36,11 @@ export async function superAdminBadges(superUserId: string) {
         .select({ n: sql<number>`count(*)::int` })
         .from(billingEvents)
         .where(and(eq(billingEvents.companyId, c.id), inArray(billingEvents.type, CONFIRMATIONS), b?.seenAt ? gt(billingEvents.createdAt, b.seenAt) : undefined));
-      // New custom requirements (skipped until migration 0015 has run).
+      // Custom requests waiting for Orbit: new ones, and prices the customer approved (skipped before migration 0015).
       let fresh = 0;
       try {
         [{ n: fresh }] = await tx.transaction((sp) =>
-          sp.select({ n: sql<number>`count(*)::int` }).from(customRequests).where(and(eq(customRequests.companyId, c.id), eq(customRequests.status, 'new'))),
+          sp.select({ n: sql<number>`count(*)::int` }).from(customRequests).where(and(eq(customRequests.companyId, c.id), inArray(customRequests.status, ['new', 'approved']))),
         );
       } catch (err) {
         if (!/custom_requests/.test(String(err)) && (err as { cause?: { code?: string } })?.cause?.code !== '42P01') throw err;

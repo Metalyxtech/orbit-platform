@@ -1,10 +1,11 @@
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { ActionContext } from '@orbit/core';
-import { billingEvents, billingPlans, companySubscriptions, type Tx } from '@orbit/db';
-import { customPrice, getCustomPlan, type CustomCycle } from '../custom/plan';
+import { billingPlans, type Tx } from '@orbit/db';
+import { customCredit, customPrice, getCustomPlan, type CustomCycle } from '../custom/plan';
 import * as rz from './razorpay';
 import { billingState } from './state';
+import { recordCheckout, switchTiming } from './switch';
 
 // Checkout for a custom customer: the monthly or yearly price Super Admin agreed with them.
 // Kept apart from the standard plans; the subscription is stored with plan "custom".
@@ -37,20 +38,29 @@ export async function startCustomCheckout(tx: Tx, ctx: ActionContext, raw: z.inp
   if (plan.maxUsers && state.usage.users > plan.maxUsers) throw new Error(`Your plan includes ${plan.maxUsers} people and you have ${state.usage.users}. Contact Orbit.`);
   const amount = price * 100; // paise or cents
   const rzPlan = await razorpayCustomPlan(tx, ctx.companyId, cycle, state.currency, amount, plan.label);
-  const startAt = state.status === 'trial' && state.trialDaysLeft > 0 ? Math.floor(new Date(state.trialEndsAt).getTime() / 1000) : undefined;
+  const timing = await switchTiming(tx, ctx.companyId, state);
+  // Yearly with a credit for the unused part of the old plan: pay (yearly - credit) now as an
+  // upfront amount, full yearly price from next year; the old plan stops now (it was credited).
+  const credit = customCredit(plan, cycle);
+  const firstPayment = credit ? Math.max(0, price - credit) : price;
+  const startAt = credit ? Math.floor(Date.now() / 1000) + 365 * 86_400 : timing.startAt;
   const sub = await rz.createSubscription({
     planId: rzPlan,
     totalCount: RZ[cycle].totalCount,
     notes: { company_id: ctx.companyId, company: ctx.companyName, plan: 'custom', cycle, currency: state.currency },
     startAt,
+    addons: credit && firstPayment > 0 ? [{ name: `${plan.label}: first year after credit`, amount: firstPayment * 100, currency: state.currency }] : undefined,
   });
-  await tx
-    .insert(companySubscriptions)
-    .values({ companyId: ctx.companyId, plan: 'custom', cycle, status: 'created', razorpaySubscriptionId: sub.id, trialEndsAt: new Date(state.trialEndsAt) })
-    .onConflictDoUpdate({
-      target: companySubscriptions.companyId,
-      set: { plan: 'custom', cycle, status: 'created', razorpaySubscriptionId: sub.id, cancelAtPeriodEnd: false, updatedAt: new Date() },
-    });
-  await tx.insert(billingEvents).values({ companyId: ctx.companyId, type: 'checkout.started', razorpayId: sub.id, amount, data: { plan: 'custom', cycle, currency: state.currency } });
-  return { subscriptionId: sub.id, keyId: await rz.publicKeyId(), planName: plan.label, amount: price, currency: state.currency, cycle: RZ[cycle].label, email: ctx.email, name: ctx.name };
+  await recordCheckout(tx, ctx.companyId, sub.id, firstPayment * 100, { plan: 'custom', cycle, currency: state.currency, replaces: timing.replaces, cancelNow: !!credit, credit });
+  return {
+    subscriptionId: sub.id,
+    keyId: await rz.publicKeyId(),
+    planName: plan.label,
+    amount: firstPayment,
+    currency: state.currency,
+    cycle: RZ[cycle].label,
+    email: ctx.email,
+    name: ctx.name,
+    paidUntil: credit ? null : timing.paidUntil,
+  };
 }

@@ -13,6 +13,14 @@ export async function getCustomPlan(tx: Tx, companyId: string): Promise<CustomPl
   return row ?? null;
 }
 
+/** Credit off the first yearly payment, if Orbit gave one and it has not been used yet. */
+export const customCredit = (p: Pick<CustomPlan, 'yearlyCredit' | 'creditUsedAt'>, cycle: CustomCycle) => (cycle === 'yearly' && p.yearlyCredit > 0 && !p.creditUsedAt ? p.yearlyCredit : 0);
+
+/** The credit has been used by a confirmed yearly checkout. */
+export async function markCreditUsed(tx: Tx, companyId: string) {
+  await tx.update(customPlans).set({ creditUsedAt: new Date() }).where(eq(customPlans.companyId, companyId));
+}
+
 /** The price for one cycle in the company's currency (whole rupees or dollars), or null if not offered. */
 export const customPrice = (p: Pick<CustomPlan, 'monthlyPrice' | 'yearlyPrice'>, cycle: CustomCycle) => (cycle === 'yearly' ? p.yearlyPrice : p.monthlyPrice);
 

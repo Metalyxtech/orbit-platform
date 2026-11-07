@@ -25,6 +25,8 @@ export default async function CustomWork({ searchParams }: { searchParams: Promi
         <KpiStrip
           items={[
             { value: String(count('new')), label: 'New', tone: count('new') ? 'hivis' : undefined },
+            { value: String(count('quoted')), label: 'Price sent, waiting' },
+            { value: String(count('approved')), label: 'Approved: start work', tone: count('approved') ? 'hivis' : undefined },
             { value: String(count('reviewing') + count('in_progress')), label: 'Reviewing or being built' },
             { value: String(count('ready')), label: 'Ready' },
             { value: String(all.length), label: 'All requirements' },

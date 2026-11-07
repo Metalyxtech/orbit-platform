@@ -127,3 +127,21 @@ export async function requestFile(tx: Tx, companyId: string, fileId: string) {
     .where(and(eq(customRequestFiles.id, fileId), eq(customRequestFiles.companyId, companyId), eq(customRequestFiles.uploaded, true)));
   return f ?? null;
 }
+
+/** Sign-up with "a custom portal built for us": the company's first request, waiting for Orbit. */
+export async function requestFromSignUp(tx: Tx, v: { companyId: string; membershipId: string; name: string; details: string }) {
+  await tx.insert(customRequests).values({
+    companyId: v.companyId,
+    requestedBy: v.membershipId,
+    requestedName: v.name,
+    title: 'Custom portal (asked at sign-up)',
+    details: v.details.trim().slice(0, 8000) || 'Asked for a custom portal when registering. Forms to follow.',
+    area: 'new',
+  });
+}
+
+/** Does this company have any custom request (used when approving a custom-only sign-up)? */
+export async function hasCustomRequest(tx: Tx, companyId: string) {
+  const [r] = await tx.select({ id: customRequests.id }).from(customRequests).where(eq(customRequests.companyId, companyId)).limit(1);
+  return !!r;
+}

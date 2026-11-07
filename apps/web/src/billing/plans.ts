@@ -100,3 +100,6 @@ export function money(v: number, cur: Currency = 'INR') {
 /** Rupees (older callers). */
 export const inr = (v: number) => money(v, 'INR');
 export const taxNote = (cur: Currency) => (cur === 'USD' ? 'Prices in US dollars' : 'GST extra');
+
+/** A yearly price paid monthly: 12 equal payments (rounded up to the whole rupee or dollar). */
+export const installmentOf = (yearly: number) => Math.ceil(yearly / 12);

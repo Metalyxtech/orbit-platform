@@ -13,6 +13,8 @@ import { recordCheckout, switchTiming } from './switch';
 const RZ: Record<CustomCycle, { period: 'monthly' | 'yearly'; totalCount: number; label: string }> = {
   monthly: { period: 'monthly', totalCount: 120, label: 'Monthly' },
   yearly: { period: 'yearly', totalCount: 10, label: 'Yearly' },
+  // The yearly price in 12 monthly payments: a 12-month term that ends by itself after the 12th.
+  yearly_monthly: { period: 'monthly', totalCount: 12, label: 'Yearly, paid monthly' },
 };
 
 async function razorpayCustomPlan(tx: Tx, companyId: string, cycle: CustomCycle, currency: 'INR' | 'USD', amount: number, label: string) {
@@ -24,7 +26,7 @@ async function razorpayCustomPlan(tx: Tx, companyId: string, cycle: CustomCycle,
   return created.id;
 }
 
-const input = z.object({ cycle: z.enum(['monthly', 'yearly']) });
+const input = z.object({ cycle: z.enum(['monthly', 'yearly', 'yearly_monthly']) });
 
 export async function startCustomCheckout(tx: Tx, ctx: ActionContext, raw: z.input<typeof input>) {
   if (ctx.role !== 'company_admin') throw new Error('Only the company admin can manage the subscription');
@@ -32,7 +34,7 @@ export async function startCustomCheckout(tx: Tx, ctx: ActionContext, raw: z.inp
   const plan = await getCustomPlan(tx, ctx.companyId);
   if (!plan?.enabled) throw new Error('Your company does not have a custom plan. Contact Orbit.');
   const price = customPrice(plan, cycle);
-  if (!price) throw new Error(`Orbit has not set a ${cycle} price for your plan yet.`);
+  if (!price) throw new Error(`Orbit has not offered ${RZ[cycle].label.toLowerCase()} payment for your plan.`);
   const state = await billingState(tx, ctx);
   if (state.status === 'active' && !state.cancelAtPeriodEnd && state.plan === 'custom' && state.cycle === cycle) throw new Error('You are already on this plan.');
   if (plan.maxUsers && state.usage.users > plan.maxUsers) throw new Error(`Your plan includes ${plan.maxUsers} people and you have ${state.usage.users}. Contact Orbit.`);

@@ -196,6 +196,9 @@ export async function cancelPlan(tx: Tx, ctx: ActionContext) {
   requireAdmin(ctx);
   const [sub] = await tx.select().from(companySubscriptions).where(eq(companySubscriptions.companyId, ctx.companyId));
   if (!sub?.razorpaySubscriptionId || !PAID.includes(sub.status)) throw new Error('There is no active subscription to cancel');
+  if (sub.plan === 'custom' && sub.cycle === 'yearly_monthly') {
+    throw new Error('Your plan is a 12-month term paid monthly. It ends by itself after the 12th payment; contact Orbit to end it early.');
+  }
   const live = await rz.cancelSubscription(sub.razorpaySubscriptionId, true);
   await tx.update(companySubscriptions).set({ cancelAtPeriodEnd: true, status: live.status === 'cancelled' ? 'cancelled' : sub.status, updatedAt: new Date() }).where(eq(companySubscriptions.companyId, ctx.companyId));
   await tx.insert(billingEvents).values({ companyId: ctx.companyId, type: 'subscription.cancel_requested', razorpayId: sub.razorpaySubscriptionId });

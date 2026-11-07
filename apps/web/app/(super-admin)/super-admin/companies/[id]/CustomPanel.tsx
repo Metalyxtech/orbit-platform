@@ -32,6 +32,10 @@ export function CustomPanel({ companyId, plan, requests, currency }: { companyId
             <input className="o-input" name="yearlyPrice" type="number" min={1} defaultValue={plan?.yearlyPrice ?? ''} placeholder="Not offered" />
           </label>
         </div>
+        <label className="o-row" style={{ gap: 8, fontSize: 13 }}>
+          <input type="checkbox" name="allowInstallments" defaultChecked={plan?.allowInstallments ?? false} />
+          The yearly price can also be paid monthly (12 payments, 12-month term)
+        </label>
         <label className="o-field">
           People allowed
           <input className="o-input" name="maxUsers" type="number" min={1} defaultValue={plan?.maxUsers ?? ''} placeholder="No limit" />

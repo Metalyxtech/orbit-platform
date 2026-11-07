@@ -4,7 +4,7 @@ import { audit, type ActionContext } from '@orbit/core';
 import { customPlans, customRequests, type Tx } from '@orbit/db';
 import { cycleOf, priceFor, type Cycle } from '../billing/plans';
 import { billingStateFor } from '../billing/state';
-import { getCustomPlan, customPrice } from './plan';
+import { customCycleLabel, customPrice, getCustomPlan, type CustomCycle } from './plan';
 
 // Prices for custom work: Super Admin sends one combined price (normal portals + custom portal),
 // monthly and/or yearly; the company admin approves it; when the work is ready the custom plan is
@@ -22,8 +22,8 @@ export async function subscriptionSnapshot(tx: Tx, companyId: string) {
   const price =
     s.bundle && s.tier && cycle
       ? priceFor(s.bundle, s.tier, cycle, s.currency)
-      : custom && (cycle === 'monthly' || cycle === 'yearly')
-        ? customPrice(custom, cycle)
+      : custom && cycle
+        ? customPrice(custom, cycle as CustomCycle)
         : null;
   const months = cycle ? (custom ? (cycle === 'yearly' ? 12 : 1) : cycleOf(cycle).months) : 0;
   const end = s.currentPeriodEnd ? new Date(s.currentPeriodEnd) : null;
@@ -37,7 +37,7 @@ export async function subscriptionSnapshot(tx: Tx, companyId: string) {
     paid,
     planName: s.planName,
     cycle,
-    cycleLabel: cycle ? (custom ? (cycle === 'yearly' ? 'Yearly' : 'Monthly') : cycleOf(cycle).label) : null,
+    cycleLabel: cycle ? (custom ? customCycleLabel(cycle) : cycleOf(cycle).label) : null,
     monthly: months === 1,
     price,
     currency: s.currency,
@@ -60,9 +60,11 @@ const quoteInput = z
     yearly: money,
     credit: z.preprocess((v) => (v === '' || v == null ? 0 : Number(v)), z.number().int().min(0).max(100_000_000)),
     note: z.string().trim().max(2000).optional(),
+    installments: z.boolean().default(false),
   })
   .refine((v) => v.monthly || v.yearly, 'Enter a monthly or a yearly price')
-  .refine((v) => !v.credit || v.yearly, 'A credit needs a yearly price (it is taken off the first yearly payment)');
+  .refine((v) => !v.credit || v.yearly, 'A credit needs a yearly price (it is taken off the first yearly payment)')
+  .refine((v) => !v.installments || v.yearly, 'Paying the yearly price monthly needs a yearly price');
 
 /** Super Admin sends the price; the customer sees it on their Custom portals page with Approve / Decline. */
 export async function sendQuote(tx: Tx, companyId: string, raw: z.input<typeof quoteInput>) {
@@ -76,6 +78,7 @@ export async function sendQuote(tx: Tx, companyId: string, raw: z.input<typeof q
       quoteYearly: v.yearly,
       quoteCredit: v.credit,
       quoteNote: v.note || null,
+      quoteInstallments: v.installments,
       quotedAt: new Date(),
       decidedAt: null,
       decidedBy: null,
@@ -85,7 +88,7 @@ export async function sendQuote(tx: Tx, companyId: string, raw: z.input<typeof q
     .where(and(eq(customRequests.id, v.id), eq(customRequests.companyId, companyId)))
     .returning({ title: customRequests.title });
   if (!row) throw new Error('Request not found');
-  const parts = [v.monthly && `monthly ${v.monthly}`, v.yearly && `yearly ${v.yearly}`, v.credit && `credit ${v.credit}`].filter(Boolean).join(', ');
+  const parts = [v.monthly && `monthly ${v.monthly}`, v.yearly && `yearly ${v.yearly}`, v.installments && 'yearly may be paid monthly', v.credit && `credit ${v.credit}`].filter(Boolean).join(', ');
   await audit(tx, { companyId, actorId: null, action: 'custom.quote', entity: 'custom_requests', entityId: v.id, data: { summary: [`Price sent for "${row.title}": ${v.label}, ${parts}`] } });
 }
 
@@ -116,7 +119,7 @@ export async function decideQuote(tx: Tx, ctx: ActionContext, raw: { id: string;
 export async function activateApprovedPlan(tx: Tx, companyId: string, requestId: string) {
   const [r] = await tx.select().from(customRequests).where(and(eq(customRequests.id, requestId), eq(customRequests.companyId, companyId)));
   if (r?.quoteApproved !== true || !r.quoteLabel || (!r.quoteMonthly && !r.quoteYearly)) return false;
-  const deal = { enabled: true, label: r.quoteLabel, monthlyPrice: r.quoteMonthly, yearlyPrice: r.quoteYearly, yearlyCredit: r.quoteCredit, creditUsedAt: null };
+  const deal = { enabled: true, label: r.quoteLabel, monthlyPrice: r.quoteMonthly, yearlyPrice: r.quoteYearly, yearlyCredit: r.quoteCredit, creditUsedAt: null, allowInstallments: r.quoteInstallments && !!r.quoteYearly };
   await tx
     .insert(customPlans)
     .values({ companyId, ...deal })

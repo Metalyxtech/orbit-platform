@@ -7,7 +7,13 @@ import { cycleOf, money, planOf, portalName, portalsOutside, priceFor, taxNote, 
 import type { BillingState } from '@/billing/state';
 import { cancelPlanAction, confirmCheckoutAction, startCheckoutAction, startCustomCheckoutAction } from './actions';
 
-type CustomDeal = { label: string; monthlyPrice: number | null; yearlyPrice: number | null; maxUsers: number | null; credit: number };
+type CustomDeal = { label: string; monthlyPrice: number | null; yearlyPrice: number | null; maxUsers: number | null; credit: number; installment: number | null };
+type CustomCycle = 'monthly' | 'yearly' | 'yearly_monthly';
+const CUSTOM_CYCLE: Record<CustomCycle, { label: string; per: string }> = {
+  monthly: { label: 'Monthly', per: 'month' },
+  yearly: { label: 'Yearly', per: 'year' },
+  yearly_monthly: { label: 'Yearly, paid monthly', per: 'month for 12 months' },
+};
 
 type History = { id: string; type: string; amount: number | null; currency: string | null; ref: string | null; at: string };
 type RzResponse = { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string };
@@ -43,7 +49,7 @@ function loadCheckout(): Promise<boolean> {
 }
 
 export function BillingClient({ state, company, history, custom }: { state: BillingState; company: string; history: History[]; custom?: CustomDeal | null }) {
-  const [customPick, setCustomPick] = useState<'monthly' | 'yearly' | null>(null);
+  const [customPick, setCustomPick] = useState<CustomCycle | null>(null);
   const router = useRouter();
   const toast = useToast();
   const [cycle, setCycle] = useState<Cycle>((state.cycle as Cycle | null) ?? 'yearly');
@@ -62,8 +68,13 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
     : state.plan === 'custom' && custom
       ? state.cycle === 'yearly'
         ? custom.yearlyPrice
-        : custom.monthlyPrice
+        : (state.cycle as string) === 'yearly_monthly'
+          ? custom.installment
+          : custom.monthlyPrice
       : null;
+  const cycleText = (state.plan === 'custom' && state.cycle && state.cycle in CUSTOM_CYCLE ? CUSTOM_CYCLE[state.cycle as CustomCycle].label : cycleOf(state.cycle ?? 'monthly').label).toLowerCase();
+  // A yearly price paid monthly is a 12-month term: no cancel button.
+  const term = state.plan === 'custom' && (state.cycle as string) === 'yearly_monthly';
   const paid = state.status === 'active' || state.status === 'past_due';
   const cur = state.currency;
   const m = (v: number) => money(v, cur);
@@ -156,8 +167,8 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
             {state.status === 'pending_payment' && 'Checkout was started but not paid. Choose the plan again to pay.'}
             {state.status === 'active' &&
               (state.cancelAtPeriodEnd
-                ? `${planLabel}, ${cycleOf(state.cycle ?? 'monthly').label.toLowerCase()}. Ends on ${date(state.currentPeriodEnd)}; it will not renew.`
-                : `${planLabel}, ${cycleOf(state.cycle ?? 'monthly').label.toLowerCase()}${planPrice ? `, ${m(planPrice)}${tax}` : ''}. Renews on ${date(state.currentPeriodEnd)}.`)}
+                ? `${planLabel}, ${cycleText}. Ends on ${date(state.currentPeriodEnd)}; it will not renew.`
+                : `${planLabel}, ${cycleText}${planPrice ? `, ${m(planPrice)}${tax}` : ''}. Renews on ${date(state.currentPeriodEnd)}.`)}
             {state.status === 'past_due' && 'Razorpay could not take the last payment and is retrying. Update your payment method from the link Razorpay emailed you.'}
             {state.status === 'cancelled' && 'Your subscription has ended. Choose a plan to continue.'}
           </p>
@@ -186,25 +197,30 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
             <p style={{ fontSize: 13, margin: 0 }}>Orbit will share your price shortly.</p>
           ) : (
             <div className="o-row" style={{ gap: 12, flexWrap: 'wrap' }}>
-              {(['monthly', 'yearly'] as const).map((c) => {
-                const price = c === 'yearly' ? custom.yearlyPrice : custom.monthlyPrice;
+              {(['monthly', 'yearly', 'yearly_monthly'] as const).map((c) => {
+                const price = c === 'yearly' ? custom.yearlyPrice : c === 'yearly_monthly' ? custom.installment : custom.monthlyPrice;
                 if (!price) return null;
                 const current = paid && !state.cancelAtPeriodEnd && state.plan === 'custom' && state.cycle === c;
                 return (
                   <div key={c} className="o-panel" style={{ flex: '1 1 240px', margin: 0 }}>
                     <div style={{ fontSize: 13 }} className="muted">
-                      {c === 'yearly' ? 'Yearly' : 'Monthly'}
+                      {CUSTOM_CYCLE[c].label}
                     </div>
                     <div style={{ fontSize: 24, fontWeight: 700, margin: '4px 0 10px' }}>
-                      {m(price)} <span style={{ fontSize: 13, fontWeight: 400 }}>/ {c === 'yearly' ? 'year' : 'month'}</span>
+                      {m(price)} <span style={{ fontSize: 13, fontWeight: 400 }}>/ {CUSTOM_CYCLE[c].per}</span>
                     </div>
+                    {c === 'yearly_monthly' && custom.yearlyPrice && (
+                      <p style={{ fontSize: 12, margin: '-4px 0 10px' }}>
+                        The yearly price {m(custom.yearlyPrice)} in 12 monthly payments. A 12-month term: it cannot be cancelled before the 12th payment.
+                      </p>
+                    )}
                     {c === 'yearly' && custom.credit > 0 && (
                       <p style={{ fontSize: 12, margin: '-4px 0 10px' }}>
                         First payment <strong>{m(Math.max(0, price - custom.credit))}</strong> after your {m(custom.credit)} credit for the unused part of your current plan.
                       </p>
                     )}
                     <Button block variant="primary" disabled={busy || current} onClick={() => setCustomPick(c)}>
-                      {current ? 'Current plan' : paid ? `Switch to ${c}` : `Subscribe ${c}`}
+                      {current ? 'Current plan' : paid ? `Switch to ${CUSTOM_CYCLE[c].label.toLowerCase()}` : `Subscribe ${CUSTOM_CYCLE[c].label.toLowerCase()}`}
                     </Button>
                   </div>
                 );
@@ -271,7 +287,7 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
       <div className="o-panel flush">
         <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
           <h2>Billing history</h2>
-          {paid && !state.cancelAtPeriodEnd && (
+          {paid && !state.cancelAtPeriodEnd && !term && (
             <Button size="small" onClick={() => setCancel(true)}>
               Cancel subscription
             </Button>
@@ -317,7 +333,7 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
       </ConfirmDialog>
       <ConfirmDialog
         open={!!customPick}
-        title={custom && customPick ? `${custom.label}, ${customPick}` : ''}
+        title={custom && customPick ? `${custom.label}, ${CUSTOM_CYCLE[customPick].label.toLowerCase()}` : ''}
         confirmLabel="Continue to payment"
         onCancel={() => setCustomPick(null)}
         onConfirm={() => {
@@ -328,8 +344,9 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
       >
         {custom && customPick && (
           <>
-            {m((customPick === 'yearly' ? custom.yearlyPrice : custom.monthlyPrice) ?? 0)}
-            {tax} per {customPick === 'yearly' ? 'year' : 'month'}.
+            {m((customPick === 'yearly' ? custom.yearlyPrice : customPick === 'yearly_monthly' ? custom.installment : custom.monthlyPrice) ?? 0)}
+            {tax} per {CUSTOM_CYCLE[customPick].per}.
+            {customPick === 'yearly_monthly' && ' A 12-month term: it ends by itself after the 12th payment and cannot be cancelled earlier.'}
             {customPick === 'yearly' && custom.credit > 0
               ? ` You pay ${m(Math.max(0, (custom.yearlyPrice ?? 0) - custom.credit))}${tax} now (after your ${m(custom.credit)} credit), then the full yearly price from next year. Your current plan stops today.`
               : state.status === 'trial' && state.trialDaysLeft > 0
@@ -337,7 +354,7 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
                 : paid && state.currentPeriodEnd && new Date(state.currentPeriodEnd).getTime() > Date.now()
                   ? ` Your current plan runs until ${date(state.currentPeriodEnd)}, which you have already paid for; the first charge for this plan is then.`
                   : ' You pay now through Razorpay.'}{' '}
-            Cancel any time.
+            {customPick !== 'yearly_monthly' && 'Cancel any time.'}
           </>
         )}
       </ConfirmDialog>

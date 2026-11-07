@@ -26,6 +26,8 @@ export const customPlans = pgTable('custom_plans', {
   /** Unused value of their old plan, taken off the first yearly payment of this plan (migration 0017). */
   yearlyCredit: integer('yearly_credit').notNull().default(0),
   creditUsedAt: timestamp('credit_used_at', { withTimezone: true }),
+  /** The yearly price may also be paid monthly: 12 payments, 12-month term (migration 0018). */
+  allowInstallments: boolean('allow_installments').notNull().default(false),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -54,6 +56,8 @@ export const customRequests = pgTable(
     /** Taken off the first yearly payment: what is left of the yearly plan they already paid. */
     quoteCredit: integer('quote_credit').notNull().default(0),
     quoteNote: text('quote_note'),
+    /** The quoted yearly price may also be paid in 12 monthly payments. */
+    quoteInstallments: boolean('quote_installments').notNull().default(false),
     quotedAt: timestamp('quoted_at', { withTimezone: true }),
     /** When and by whom the customer approved or declined the price. */
     decidedAt: timestamp('decided_at', { withTimezone: true }),

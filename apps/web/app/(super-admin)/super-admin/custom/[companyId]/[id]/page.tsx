@@ -85,6 +85,7 @@ export default async function CustomRequestPage({ params }: { params: Promise<{ 
               monthly: r.quoteMonthly,
               yearly: r.quoteYearly,
               credit: r.quoteCredit,
+              installments: r.quoteInstallments,
               note: r.quoteNote,
               quotedAt: r.quotedAt?.toISOString() ?? null,
               approved: r.quoteApproved,

@@ -13,6 +13,12 @@ import { portalModules } from './portals';
 /** Portal ids ticked on a form, limited to portals that exist. */
 const pickedPortals = (form: FormData) => [...new Set(form.getAll('portals').map(String))].filter((p) => portalModules[p]);
 
+/** Company chooser after sign-in: open the chosen company. */
+export async function chooseCompanyAction(form: FormData) {
+  await switchCompanyAction(String(form.get('companyId') ?? ''));
+  redirect('/');
+}
+
 export async function switchCompanyAction(companyId: string) {
   const s = await getSession();
   if (s.state !== 'ok' || !s.companies.some((c) => c.id === companyId)) return;

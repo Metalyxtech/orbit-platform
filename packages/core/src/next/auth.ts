@@ -81,12 +81,17 @@ export async function readIdentity(): Promise<AuthIdentity | null> {
   return identity && identity.exp > Date.now() ? identity : null;
 }
 
+/** The company a person chose to work in (people in several companies). Cleared at sign-out. */
+export const COMPANY_COOKIE = 'orbit_company';
+
 /** Clears our cookie and returns the WorkOS logout URL (ends the AuthKit session too). */
 export async function signOutUrl(): Promise<string> {
   const identity = await readIdentity();
   const jar = await cookies();
   jar.delete(SESSION_COOKIE);
   jar.delete(DEV_COOKIE);
+  // Someone in several companies is asked again which one to open at the next sign-in.
+  jar.delete(COMPANY_COOKIE);
   if (identity?.sessionId && !devAuthEnabled()) {
     const w = await getWorkOS();
     return w.userManagement.getLogoutUrl({ sessionId: identity.sessionId, returnTo: process.env.APP_BASE_URL });

@@ -6,3 +6,4 @@ export * from './portal-roles';
 export * from './procurement';
 export * from './billing';
 export * from './legal';
+export * from './custom';

@@ -7,6 +7,7 @@ import { unreadCount } from '@/messages';
 import { isManager, workspaceFor } from '@/management/workspaces';
 import { accessiblePortals } from '@/portal-access';
 import { companyAdminItems } from '@/company-admin-nav';
+import { showCustomMenu } from '@/custom/plan';
 import { portalNavItems } from '@/portal-nav';
 import { portalRolesFor, queueCounts } from '@/portal-role';
 import { BRAND, portalModules } from '@/portals';
@@ -21,12 +22,13 @@ export default async function PortalLayout({ children, params }: { children: Rea
   if (!mod) notFound();
   await requireAgreement(await getSession());
 
-  const { ctx, enabled, waiting, unread, roles } = await query(async (tx, ctx) => ({
+  const { ctx, enabled, waiting, unread, roles, custom } = await query(async (tx, ctx) => ({
     ctx,
     enabled: await accessiblePortals(tx, ctx),
     waiting: (await queueCounts(tx, ctx, [portal]))[portal],
     unread: await unreadCount(tx, ctx),
     roles: await portalRolesFor(tx, ctx, Object.keys(portalModules)),
+    custom: await showCustomMenu(tx, ctx),
   }));
   const portalRole = roles[portal];
   if (!enabled.includes(portal)) redirect('/');
@@ -40,7 +42,7 @@ export default async function PortalLayout({ children, params }: { children: Rea
   }
   nav.push({ href: '/manage/messages', label: 'Messages', section: 'main', badge: unread || undefined });
   // One Company admin menu (company pages and every portal's settings), the same in every portal.
-  const adminNav = companyAdminItems(ctx, enabled, roles).map((n) => ({ ...n, section: 'admin' as const, badge: undefined }));
+  const adminNav = companyAdminItems(ctx, enabled, roles, { custom }).map((n) => ({ ...n, section: 'admin' as const, badge: undefined }));
   const shellNav = [...nav.filter((n) => n.section !== 'admin'), ...adminNav];
 
   return (

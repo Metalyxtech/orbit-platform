@@ -10,6 +10,7 @@ import { portalRolesFor, queueCounts } from '@/portal-role';
 import { BRAND } from '@/portals';
 import { workspaceFor } from '@/management/workspaces';
 import { manageNavSections } from './nav-groups';
+import { showCustomMenu } from '@/custom/plan';
 import { CompanySwitcher } from '@/CompanySwitcher';
 import { requireAgreement } from '@/legal/gate';
 
@@ -30,6 +31,7 @@ export default async function ManageLayout({ children }: { children: ReactNode }
       unread: await unreadCount(tx, ctx),
       badges: await queueCounts(tx, ctx, portals),
       roles: await portalRolesFor(tx, ctx, portals),
+      custom: await showCustomMenu(tx, ctx),
     };
   });
   const ctx = s.ctx;

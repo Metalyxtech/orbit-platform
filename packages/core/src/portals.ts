@@ -44,6 +44,11 @@ export interface PortalManifest {
   portalRoles?: PortalRoleDef[];
   /** The portal role a person has when the admin has not set one. */
   defaultPortalRole?: (role: MemberRole) => string;
+  /**
+   * Built for one customer (portals/custom-*). Hidden from sign-up, standard plans and portal
+   * requests; only Super Admin switches it on for that company. Never part of a standard bundle.
+   */
+  custom?: boolean;
 }
 
 /** The portal role this person acts as: the admin's choice, or the portal's default for their company role. */

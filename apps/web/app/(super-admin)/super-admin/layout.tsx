@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 /** Super Admin shell: its own sidebar, so new sections slot in as menu items. */
 export default async function SuperAdminLayout({ children }: { children: ReactNode }) {
   const me = await requireSuperAdminPage();
-  const { requests: total, payments } = await superAdminBadges(me.userId);
+  const { requests: total, payments, custom } = await superAdminBadges(me.userId);
   return (
     <div className="o-shell">
       <aside className="o-side">
@@ -20,7 +20,7 @@ export default async function SuperAdminLayout({ children }: { children: ReactNo
           </div>
         </div>
         <div className="o-nav-title">Platform</div>
-        <SuperNav requests={total} payments={payments} />
+        <SuperNav requests={total} payments={payments} custom={custom} />
         <div className="o-side-foot">
           <strong>{me.name}</strong>
           Super Admin

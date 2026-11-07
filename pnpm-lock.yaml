@@ -47,6 +47,9 @@ importers:
       '@orbit/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@orbit/portal-custom-1':
+        specifier: workspace:*
+        version: link:../../portals/custom-1
       '@orbit/portal-procurement':
         specifier: workspace:*
         version: link:../../portals/procurement
@@ -204,6 +207,34 @@ importers:
 
   packages/ui:
     devDependencies:
+      '@types/react':
+        specifier: 19.1.17
+        version: 19.1.17
+      next:
+        specifier: 15.5.28
+        version: 15.5.28(@types/node@22.20.5)(react-dom@19.1.10(react@19.1.10))(react@19.1.10)
+      react:
+        specifier: 19.1.10
+        version: 19.1.10
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
+  portals/custom-1:
+    dependencies:
+      '@orbit/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@orbit/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@orbit/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+    devDependencies:
+      '@types/node':
+        specifier: 22.20.5
+        version: 22.20.5
       '@types/react':
         specifier: 19.1.17
         version: 19.1.17

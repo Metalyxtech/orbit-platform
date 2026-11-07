@@ -9,6 +9,9 @@ const ALLOWED_TYPES = new Set([
   'application/pdf',
   'text/csv',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  // Customers' own forms for custom work (Word documents and phone photos).
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'image/webp',
 ]);
 
 const bucket = () => {

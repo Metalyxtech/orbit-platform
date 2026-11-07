@@ -8,7 +8,12 @@ export type AdminNavItem = { href: string; label: string; group: string };
  * The one Company admin menu: company-wide pages first, then every portal's settings under the
  * portal's name. Used by the Management workspace and by every portal's sidebar.
  */
-export function companyAdminItems(ctx: Pick<SessionContext, 'role'>, portals: string[], roles: Record<string, string | null>): AdminNavItem[] {
+export function companyAdminItems(
+  ctx: Pick<SessionContext, 'role'>,
+  portals: string[],
+  roles: Record<string, string | null>,
+  opts: { custom?: boolean } = {},
+): AdminNavItem[] {
   if (ctx.role !== 'company_admin') return [];
   const items: AdminNavItem[] = [
     { href: '/manage/company/people', label: 'People and portals', group: 'Company' },
@@ -16,6 +21,8 @@ export function companyAdminItems(ctx: Pick<SessionContext, 'role'>, portals: st
     { href: '/manage/company/billing', label: 'Plan and billing', group: 'Company' },
     { href: '/manage/company/history', label: 'Change history', group: 'Company' },
     { href: '/manage/company/legal', label: 'Terms and privacy', group: 'Company' },
+    // Only for custom customers (Super Admin switches custom work on).
+    ...(opts.custom ? [{ href: '/manage/company/custom', label: 'Custom requirements', group: 'Company' }] : []),
   ];
   for (const p of portals.filter((x) => portalModules[x])) {
     const group = portalModules[p].manifest.name;

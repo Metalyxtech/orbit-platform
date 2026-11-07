@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { audit, type ActionContext } from '@orbit/core';
 import { billingEvents, companyPortals, type Tx } from '@orbit/db';
+import { isCustomPortal } from '../portals';
 import { planOf, portalName } from './plans';
 
 // Fits the company's portals to the plan it just paid for.
@@ -13,7 +14,8 @@ export async function fitPortalsToPlan(tx: Tx, ctx: ActionContext, planId: strin
   const plan = planOf(planId);
   if (!plan) return { paused: [] as string[], resumed: [] as string[] };
   const rows = await tx.select({ portal: companyPortals.portal, enabled: companyPortals.enabled }).from(companyPortals).where(eq(companyPortals.companyId, ctx.companyId));
-  const paused = rows.filter((r) => r.enabled && !plan.portals.includes(r.portal)).map((r) => r.portal);
+  // Custom portals belong to the custom deal, never to a standard plan: never paused here.
+  const paused = rows.filter((r) => r.enabled && !plan.portals.includes(r.portal) && !isCustomPortal(r.portal)).map((r) => r.portal);
   // Portals billing paused before (not ones Orbit switched off) come back when the new plan includes them.
   const earlier = await tx
     .select({ data: billingEvents.data })

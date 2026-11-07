@@ -4,9 +4,11 @@ A portal built for **one customer**, kept completely separate from the normal po
 (`portals/timesheet`, `portals/procurement`). Changing code here never changes them.
 
 ## How a custom job flows
-1. Super Admin switches **Custom** on for the company (Company page > Custom work) and sets the price.
-2. The company admin uploads their forms (images or PDF) in **Company admin > Custom requirements**.
-3. Super Admin opens **Custom work**, downloads the files and hands them to a developer.
+1. Any company admin asks for a custom portal in **Company admin > Custom portals** (or from
+   Company portals > "Request a custom portal") and uploads their forms (images or PDF).
+2. Super Admin opens **Custom work**, replies, and sets the price on the Company page > Custom work
+   (one price covering their normal portals plus the custom portal).
+3. Super Admin downloads the files from **Custom work** and hands them to a developer.
 4. The developer builds the forms and workflow **in this folder** (see below).
 5. Super Admin switches the portal on for that company (Company page > Portals > Custom portal).
 

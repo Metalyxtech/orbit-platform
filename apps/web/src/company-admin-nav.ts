@@ -12,7 +12,6 @@ export function companyAdminItems(
   ctx: Pick<SessionContext, 'role'>,
   portals: string[],
   roles: Record<string, string | null>,
-  opts: { custom?: boolean } = {},
 ): AdminNavItem[] {
   if (ctx.role !== 'company_admin') return [];
   const items: AdminNavItem[] = [
@@ -21,8 +20,8 @@ export function companyAdminItems(
     { href: '/manage/company/billing', label: 'Plan and billing', group: 'Company' },
     { href: '/manage/company/history', label: 'Change history', group: 'Company' },
     { href: '/manage/company/legal', label: 'Terms and privacy', group: 'Company' },
-    // Only for custom customers (Super Admin switches custom work on).
-    ...(opts.custom ? [{ href: '/manage/company/custom', label: 'Custom requirements', group: 'Company' }] : []),
+    // Ask Orbit for a custom portal or changes (open to every company admin).
+    { href: '/manage/company/custom', label: 'Custom portals', group: 'Company' },
   ];
   for (const p of portals.filter((x) => portalModules[x])) {
     const group = portalModules[p].manifest.name;

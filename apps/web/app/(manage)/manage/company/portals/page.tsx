@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSession, query } from '@orbit/core/next';
 import { companyPortalList } from '@/company-admin/portals';
@@ -23,6 +24,17 @@ export default async function CompanyPortals() {
           </p>
         </div>
         <PortalsClient portals={portals} />
+        <div className="o-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <div>
+            <h2 style={{ margin: 0 }}>Need a portal we don&apos;t offer?</h2>
+            <p className="muted" style={{ fontSize: 13, margin: '4px 0 0' }}>
+              Orbit can build a custom portal for {s.ctx.companyName} from your own forms and workflow, alongside the portals you use now.
+            </p>
+          </div>
+          <Link className="o-btn primary" href="/manage/company/custom">
+            Request a custom portal
+          </Link>
+        </div>
       </div>
     </>
   );

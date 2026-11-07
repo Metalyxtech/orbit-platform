@@ -17,7 +17,7 @@ const Home = async () => {
         </div>
         <div className="o-panel">
           <p style={{ margin: 0, fontSize: 13 }}>
-            Your company admin can send forms and changes from <strong>Company admin › Custom requirements</strong>.
+            Your company admin can send forms and changes from <strong>Company admin › Custom portals</strong>.
           </p>
         </div>
       </div>

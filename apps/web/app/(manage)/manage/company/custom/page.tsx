@@ -6,6 +6,7 @@ import { billingSettings } from '@/billing/state';
 import { getCustomPlan } from '@/custom/plan';
 import { AREAS, areaLabel, companyRequests, statusOf } from '@/custom/requests';
 import { CustomRequestForm } from './CustomRequestForm';
+import { QuoteBox } from './QuoteBox';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,6 +75,22 @@ export default async function CustomRequirements() {
                         </a>
                       ))}
                     </p>
+                  )}
+                  {r.quotedAt && r.quoteLabel && (
+                    <QuoteBox
+                      requestId={r.id}
+                      currency={d.currency}
+                      waiting={r.status === 'quoted'}
+                      quote={{
+                        label: r.quoteLabel,
+                        monthly: r.quoteMonthly,
+                        yearly: r.quoteYearly,
+                        credit: r.quoteCredit,
+                        note: r.quoteNote,
+                        approved: r.quoteApproved,
+                        decidedAt: r.decidedAt?.toISOString() ?? null,
+                      }}
+                    />
                   )}
                   {r.orbitNote && (
                     <div className="o-banner ok" style={{ marginTop: 10, whiteSpace: 'pre-wrap' }}>

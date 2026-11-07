@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { audit, type ActionContext, type SessionContext } from '@orbit/core';
+import { activateApprovedPlan } from './quotes';
 import { companyKey, presignUpload } from '@orbit/core/aws';
 import { customRequestFiles, customRequests, type Tx } from '@orbit/db';
 
@@ -17,6 +18,8 @@ export const AREAS = [
 export const STATUSES = [
   { id: 'new', label: 'Sent to Orbit', tone: 'steel' },
   { id: 'reviewing', label: 'Orbit is reviewing', tone: 'warn' },
+  { id: 'quoted', label: 'Price sent: waiting for approval', tone: 'hivis' },
+  { id: 'approved', label: 'Approved: work starting', tone: 'ok' },
   { id: 'in_progress', label: 'Being built', tone: 'warn' },
   { id: 'ready', label: 'Ready', tone: 'ok' },
   { id: 'declined', label: 'Not possible', tone: 'bad' },
@@ -111,6 +114,8 @@ export async function updateRequest(tx: Tx, companyId: string, raw: z.input<type
     .where(and(eq(customRequests.id, v.id), eq(customRequests.companyId, companyId)))
     .returning({ title: customRequests.title });
   if (!row) throw new Error('Request not found');
+  // Ready: an approved price becomes the company's custom plan, so the admin can subscribe.
+  if (v.status === 'ready') await activateApprovedPlan(tx, companyId, v.id); // only a price the customer approved
   await audit(tx, { companyId, actorId: null, action: 'custom.update', entity: 'custom_requests', entityId: v.id, data: { summary: [`Custom requirement "${row.title}": ${statusOf(v.status).label}`] } });
 }
 

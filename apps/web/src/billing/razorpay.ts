@@ -58,7 +58,17 @@ export const createPlan = (input: { period: 'monthly' | 'yearly'; interval: numb
     item: { name: input.name, amount: input.amount, currency: input.currency, description: input.description },
   });
 
-export const createSubscription = (input: { planId: string; totalCount: number; notes: Record<string, string>; startAt?: number }) =>
+/**
+ * addons: an upfront amount charged when the customer authorises (needs start_at in the future),
+ * e.g. the first year after a credit, before the plan's own charges begin.
+ */
+export const createSubscription = (input: {
+  planId: string;
+  totalCount: number;
+  notes: Record<string, string>;
+  startAt?: number;
+  addons?: { name: string; amount: number; currency: 'INR' | 'USD' }[];
+}) =>
   call<RzSubscription>('POST', '/subscriptions', {
     plan_id: input.planId,
     total_count: input.totalCount,
@@ -66,6 +76,7 @@ export const createSubscription = (input: { planId: string; totalCount: number; 
     customer_notify: 1,
     notes: input.notes,
     ...(input.startAt ? { start_at: input.startAt } : {}),
+    ...(input.addons?.length ? { addons: input.addons.map((a) => ({ item: { name: a.name, amount: a.amount, currency: a.currency } })) } : {}),
   });
 
 export const fetchSubscription = (id: string) => call<RzSubscription>('GET', `/subscriptions/${encodeURIComponent(id)}`);

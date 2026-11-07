@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { areaLabel, STATUSES, statusOf } from '@/custom/requests';
-import { updateCustomRequestAction } from '../../../custom-actions';
+import { sendQuoteAction, updateCustomRequestAction } from '../../../custom-actions';
+import { QuotePanel } from './QuotePanel';
 import { companyCustomWork } from '../../../custom-data';
 import { fmtDate, loadCompanies, requireSuperAdminPage } from '../../../data';
 
@@ -74,6 +75,22 @@ export default async function CustomRequestPage({ params }: { params: Promise<{ 
               </div>
             </div>
           </div>
+          <div className="o-stack" style={{ gap: 16 }}>
+          <QuotePanel
+            snap={work.subscription}
+            company={company.name}
+            action={sendQuoteAction.bind(null, company.id, r.id)}
+            quote={{
+              label: r.quoteLabel,
+              monthly: r.quoteMonthly,
+              yearly: r.quoteYearly,
+              credit: r.quoteCredit,
+              note: r.quoteNote,
+              quotedAt: r.quotedAt?.toISOString() ?? null,
+              approved: r.quoteApproved,
+              decidedAt: r.decidedAt?.toISOString() ?? null,
+            }}
+          />
           <div className="o-panel">
             <div className="o-panel-head">
               <h2>Status and reply</h2>
@@ -98,8 +115,9 @@ export default async function CustomRequestPage({ params }: { params: Promise<{ 
               </button>
             </form>
             <p className="faint" style={{ fontSize: 12 }}>
-              Price for this customer: Company page › Custom work{work.plan?.monthlyPrice || work.plan?.yearlyPrice ? '' : ' (not set yet)'}.
+              Their current custom plan: {work.plan?.enabled ? `${work.plan.label} (on)` : 'none yet'}. It is replaced by the approved price when you set this request to Ready.
             </p>
+          </div>
           </div>
         </div>
       </div>

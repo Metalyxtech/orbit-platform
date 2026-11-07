@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getSession, query } from '@orbit/core/next';
 import { billingHistory, billingState } from '@/billing/state';
-import { findCustomPlan } from '@/custom/plan';
+import { customCredit, findCustomPlan } from '@/custom/plan';
 import { BillingClient } from './BillingClient';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +15,7 @@ export default async function Billing() {
     return {
       state: await billingState(tx, ctx),
       history: await billingHistory(tx, ctx),
-      custom: plan?.enabled ? { label: plan.label, monthlyPrice: plan.monthlyPrice, yearlyPrice: plan.yearlyPrice, maxUsers: plan.maxUsers } : null,
+      custom: plan?.enabled ? { label: plan.label, monthlyPrice: plan.monthlyPrice, yearlyPrice: plan.yearlyPrice, maxUsers: plan.maxUsers, credit: customCredit(plan, 'yearly') } : null,
     };
   });
   return (

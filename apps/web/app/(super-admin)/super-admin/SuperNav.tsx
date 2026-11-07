@@ -22,7 +22,7 @@ export function SuperNav({ requests, payments = 0, custom = 0 }: { requests: num
           {i.label}
           {i.href.endsWith('/requests') && requests > 0 ? <span className="o-badge">{requests}</span> : null}
           {i.href.endsWith('/custom') && custom > 0 ? (
-            <span className="o-badge" title="New custom requirements">
+            <span className="o-badge" title="New custom requests and approved prices">
               {custom}
             </span>
           ) : null}

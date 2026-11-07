@@ -23,6 +23,9 @@ export const customPlans = pgTable('custom_plans', {
   maxUsers: integer('max_users'),
   /** Internal note for Orbit (what is included). */
   note: text('note'),
+  /** Unused value of their old plan, taken off the first yearly payment of this plan (migration 0017). */
+  yearlyCredit: integer('yearly_credit').notNull().default(0),
+  creditUsedAt: timestamp('credit_used_at', { withTimezone: true }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -40,10 +43,23 @@ export const customRequests = pgTable(
     details: text('details').notNull(),
     /** Which portal it relates to: timesheet, procurement, or new (a custom portal). */
     area: text('area').notNull(),
-    /** new | reviewing | in_progress | ready | declined */
+    /** new | reviewing | quoted | approved | in_progress | ready | declined */
     status: text('status').notNull().default('new'),
     /** Orbit's reply to the customer. */
     orbitNote: text('orbit_note'),
+    /** The price Orbit sent (migration 0017): the combined custom plan, monthly and/or yearly. */
+    quoteLabel: text('quote_label'),
+    quoteMonthly: integer('quote_monthly'),
+    quoteYearly: integer('quote_yearly'),
+    /** Taken off the first yearly payment: what is left of the yearly plan they already paid. */
+    quoteCredit: integer('quote_credit').notNull().default(0),
+    quoteNote: text('quote_note'),
+    quotedAt: timestamp('quoted_at', { withTimezone: true }),
+    /** When and by whom the customer approved or declined the price. */
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    decidedBy: uuid('decided_by').references(() => memberships.id),
+    /** The customer's answer: true approved, false declined, null not answered. */
+    quoteApproved: boolean('quote_approved'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

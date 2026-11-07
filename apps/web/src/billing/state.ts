@@ -21,7 +21,9 @@ import {
 } from './plans';
 import { fitPortalsToPlan } from './portals';
 import { getCustomPlan } from '../custom/plan';
+import { markCreditUsed } from '../custom/plan';
 import * as rz from './razorpay';
+import { completeSwitch, pendingCheckout, recordCheckout, switchTiming } from './switch';
 
 const pgCode = (err: unknown) => (err as { code?: string; cause?: { code?: string } })?.code ?? (err as { cause?: { code?: string } })?.cause?.code;
 /** Migrations 0011/0012 not run yet: every company is on the free trial. */
@@ -145,24 +147,17 @@ export async function startCheckout(tx: Tx, ctx: ActionContext, raw: z.input<typ
   // A plan without a portal the company uses is allowed: that portal is paused once payment is confirmed.
   if (state.status === 'active' && !state.cancelAtPeriodEnd && state.plan === id && state.cycle === input.cycle) throw new Error('You are already on this plan.');
   const rzPlan = await razorpayPlanId(tx, input.bundle, input.tier, input.cycle, currency);
-  // Trial days left are honoured: the first charge happens when the trial ends.
-  const startAt = state.status === 'trial' && state.trialDaysLeft > 0 ? Math.floor(new Date(state.trialEndsAt).getTime() / 1000) : undefined;
+  // First charge after the trial or after the period already paid for; the current plan is untouched until payment.
+  const { startAt, paidUntil, replaces } = await switchTiming(tx, ctx.companyId, state);
   const sub = await rz.createSubscription({
     planId: rzPlan,
     totalCount: cycleOf(input.cycle).rz.totalCount,
     notes: { company_id: ctx.companyId, company: ctx.companyName, plan: id, cycle: input.cycle, currency },
     startAt,
   });
-  await tx
-    .insert(companySubscriptions)
-    .values({ companyId: ctx.companyId, plan: id, cycle: input.cycle, status: 'created', razorpaySubscriptionId: sub.id, trialEndsAt: new Date(state.trialEndsAt) })
-    .onConflictDoUpdate({
-      target: companySubscriptions.companyId,
-      set: { plan: id, cycle: input.cycle, status: 'created', razorpaySubscriptionId: sub.id, cancelAtPeriodEnd: false, updatedAt: new Date() },
-    });
   const amount = priceFor(input.bundle, input.tier, input.cycle, currency);
-  await tx.insert(billingEvents).values({ companyId: ctx.companyId, type: 'checkout.started', razorpayId: sub.id, amount: amount * 100, data: { plan: id, cycle: input.cycle, currency } });
-  return { subscriptionId: sub.id, keyId: await rz.publicKeyId(), planName: plan.name, amount, currency, cycle: cycleOf(input.cycle).label, email: ctx.email, name: ctx.name };
+  await recordCheckout(tx, ctx.companyId, sub.id, amount * 100, { plan: id, cycle: input.cycle, currency, replaces });
+  return { subscriptionId: sub.id, keyId: await rz.publicKeyId(), planName: plan.name, amount, currency, cycle: cycleOf(input.cycle).label, email: ctx.email, name: ctx.name, paidUntil };
 }
 
 const confirmInput = z.object({ paymentId: z.string().min(5).max(80), subscriptionId: z.string().min(5).max(80), signature: z.string().min(10).max(200) });
@@ -171,11 +166,14 @@ const confirmInput = z.object({ paymentId: z.string().min(5).max(80), subscripti
 export async function confirmCheckout(tx: Tx, ctx: ActionContext, raw: z.input<typeof confirmInput>) {
   requireAdmin(ctx);
   const input = confirmInput.parse(raw);
-  const [sub] = await tx.select().from(companySubscriptions).where(eq(companySubscriptions.companyId, ctx.companyId));
-  if (!sub || sub.razorpaySubscriptionId !== input.subscriptionId) throw new Error('This payment is not for your company');
+  const sub = await pendingCheckout(tx, ctx.companyId, input.subscriptionId);
+  if (!sub) throw new Error('This payment is not for your company');
   if (!(await rz.verifyCheckoutSignature(input.paymentId, input.subscriptionId, input.signature))) throw new Error('The payment could not be verified. Nothing was charged twice; contact Orbit if money left your account.');
   const live = await rz.fetchSubscription(input.subscriptionId);
+  const state = await billingState(tx, ctx);
+  await completeSwitch(tx, ctx, input.subscriptionId, sub, new Date(state.trialEndsAt));
   await applyRazorpay(tx, ctx.companyId, live);
+  if (sub.credit) await markCreditUsed(tx, ctx.companyId);
   const fit = await fitPortalsToPlan(tx, ctx, sub.plan);
   await tx.insert(billingEvents).values({ companyId: ctx.companyId, type: 'checkout.completed', razorpayId: input.paymentId, data: { subscription: input.subscriptionId } });
   await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'billing.subscribe', entity: 'company_subscriptions', entityId: ctx.companyId, data: { summary: [`Subscribed to ${planOf(sub.plan)?.name ?? 'the custom plan'} (${sub.plan === 'custom' ? sub.cycle : cycleOf(sub.cycle).label})`] }, requestId: ctx.requestId });

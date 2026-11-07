@@ -551,3 +551,8 @@ h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
   body { background: #fff !important; }
   .o-panel { border: 0 !important; box-shadow: none !important; }
 }
+
+/* Loading placeholder (page skeleton while the server answers). */
+.o-skel { display: block; border-radius: 4px; background: linear-gradient(90deg, #eceef0 25%, #f5f6f7 37%, #eceef0 63%); background-size: 400% 100%; animation: o-skel 1.2s ease infinite; }
+@keyframes o-skel { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+@media (prefers-reduced-motion: reduce) { .o-skel { animation: none; } }

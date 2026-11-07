@@ -33,28 +33,18 @@ export type BillingStatus = 'trial' | 'trial_ended' | 'active' | 'past_due' | 'c
 
 /** Orbit's billing settings for a company: currency, plans released or hidden, trial length. */
 export async function billingSettings(tx: Tx, companyId: string): Promise<{ currency: Currency; showPlans: boolean; trialDays: number }> {
-  try {
-    const [row] = await tx.transaction((sp) => sp.select().from(companyBilling).where(eq(companyBilling.companyId, companyId)));
-    return { currency: row?.currency === 'USD' ? 'USD' : 'INR', showPlans: row?.showPlans ?? true, trialDays: row?.trialDays ?? TRIAL_DAYS };
-  } catch (err) {
-    if (missing(err)) return { currency: 'INR', showPlans: true, trialDays: TRIAL_DAYS };
-    throw err;
-  }
+  const [row] = await tx.select().from(companyBilling).where(eq(companyBilling.companyId, companyId));
+  return { currency: row?.currency === 'USD' ? 'USD' : 'INR', showPlans: row?.showPlans ?? true, trialDays: row?.trialDays ?? TRIAL_DAYS };
 }
 
-/** The company's plan, status, limits and usage. Never throws for a missing table. */
+/** The company's plan, status, limits and usage (migrations 0011 and 0012 have run everywhere). */
 export async function billingState(tx: Tx, ctx: Pick<SessionContext, 'companyId'>) {
   return billingStateFor(tx, ctx.companyId);
 }
 
 export async function billingStateFor(tx: Tx, companyId: string) {
   const [company] = await tx.select({ createdAt: companies.createdAt }).from(companies).where(eq(companies.id, companyId));
-  let sub: typeof companySubscriptions.$inferSelect | undefined;
-  try {
-    [sub] = await tx.transaction((sp) => sp.select().from(companySubscriptions).where(eq(companySubscriptions.companyId, companyId)));
-  } catch (err) {
-    if (!missing(err)) throw err;
-  }
+  const [sub] = await tx.select().from(companySubscriptions).where(eq(companySubscriptions.companyId, companyId));
   const settings = await billingSettings(tx, companyId);
   const now = Date.now();
   const trialStart = Math.max((company?.createdAt ?? new Date()).getTime(), new Date(BILLING_LAUNCH).getTime());
@@ -209,10 +199,5 @@ export async function cancelPlan(tx: Tx, ctx: ActionContext) {
 
 export async function billingHistory(tx: Tx, ctx: SessionContext) {
   requireAdmin(ctx);
-  try {
-    return await tx.transaction((sp) => sp.select().from(billingEvents).where(eq(billingEvents.companyId, ctx.companyId)).orderBy(desc(billingEvents.createdAt)).limit(50));
-  } catch (err) {
-    if (missing(err)) return [];
-    throw err;
-  }
+  return tx.select().from(billingEvents).where(eq(billingEvents.companyId, ctx.companyId)).orderBy(desc(billingEvents.createdAt)).limit(50);
 }

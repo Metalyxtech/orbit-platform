@@ -12,25 +12,13 @@ export const missingTable = (err: unknown) => pgCode(err) === '42P01' || /relati
 /** Migration 0006 not run: the status column is missing. */
 const missingStatus = (err: unknown) => pgCode(err) === '42703' || /column "status" does not exist/.test(String(err));
 
-/**
- * Portal rows for some memberships. Runs in savepoints so a database without migrations 0005 / 0006
- * reads as "no rows" / "every row active" instead of failing the page.
- */
+/** Portal rows for some memberships (migrations 0005 and 0006 have run everywhere). */
 export async function readMemberPortals(tx: Tx, membershipIds: string[]): Promise<MemberPortalRow[]> {
   if (membershipIds.length === 0) return [];
-  const where = inArray(memberPortals.membershipId, membershipIds);
-  try {
-    return await tx.transaction((sp) =>
-      sp.select({ membershipId: memberPortals.membershipId, portal: memberPortals.portal, status: memberPortals.status }).from(memberPortals).where(where),
-    );
-  } catch (err) {
-    if (missingTable(err)) return [];
-    if (!missingStatus(err)) throw err;
-  }
-  const rows = await tx.transaction((sp) =>
-    sp.select({ membershipId: memberPortals.membershipId, portal: memberPortals.portal }).from(memberPortals).where(where),
-  );
-  return rows.map((r) => ({ ...r, status: 'active' as const }));
+  return tx
+    .select({ membershipId: memberPortals.membershipId, portal: memberPortals.portal, status: memberPortals.status })
+    .from(memberPortals)
+    .where(inArray(memberPortals.membershipId, membershipIds));
 }
 
 /** Records the portals someone asked for when joining (status requested). */

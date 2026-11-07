@@ -10,6 +10,7 @@ import { portalRolesFor, queueCounts } from '@/portal-role';
 import { BRAND } from '@/portals';
 import { workspaceFor } from '@/management/workspaces';
 import { manageNavSections } from './nav-groups';
+import { CompanySwitcher } from '@/CompanySwitcher';
 import { requireAgreement } from '@/legal/gate';
 
 export const dynamic = 'force-dynamic';
@@ -47,6 +48,7 @@ export default async function ManageLayout({ children }: { children: ReactNode }
         <div className="o-side-foot">
           <strong>{ctx.name}</strong>
           {ctx.title ?? (ctx.role === 'management' ? 'Management' : 'Company admin')}
+          <CompanySwitcher companies={s.companies} current={ctx.companyId} />
           <div>
             <a href="/auth/sign-out" style={{ color: '#9aa3ab', fontSize: 12 }}>
               Sign out

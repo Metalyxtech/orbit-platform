@@ -8,17 +8,16 @@ import { Effects } from '../effects';
 import { uuidv7 } from '../events';
 import type { ActionContext, SessionContext } from '../session';
 import { WorkflowConflictError } from '../workflow/types';
-import { devAuthEnabled, readIdentity } from './auth';
+import { COMPANY_COOKIE, devAuthEnabled, readIdentity } from './auth';
 import { getDb } from './db';
 
-export const COMPANY_COOKIE = 'orbit_company';
 const NO_COMPANY = '00000000-0000-0000-0000-000000000000';
 
 export type SessionState =
   | { state: 'signed_out' }
   | { state: 'no_company'; userId: string; email: string; name: string; isSuperAdmin: boolean }
   | { state: 'pending'; companyName: string; isSuperAdmin: boolean; blocked: boolean }
-  | { state: 'ok'; ctx: SessionContext; companies: { id: string; name: string }[] };
+  | { state: 'ok'; ctx: SessionContext; companies: { id: string; name: string; role: string }[] };
 
 /** Resolves who is calling and which company they act in. Cached per request. */
 export const getSession = cache(async (): Promise<SessionState> => {
@@ -69,7 +68,7 @@ export const getSession = cache(async (): Promise<SessionState> => {
   const h = await headers();
   return {
     state: 'ok',
-    companies: active.map((r) => ({ id: r.c.id, name: r.c.name })),
+    companies: active.map((r) => ({ id: r.c.id, name: r.c.name, role: r.m.role })),
     ctx: {
       requestId: h.get('x-amzn-trace-id') ?? h.get('x-vercel-id') ?? uuidv7(),
       userId: user.id,

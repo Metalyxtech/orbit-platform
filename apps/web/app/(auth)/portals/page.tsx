@@ -24,6 +24,12 @@ export default async function Portals() {
     <AuthCard title="Choose a portal">
       <p className="muted" style={{ fontSize: 13 }}>
         Signed in to {s.ctx.companyName} as {s.ctx.name}.
+        {s.companies.length > 1 && (
+          <>
+            {' '}
+            <a href="/choose-company">Switch company</a>
+          </>
+        )}
       </p>
       <div className="o-stack" style={{ gap: 8 }}>
         {isManager(s.ctx) && (

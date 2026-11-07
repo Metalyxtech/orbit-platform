@@ -3,10 +3,10 @@ import { z } from 'zod';
 import { audit, type ActionContext, type SessionContext } from '@orbit/core';
 import { companyKey, presignUpload } from '@orbit/core/aws';
 import { customRequestFiles, customRequests, type Tx } from '@orbit/db';
-import { isCustomCompany } from './plan';
 
-// Custom requirements: a custom customer's admin describes what they need and uploads their forms;
-// Super Admin reviews them and replies. Nothing here touches the normal portals.
+// Custom requirements: any company admin describes the custom portal or change they need and
+// uploads their forms; Super Admin reviews, replies and sets the price. Nothing here touches the
+// normal portals.
 
 export const AREAS = [
   { id: 'timesheet', label: 'Timesheet (change or new form)' },
@@ -25,9 +25,9 @@ export type RequestStatus = (typeof STATUSES)[number]['id'];
 export const statusOf = (s: string) => STATUSES.find((x) => x.id === s) ?? STATUSES[0];
 export const areaLabel = (a: string) => AREAS.find((x) => x.id === a)?.label ?? a;
 
-const requireCustomAdmin = async (tx: Tx, ctx: SessionContext) => {
+/** Any company admin can ask for a custom portal or changes; Orbit then sets the price. */
+const requireCustomAdmin = async (_tx: Tx, ctx: SessionContext) => {
   if (ctx.role !== 'company_admin') throw new Error('Only the company admin can send custom requirements');
-  if (!(await isCustomCompany(tx, ctx.companyId))) throw new Error('Custom work is not set up for your company. Contact Orbit.');
 };
 
 const createInput = z.object({

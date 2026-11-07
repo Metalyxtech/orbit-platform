@@ -5,7 +5,7 @@ import { portalNavItems } from '@/portal-nav';
 import { portalModules } from '@/portals';
 import { toEntries, type MenuSection } from '@orbit/ui';
 
-type Counts = { waiting: number; unread: number; badges: Record<string, number>; roles: Record<string, string | null>; custom?: boolean };
+type Counts = { waiting: number; unread: number; badges: Record<string, number>; roles: Record<string, string | null> };
 
 /**
  * Sidebar for the Management workspace, as a short main menu with drop-downs:
@@ -46,7 +46,7 @@ export function manageNavSections(ctx: SessionContext, ws: Workspace, portals: s
       })),
     },
   ];
-  const admin = companyAdminItems(ctx, open, c.roles, { custom: c.custom });
+  const admin = companyAdminItems(ctx, open, c.roles);
   if (admin.length) sections.push({ title: 'Company admin', entries: toEntries(admin.map((n) => ({ ...n, menu: n.group === 'Company' ? undefined : `${n.group} settings` }))) });
   return sections;
 }

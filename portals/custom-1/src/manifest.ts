@@ -2,7 +2,7 @@ import type { PortalManifest } from '@orbit/core/portals';
 
 /**
  * Custom portal 1: built for one customer from the forms they uploaded (Company admin >
- * Custom requirements). Everything for this customer lives in this folder, so changes here
+ * Custom portals). Everything for this customer lives in this folder, so changes here
  * never affect the Timesheet or Purchase portals. Rename `name` to the customer's portal name.
  */
 export const custom1Manifest: PortalManifest = {

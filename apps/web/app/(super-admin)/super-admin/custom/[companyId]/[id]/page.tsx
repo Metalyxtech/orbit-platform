@@ -90,7 +90,7 @@ export default async function CustomRequestPage({ params }: { params: Promise<{ 
                 </select>
               </label>
               <label className="o-field">
-                Reply to the customer (they see it on their Custom requirements page)
+                Reply to the customer (they see it on their Custom portals page)
                 <textarea className="o-input" name="orbitNote" rows={6} maxLength={4000} defaultValue={r.orbitNote ?? ''} placeholder="e.g. We will build this as a new form in your custom portal. Ready in about 2 weeks." />
               </label>
               <button className="o-btn small primary" type="submit" style={{ alignSelf: 'flex-start' }}>

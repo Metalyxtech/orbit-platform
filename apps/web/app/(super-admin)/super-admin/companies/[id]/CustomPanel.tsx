@@ -16,7 +16,7 @@ export function CustomPanel({ companyId, plan, requests, currency }: { companyId
       <form action={saveCustomPlanAction.bind(null, companyId)} className="o-stack" style={{ gap: 10 }}>
         <label className="o-row" style={{ gap: 8, fontSize: 13 }}>
           <input type="checkbox" name="enabled" defaultChecked={plan?.enabled ?? false} />
-          Custom customer (sees Custom requirements and their own plan)
+          Custom plan: the company pays the price below instead of the standard plans
         </label>
         <label className="o-field">
           Plan name shown to the customer
@@ -45,7 +45,8 @@ export function CustomPanel({ companyId, plan, requests, currency }: { companyId
         </button>
       </form>
       <p className="faint" style={{ fontSize: 12, margin: '10px 0 6px' }}>
-        Prices are in the company&apos;s currency{currency === 'INR' ? ', GST extra' : ''}. The custom portal is switched on under Portals below once it is built.
+        Prices are in the company&apos;s currency{currency === 'INR' ? ', GST extra' : ''}. Set one price for everything they use: their normal portals
+        plus the custom portal. Switch the custom portal on under Portals below once it is built.
       </p>
       {requests.length > 0 && (
         <>

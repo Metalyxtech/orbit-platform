@@ -11,31 +11,35 @@ export const dynamic = 'force-dynamic';
 
 const when = (d: Date) => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
-/** Company admin > Custom requirements (custom customers only): send forms and changes to Orbit. */
+/**
+ * Company admin > Custom portals: any company can ask Orbit for a portal built for them (or changes),
+ * uploading their forms. Orbit replies here and sets the price; the normal portals stay as they are.
+ */
 export default async function CustomRequirements() {
   const s = await getSession();
   if (s.state !== 'ok' || s.ctx.role !== 'company_admin') redirect('/manage');
   const d = await query(async (tx, ctx) => {
     const plan = await getCustomPlan(tx, ctx.companyId);
-    if (!plan?.enabled) return null;
-    return { plan, requests: await companyRequests(tx, ctx.companyId), currency: (await billingSettings(tx, ctx.companyId)).currency };
+    return { plan: plan?.enabled ? plan : null, requests: await companyRequests(tx, ctx.companyId), currency: (await billingSettings(tx, ctx.companyId)).currency };
   });
-  if (!d) redirect('/manage');
   return (
     <>
       <header className="o-top">
-        <strong>Custom requirements</strong>
+        <strong>Custom portals</strong>
       </header>
       <div className="o-page">
         <div className="o-page-head">
           <div>
-            <h1>Custom requirements</h1>
+            <h1>Custom portals</h1>
             <p>
-              Send Orbit your own forms and the changes you need. Our team builds them in your company&apos;s custom portal ({d.plan.label}) and replies here.
+              Need a portal Orbit does not offer, or your own forms in Timesheet or Purchase? Send your forms (photos, scans or PDF) and how the work flows.
+              {d.plan
+                ? ` Our team builds them in your custom portal (${d.plan.label}) and replies here.`
+                : ' Our team reviews them, replies here with a price, and builds your custom portal next to the portals you already use.'}
             </p>
           </div>
         </div>
-        {(d.plan.monthlyPrice || d.plan.yearlyPrice) && (
+        {d.plan && (d.plan.monthlyPrice || d.plan.yearlyPrice) && (
           <div className="o-banner info">
             Your custom plan: {[d.plan.monthlyPrice && `${money(d.plan.monthlyPrice, d.currency)} per month`, d.plan.yearlyPrice && `${money(d.plan.yearlyPrice, d.currency)} per year`].filter(Boolean).join(' or ')}
             {d.currency === 'INR' ? ' + GST' : ''}. Subscribe in Plan and billing.

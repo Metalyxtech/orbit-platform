@@ -13,11 +13,6 @@ export async function getCustomPlan(tx: Tx, companyId: string): Promise<CustomPl
   return row ?? null;
 }
 
-/** True when Super Admin has made this company a custom customer. */
-export async function isCustomCompany(tx: Tx, companyId: string) {
-  return (await getCustomPlan(tx, companyId))?.enabled ?? false;
-}
-
 /** The price for one cycle in the company's currency (whole rupees or dollars), or null if not offered. */
 export const customPrice = (p: Pick<CustomPlan, 'monthlyPrice' | 'yearlyPrice'>, cycle: CustomCycle) => (cycle === 'yearly' ? p.yearlyPrice : p.monthlyPrice);
 
@@ -46,20 +41,6 @@ const missingTable = (err: unknown) => {
   const code = (err as { code?: string; cause?: { code?: string } })?.code ?? (err as { cause?: { code?: string } })?.cause?.code;
   return code === '42P01' || /relation "custom_\w+" does not exist/.test(String(err));
 };
-
-/**
- * For the menu: is this a custom customer? Safe before migration 0015 has run (answers false).
- * Called for company admins only, so other people pay nothing for it.
- */
-export async function showCustomMenu(tx: Tx, ctx: { role: string; companyId: string }) {
-  if (ctx.role !== 'company_admin') return false;
-  try {
-    return await tx.transaction((sp) => isCustomCompany(sp, ctx.companyId));
-  } catch (err) {
-    if (missingTable(err)) return false;
-    throw err;
-  }
-}
 
 /** The custom deal for pages any company admin opens (null before migration 0015 has run). */
 export async function findCustomPlan(tx: Tx, companyId: string): Promise<CustomPlan | null> {

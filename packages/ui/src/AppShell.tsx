@@ -23,7 +23,8 @@ export interface AppShellProps {
   portals: { id: string; name: string }[];
   companies: { id: string; name: string }[];
   nav: ShellNavItem[];
-  user: { name: string; title: string | null };
+  /** role: who the person is in this portal (e.g. "Sales executive"); title: a second, quieter line. */
+  user: { name: string; title: string | null; role?: string };
   onSwitchCompany?: (companyId: string) => Promise<void>;
   signOutHref: string;
   children: ReactNode;
@@ -72,8 +73,7 @@ export function AppShell(props: AppShellProps) {
           ]}
         />
         <div className="o-side-foot">
-          <strong>{props.user.name}</strong>
-          {props.user.title}
+          <UserCard {...props.user} />
           {props.companies.length > 1 && props.onSwitchCompany && (
             <select
               className="o-select"
@@ -95,12 +95,11 @@ export function AppShell(props: AppShellProps) {
               ))}
             </select>
           )}
-          <div>
-            <a href={props.signOutHref} style={{ color: '#9aa3ab', fontSize: 12 }}>
+          <div style={{ fontSize: 11, marginTop: 10 }}>
+            <a href={props.signOutHref} style={{ color: '#c9cfd5' }}>
               Sign out
             </a>
-          </div>
-          <div style={{ fontSize: 11, marginTop: 6 }}>
+            <span style={{ color: '#5d666e' }}> · </span>
             <a href="/legal/terms" target="_blank" rel="noreferrer" style={{ color: '#9aa3ab' }}>
               Terms
             </a>
@@ -126,5 +125,28 @@ export function TopBar({ crumbs, children }: { crumbs: string[]; children?: Reac
       </div>
       {children}
     </header>
+  );
+}
+
+/** Name with initials and the person's role here. A name that is still an email shows its first part. */
+function UserCard({ name, title, role }: { name: string; title: string | null; role?: string }) {
+  const shown = name.includes('@') ? name.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : name;
+  const initials = shown
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join('');
+  return (
+    <div className="o-user" title={name}>
+      <span className="o-user-av" aria-hidden>
+        {initials || '?'}
+      </span>
+      <span className="o-user-txt">
+        <strong>{shown}</strong>
+        {role && <span className="o-user-role">{role}</span>}
+        {title && <span className="o-user-sub">{title}</span>}
+      </span>
+    </div>
   );
 }

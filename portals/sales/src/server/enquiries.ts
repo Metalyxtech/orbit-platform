@@ -468,6 +468,8 @@ export async function enquiryDetail(tx: Tx, ctx: SessionContext, id: string) {
     order: order[0] ?? null,
     docs: docs.filter((d) => d.section === 'project').map((d) => ({ ...d, by: d.byId ? (people.get(d.byId) ?? '') : '' })),
     costingDocs: seeCost ? docs.filter((d) => d.section === 'costing').map((d) => ({ ...d, by: d.byId ? (people.get(d.byId) ?? '') : '' })) : [],
+    /** The quotation already went to the customer once, so the next send is a revision. */
+    sentBefore: !!e.quoteNo && events.some((x) => x.text.startsWith(`Sent ${e.quoteNo} Rev `)),
     events: events.map((x) => ({ id: x.id, text: x.text, at: x.createdAt.toISOString(), by: x.byId ? (people.get(x.byId) ?? '') : '' })),
     can: {
       editProject: sales && projectOpen,

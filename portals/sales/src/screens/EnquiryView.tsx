@@ -7,7 +7,6 @@ import {
   decideQuoteAction,
   markLostAction,
   markWonAction,
-  pricingDoneAction,
   reopenProjectAction,
   sendQuoteAction,
   sendToCostingAction,
@@ -17,6 +16,7 @@ import {
   updateProjectAction,
 } from '../actions';
 import type { EnquiryDetail } from '../server';
+import { CostingSheet } from './CostingSheet';
 import { DocsPanel } from './DocsPanel';
 import { LinesEditor } from './LinesEditor';
 import { QuoteChip, StageChip } from './ui';
@@ -61,6 +61,21 @@ export function EnquiryView({ d }: { d: EnquiryDetail }) {
           {stage === 'lost' && <li className="bad">Lost: {e.lostReason}</li>}
         </ol>
 
+        {/* Estimator and management: the costing sheet, full width. Sales sees the quotation lines below. */}
+        {d.can.seeCost && (e.stage === 'costing' || !!e.pricingDoneAt) && (
+          <CostingSheet
+            key={`${linesKey}|${e.markup}|${e.costingNotes ?? ''}`}
+            enquiryId={e.id}
+            lines={d.lines.map((l) => ({ item: l.item, qty: l.qty, unit: l.unit, material: l.material, labour: l.labour, other: l.other, rate: l.rate }))}
+            markup={e.markup}
+            notes={e.costingNotes ?? ''}
+            currency={cur}
+            editable={d.can.editCost}
+            canFinish={d.can.pricingDone}
+            priced={!!e.pricingDoneAt}
+          />
+        )}
+
         <div className="o-cols-wide">
           <div className="o-stack">
             <ProjectPanel d={d} />
@@ -70,17 +85,36 @@ export function EnquiryView({ d }: { d: EnquiryDetail }) {
               canEdit={d.can.editDocs}
               lockedReason={e.pricingDoneAt ? 'Pricing is done, so documents are locked. The sales manager can reopen the project for changes.' : undefined}
             />
-            <LinesEditor
-              key={linesKey}
-              enquiryId={e.id}
-              lines={d.lines}
-              currency={cur}
-              canEdit={d.can.editLines}
-              ratesOnly={d.can.editRatesOnly}
-              editCost={d.can.editCost}
-              seeCost={d.can.seeCost}
-              editRate={d.can.editLines && !d.can.editCost}
-            />
+            {(d.can.editCost || d.costingDocs.length > 0) && (
+              <DocsPanel
+                section="costing"
+                title="Costing attachments"
+                intro="Costing sheets, supplier quotes, site photos. Seen by the estimator, sales manager and GM only."
+                enquiryId={e.id}
+                docs={d.costingDocs}
+                canEdit={d.can.editCost}
+                lockedReason={e.pricingDoneAt ? 'Locked after pricing.' : undefined}
+              />
+            )}
+            {!d.can.editCost && (
+              <LinesEditor
+                key={linesKey}
+                enquiryId={e.id}
+                lines={d.lines}
+                currency={cur}
+                canEdit={d.can.editLines}
+                ratesOnly={d.can.editRatesOnly}
+                editCost={false}
+                seeCost={false}
+                editRate={d.can.editLines}
+              />
+            )}
+            {!d.can.seeCost && e.costingNotes && (
+              <div className="o-panel">
+                <h2>Costing basis from the estimator</h2>
+                <p style={{ whiteSpace: 'pre-wrap', margin: 0, fontSize: 13 }}>{e.costingNotes}</p>
+              </div>
+            )}
             {e.quoteNo && <QuotePreview d={d} />}
             <div className="o-panel">
               <h2>History</h2>
@@ -97,7 +131,7 @@ export function EnquiryView({ d }: { d: EnquiryDetail }) {
             </div>
           </div>
           <div className="o-stack">
-            <TotalsPanel d={d} />
+            {!d.can.editCost && <TotalsPanel d={d} />}
             <ActionsPanel d={d} />
             {d.can.followUp && <FollowUpPanel d={d} />}
             <div className="o-panel">
@@ -235,13 +269,13 @@ function ActionsPanel({ d }: { d: EnquiryDetail }) {
   const [note, setNote] = useState('');
   const [reason, setReason] = useState(LOST_REASONS[0]);
   const [advance, setAdvance] = useState(String(d.cfg.defaultAdvance));
-  const any = c.sendToCosting || c.pricingDone || c.reopen || c.askApproval || c.approve || c.send || c.negotiate || c.won || c.lost;
+  const any = c.sendToCosting || c.reopen || c.askApproval || c.approve || c.send || c.negotiate || c.won || c.lost;
   if (!any)
     return (
       <div className="o-panel">
         <h2>Next step</h2>
         <p className="muted" style={{ fontSize: 13, margin: 0 }}>
-          {e.stage === 'costing' ? 'With the estimator for costing.' : e.quoteStatus === 'pending' ? 'Waiting for approval.' : OPEN_STAGES.includes(e.stage as Stage) ? 'Nothing for you here right now.' : `This enquiry is ${stageLabel(e.stage).toLowerCase()}.`}
+          {c.pricingDone ? 'Fill in the costing sheet, save it, then press Pricing done.' : e.stage === 'costing' ? 'With the estimator for costing.' : e.quoteStatus === 'pending' ? 'Waiting for approval.' : OPEN_STAGES.includes(e.stage as Stage) ? 'Nothing for you here right now.' : `This enquiry is ${stageLabel(e.stage).toLowerCase()}.`}
         </p>
       </div>
     );
@@ -253,12 +287,6 @@ function ActionsPanel({ d }: { d: EnquiryDetail }) {
           <>
             <p className="muted" style={{ fontSize: 12, margin: 0 }}>Add the project details and documents, then hand it to the estimator. You can still edit until pricing is done.</p>
             <Button variant="primary" disabled={busy} onClick={() => run(() => sendToCostingAction({ id: e.id }), 'Sent for costing.')}>Send to estimator</Button>
-          </>
-        )}
-        {c.pricingDone && (
-          <>
-            <p className="muted" style={{ fontSize: 12, margin: 0 }}>Enter a cost on every line and save the lines. Pricing done locks the project for sales.</p>
-            <Button variant="primary" disabled={busy} onClick={() => confirm('Mark pricing done? Sales can no longer change the project or documents.') && run(() => pricingDoneAction({ id: e.id }), 'Pricing done.')}>Pricing done</Button>
           </>
         )}
         {c.approve && (

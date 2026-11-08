@@ -1,20 +1,17 @@
 'use client';
 import Link from 'next/link';
 import { useState } from 'react';
-import { Button, Chip, DataTable, EmptyState } from '@orbit/ui';
-import { fmtDate, fmtMoney, roleLabel, SALES_ROLES, type SalesConfig } from '../config';
+import { Button, Chip, DataTable, EmptyState, SaveBar } from '@orbit/ui';
+import { fmtDate, fmtMoney } from '../config';
 import {
   addCustomerAction,
   advanceOrderAction,
   confirmOrderAction,
   raiseInvoiceAction,
   recordPaymentAction,
-  saveSettingsAction,
-  setSalesAccessAction,
-  setSalesRoleAction,
   setTargetsAction,
 } from '../actions';
-import type { CustomerRow, InvoiceRow, OrderRow, SalesPerson } from '../server';
+import type { CustomerRow, InvoiceRow, OrderRow } from '../server';
 import { enquiryHref } from './ui';
 import { useRun } from './useRun';
 
@@ -135,7 +132,9 @@ export function CustomersClient({ rows, currency, canAdd }: { rows: CustomerRow[
 
 export function TargetsClient({ rows, people, currency, canEdit }: { rows: { membershipId: string; name: string; target: number; won: number; open: number }[]; people: { id: string; name: string }[]; currency: string; canEdit: boolean }) {
   const { busy, run } = useRun();
-  const [t, setT] = useState<Record<string, string>>(Object.fromEntries(rows.map((r) => [r.membershipId, String(r.target || '')])));
+  const initial = Object.fromEntries(rows.map((r) => [r.membershipId, String(r.target || '')]));
+  const [t, setT] = useState<Record<string, string>>(initial);
+  const dirty = Object.keys({ ...initial, ...t }).some((k) => (Number(initial[k]) || 0) !== (Number(t[k]) || 0));
   const [add, setAdd] = useState('');
   const shown = [...rows, ...people.filter((p) => t[p.id] !== undefined && !rows.some((r) => r.membershipId === p.id)).map((p) => ({ membershipId: p.id, name: p.name, target: 0, won: 0, open: 0 }))];
   return (
@@ -171,100 +170,16 @@ export function TargetsClient({ rows, people, currency, canEdit }: { rows: { mem
             ))}
           </select>
           <Button size="small" disabled={!add} onClick={() => (setT({ ...t, [add]: '' }), setAdd(''))}>Add</Button>
-          <Button variant="primary" disabled={busy} style={{ marginLeft: 'auto' }} onClick={() => run(() => setTargetsAction({ targets: Object.fromEntries(Object.entries(t).map(([k, v]) => [k, Number(v) || 0])) }), 'Targets saved.')}>Save targets</Button>
         </div>
       )}
+      <SaveBar
+        dirty={canEdit && dirty}
+        busy={busy}
+        what="monthly targets"
+        impact="Salespeople see the new targets on their dashboard as soon as you save."
+        onDiscard={() => setT(initial)}
+        onSave={() => run(() => setTargetsAction({ targets: Object.fromEntries(Object.entries(t).map(([k, v]) => [k, Number(v) || 0])) }), 'Targets saved.')}
+      />
     </div>
-  );
-}
-
-export function SettingsClient({ cfg, team }: { cfg: SalesConfig; team: SalesPerson[] }) {
-  const { busy, run } = useRun();
-  const [f, setF] = useState({ managerDiscount: cfg.managerDiscount, minMargin: cfg.minMargin, gst: cfg.gst, currency: cfg.currency, validityDays: cfg.validityDays, paymentTermsDays: cfg.paymentTermsDays, defaultAdvance: cfg.defaultAdvance, terms: cfg.terms });
-  const numField = (k: Exclude<keyof typeof f, 'currency' | 'terms'>, label: string) => (
-    <label className="o-field">
-      {label}
-      <input className="o-input" type="number" min={0} value={f[k]} onChange={(e) => setF({ ...f, [k]: Number(e.target.value) || 0 })} />
-    </label>
-  );
-  return (
-    <>
-      <div className="o-panel">
-        <h2>Approvals and quotation</h2>
-        <div className="o-form-row">
-          {numField('managerDiscount', 'Sales manager approves discounts up to %')}
-          {numField('minMargin', 'Margin under this % goes to the GM')}
-          {numField('gst', 'GST %')}
-          <label className="o-field">
-            Currency symbol
-            <input className="o-input" value={f.currency} maxLength={4} onChange={(e) => setF({ ...f, currency: e.target.value })} />
-          </label>
-          {numField('validityDays', 'Quotation valid for days')}
-          {numField('paymentTermsDays', 'Invoice due after days')}
-          {numField('defaultAdvance', 'Default advance %')}
-        </div>
-        <label className="o-field" style={{ marginTop: 10 }}>
-          Terms printed on quotations
-          <textarea className="o-textarea" rows={4} value={f.terms} maxLength={2000} onChange={(e) => setF({ ...f, terms: e.target.value })} />
-        </label>
-        <div style={{ marginTop: 10 }}>
-          <Button variant="primary" disabled={busy} onClick={() => run(() => saveSettingsAction(f), 'Settings saved.')}>Save settings</Button>
-        </div>
-      </div>
-      <div className="o-panel flush">
-        <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
-          <h2>Sales roles</h2>
-        </div>
-        <table className="o-table">
-          <thead>
-            <tr><th>Person</th><th>Sales role</th><th>Portal access</th><th>What they do</th></tr>
-          </thead>
-          <tbody>
-            {team.map((p) => (
-              <tr key={p.membershipId}>
-                <td>{p.name}<div className="faint" style={{ fontSize: 11 }}>{p.email}</div></td>
-                <td style={{ width: 220 }}>
-                  {p.companyRole === 'company_admin' ? (
-                    <Chip tone="steel">{roleLabel('admin')}</Chip>
-                  ) : (
-                    <select
-                      className="o-select"
-                      value={p.salesRole}
-                      disabled={busy}
-                      aria-label={`Sales role for ${p.name}`}
-                      onChange={(e) => run(() => setSalesRoleAction({ membershipId: p.membershipId, role: e.target.value }), p.access === 'on' ? 'Role saved.' : `Role saved. ${p.name} can now open Sales.`)}
-                    >
-                      {SALES_ROLES.filter((r) => r.id !== 'admin').map((r) => (
-                        <option key={r.id} value={r.id}>{r.label}</option>
-                      ))}
-                    </select>
-                  )}
-                </td>
-                <td style={{ width: 200 }}>
-                  {p.companyRole === 'company_admin' || p.companyRole === 'management' ? (
-                    <Chip tone="ok">Always</Chip>
-                  ) : p.access === 'on' ? (
-                    <span className="o-row" style={{ gap: 6 }}>
-                      <Chip tone="ok">Can open Sales</Chip>
-                      <Button size="small" disabled={busy} onClick={() => confirm(`Close the Sales portal for ${p.name}?`) && run(() => setSalesAccessAction({ membershipId: p.membershipId, on: false }), 'Access removed.')}>
-                        Remove
-                      </Button>
-                    </span>
-                  ) : (
-                    <span className="o-row" style={{ gap: 6 }}>
-                      <Chip tone={p.access === 'requested' ? 'hivis' : 'grey'}>{p.access === 'requested' ? 'Asked for access' : 'No access'}</Chip>
-                      <Button size="small" variant="primary" disabled={busy} onClick={() => run(() => setSalesAccessAction({ membershipId: p.membershipId, on: true }), `${p.name} can now open Sales.`)}>
-                        Give access
-                      </Button>
-                    </span>
-                  )}
-                </td>
-                <td className="muted" style={{ fontSize: 12 }}>{SALES_ROLES.find((r) => r.id === p.salesRole)?.detail}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
   );
 }

@@ -64,6 +64,10 @@ export const salesEnquiries = pgTable(
     /** draft | pending | approved | rejected | sent */
     quoteStatus: text('quote_status').notNull().default('draft'),
     lostReason: text('lost_reason'),
+    /** Estimator's markup on cost for the suggested selling rates (%). */
+    markup: numeric('markup', { precision: 5, scale: 2, mode: 'number' }).notNull().default(0),
+    /** Estimator's basis: assumptions, inclusions and exclusions. */
+    costingNotes: text('costing_notes'),
     /** The estimator finished pricing: the project details and documents are locked from then on. */
     pricingDoneAt: timestamp('pricing_done_at', { withTimezone: true }),
     createdAt: at(),
@@ -86,7 +90,11 @@ export const salesLines = pgTable(
     qty: qty('qty').notNull(),
     unit: text('unit').notNull(),
     rate: money('rate').notNull().default(0),
+    /** Unit cost = material + labour + other (kept in step by the server). */
     cost: money('cost').notNull().default(0),
+    material: money('material').notNull().default(0),
+    labour: money('labour').notNull().default(0),
+    other: money('other').notNull().default(0),
   },
   (t) => [index('sales_lines_enquiry').on(t.enquiryId, t.position)],
 );
@@ -118,6 +126,8 @@ export const salesDocs = pgTable(
       .references(() => salesEnquiries.id),
     /** file | link */
     kind: text('kind').notNull(),
+    /** project (customer documents, sales uploads) | costing (estimator's sheets, supplier quotes) */
+    section: text('section').notNull().default('project'),
     name: text('name').notNull(),
     url: text('url'),
     s3Key: text('s3_key'),

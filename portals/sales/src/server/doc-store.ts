@@ -7,6 +7,7 @@ import { notReady } from './shared';
 
 export interface SalesDoc {
   id: string;
+  section: 'project' | 'costing';
   kind: 'file' | 'link';
   name: string;
   url: string | null;
@@ -18,6 +19,7 @@ export interface SalesDoc {
 
 const cols = {
   id: salesDocs.id,
+  section: salesDocs.section,
   kind: salesDocs.kind,
   name: salesDocs.name,
   url: salesDocs.url,
@@ -29,7 +31,7 @@ const cols = {
 /** Links always count; files only once the upload finished. */
 const visible = or(eq(salesDocs.kind, 'link'), eq(salesDocs.uploaded, true));
 
-/** Documents of one enquiry. */
+/** Documents of one enquiry (both sections; callers filter by who may see costing ones). */
 export async function listDocs(tx: Tx, companyId: string, enquiryId: string): Promise<SalesDoc[]> {
   const rows = await tx.select(cols).from(salesDocs).where(and(eq(salesDocs.companyId, companyId), eq(salesDocs.enquiryId, enquiryId), visible)).orderBy(asc(salesDocs.createdAt));
   return rows as SalesDoc[];
@@ -38,7 +40,7 @@ export async function listDocs(tx: Tx, companyId: string, enquiryId: string): Pr
 /** One uploaded file of this company, for the download link. */
 export async function docFile(tx: Tx, companyId: string, id: string) {
   const [f] = await tx
-    .select({ s3Key: salesDocs.s3Key, name: salesDocs.name })
+    .select({ s3Key: salesDocs.s3Key, name: salesDocs.name, section: salesDocs.section })
     .from(salesDocs)
     .where(and(eq(salesDocs.id, id), eq(salesDocs.companyId, companyId), eq(salesDocs.kind, 'file'), eq(salesDocs.uploaded, true)));
   return f?.s3Key ? f : null;
@@ -61,7 +63,8 @@ export interface ProjectDocs {
 export async function projectDocuments(tx: Tx, companyId: string): Promise<ProjectDocs[]> {
   try {
     return await tx.transaction(async (sp) => {
-      const docs = (await sp.select({ ...cols, enquiryId: salesDocs.enquiryId }).from(salesDocs).where(and(eq(salesDocs.companyId, companyId), visible)).orderBy(asc(salesDocs.createdAt))) as (SalesDoc & { enquiryId: string })[];
+      // Only the customer's project documents: costing attachments stay with estimating and management.
+      const docs = (await sp.select({ ...cols, enquiryId: salesDocs.enquiryId }).from(salesDocs).where(and(eq(salesDocs.companyId, companyId), eq(salesDocs.section, 'project'), visible)).orderBy(asc(salesDocs.createdAt))) as (SalesDoc & { enquiryId: string })[];
       const ids = [...new Set(docs.map((d) => d.enquiryId))];
       if (!ids.length) return [];
       const enq = await sp

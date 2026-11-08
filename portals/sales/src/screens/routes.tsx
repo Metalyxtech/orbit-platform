@@ -5,7 +5,8 @@ import { Chip, EmptyState, KpiStrip, TopBar } from '@orbit/ui';
 import { fmtMoney, fmtShort, OPEN_STAGES, roleLabel, STAGES, stageLabel, type Stage } from '../config';
 import { admin, customers, dashboard, enquiries, loadConfig, myRole, NOT_READY, notReady, orders, queue } from '../server';
 import { EnquiryView } from './EnquiryView';
-import { CustomersClient, InvoicesTable, OrdersTable, SettingsClient, TargetsClient } from './ListClients';
+import { CustomersClient, InvoicesTable, OrdersTable, TargetsClient } from './ListClients';
+import { SettingsClient } from './SettingsClient';
 import { NewEnquiryClient } from './NewEnquiryClient';
 import { EnquiryTable, enquiryHref, NotReady, PageHead } from './ui';
 

@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import type { ActionContext, SessionContext } from '@orbit/core';
 import { salesCustomers, salesEnquiries, salesEvents, salesLines, salesOrders, type Tx } from '@orbit/db';
-import { approverFor, fmtMoney, LOST_REASONS, OPEN_STAGES, quoteTotals, SOURCES, stageLabel, type QuoteStatus, type Stage } from '../config';
+import { approverFor, fmtMoney, LOST_REASONS, OPEN_STAGES, quoteTotals, SOURCES, stageLabel, suggestedRate, unitCost, type QuoteStatus, type Stage } from '../config';
 import { addCustomer, customerInput } from './customers';
 import { listDocs } from './doc-store';
 import { addDays, hasRole, loadConfig, lockEnquiry, logEvent, myRole, nextNumber, peopleById, requireRole, today } from './shared';
@@ -92,33 +92,67 @@ export async function setFollowUp(tx: Tx, ctx: ActionContext, raw: { id: string;
 const linesInput = z.object({ id: z.uuid(), lines: z.array(lineInput).max(100) });
 
 /**
- * Saves quotation lines. Before pricing is done sales edits items, quantities and rates and the
- * estimator also enters costs; after pricing only rates change (the commercial offer).
+ * Saves quotation lines (sales). Before pricing is done sales edits items, quantities and rates;
+ * after pricing only rates change. Costs stay as the estimator left them (see saveCosting).
  */
 export async function saveLines(tx: Tx, ctx: ActionContext, raw: z.input<typeof linesInput>) {
   const v = linesInput.parse(raw);
   const me = await myRole(tx, ctx);
-  requireRole(me, 'exec', 'manager', 'estimator');
+  requireRole(me, 'exec', 'manager');
   const r = await lockEnquiry(tx, ctx, v.id);
   if (!OPEN_STAGES.includes(r.stage as Stage)) throw new Error('This enquiry is closed');
   if (r.quoteStatus === 'pending') throw new Error('The quotation is waiting for approval; it cannot change now');
-  const isEstimator = hasRole(me, 'estimator') && me !== 'exec';
-  if (!isEstimator) assertMineOrManager(me, r.ownerId, ctx);
+  assertMineOrManager(me, r.ownerId, ctx);
   const old = await tx.select().from(salesLines).where(eq(salesLines.enquiryId, r.id)).orderBy(asc(salesLines.position));
-  let next = v.lines;
+  const keepCost = (i: number) => ({ cost: old[i]?.cost ?? 0, material: old[i]?.material ?? 0, labour: old[i]?.labour ?? 0, other: old[i]?.other ?? 0 });
+  let next;
   if (r.pricingDoneAt) {
-    if (me === 'estimator') throw new Error('Pricing is done. The sales team now sets the rates.');
-    if (next.length !== old.length) throw new Error('Lines cannot be added or removed after pricing; ask the estimator to reprice');
-    next = old.map((o, i) => ({ item: o.item, qty: o.qty, unit: o.unit, cost: o.cost, rate: next[i].rate }));
-  } else if (me === 'estimator' && r.stage !== 'costing') {
-    throw new Error('Costing starts when sales sends the enquiry for costing');
-  } else if (!isEstimator) {
-    next = next.map((l, i) => ({ ...l, cost: old[i]?.cost ?? 0 })); // sales does not set costs
+    if (v.lines.length !== old.length) throw new Error('Lines cannot be added or removed after pricing; ask the sales manager to reopen it for the estimator');
+    next = old.map((o, i) => ({ item: o.item, qty: o.qty, unit: o.unit, rate: v.lines[i].rate, ...keepCost(i) }));
+  } else {
+    next = v.lines.map((l, i) => ({ item: l.item, qty: l.qty, unit: l.unit, rate: l.rate, ...keepCost(i) }));
   }
   await tx.delete(salesLines).where(eq(salesLines.enquiryId, r.id));
   if (next.length) await tx.insert(salesLines).values(next.map((l, i) => ({ companyId: ctx.companyId, enquiryId: r.id, position: i, ...l })));
   // Changed lines are a new offer: it needs approval again (if the rule asks) and a new send.
   await tx.update(salesEnquiries).set({ quoteStatus: 'draft', updatedAt: new Date() }).where(eq(salesEnquiries.id, r.id));
+  return { ok: true as const };
+}
+
+const costingInput = z.object({
+  id: z.uuid(),
+  lines: z
+    .array(
+      z.object({
+        item: z.string().trim().min(1, 'Describe each line').max(300),
+        qty: z.number().min(0).max(1e9),
+        unit: z.string().trim().min(1).max(20),
+        material: z.number().min(0).max(1e12),
+        labour: z.number().min(0).max(1e12),
+        other: z.number().min(0).max(1e12),
+      }),
+    )
+    .max(200),
+  markup: z.number().min(0).max(500),
+  notes: z.string().trim().max(8000).optional(),
+});
+
+/**
+ * The estimator's costing sheet: lines with unit cost broken into material, labour and other,
+ * the markup for suggested selling rates, and the costing basis (assumptions, exclusions).
+ */
+export async function saveCosting(tx: Tx, ctx: ActionContext, raw: z.input<typeof costingInput>) {
+  const v = costingInput.parse(raw);
+  requireRole(await myRole(tx, ctx), 'estimator');
+  const r = await lockEnquiry(tx, ctx, v.id);
+  if (r.stage !== 'costing' || r.pricingDoneAt) throw new Error('This enquiry is not with the estimator');
+  const old = await tx.select().from(salesLines).where(eq(salesLines.enquiryId, r.id)).orderBy(asc(salesLines.position));
+  await tx.delete(salesLines).where(eq(salesLines.enquiryId, r.id));
+  if (v.lines.length)
+    await tx.insert(salesLines).values(
+      v.lines.map((l, i) => ({ companyId: ctx.companyId, enquiryId: r.id, position: i, item: l.item, qty: l.qty, unit: l.unit, material: l.material, labour: l.labour, other: l.other, cost: unitCost(l), rate: old[i]?.rate ?? 0 })),
+    );
+  await tx.update(salesEnquiries).set({ markup: v.markup, costingNotes: v.notes || null, updatedAt: new Date() }).where(eq(salesEnquiries.id, r.id));
   return { ok: true as const };
 }
 
@@ -153,11 +187,18 @@ export async function pricingDone(tx: Tx, ctx: ActionContext, raw: { id: string 
   const lines = await tx.select().from(salesLines).where(eq(salesLines.enquiryId, r.id));
   if (!lines.length) throw new Error('Add the quotation lines first');
   if (lines.some((l) => l.qty > 0 && !(l.cost > 0))) throw new Error('Enter a cost for every line');
+  // Lines without a selling rate get the estimator's suggested rate (cost plus markup); sales can change them.
+  let suggested = 0;
+  for (const l of lines) {
+    if (l.rate > 0 || !(r.markup > 0)) continue;
+    await tx.update(salesLines).set({ rate: suggestedRate(l.cost, r.markup) }).where(eq(salesLines.id, l.id));
+    suggested++;
+  }
   const quoteNo = r.quoteNo ?? (await nextNumber(tx, ctx.companyId, 'qt'));
   await tx.update(salesEnquiries).set({ stage: 'quoted', pricingDoneAt: new Date(), quoteNo, quoteStatus: 'draft', updatedAt: new Date() }).where(eq(salesEnquiries.id, r.id));
   const cost = lines.reduce((n, l) => n + l.qty * l.cost, 0);
   const cfg = await loadConfig(tx, ctx.companyId);
-  await logEvent(tx, ctx, r.id, `Pricing done: cost ${fmtMoney(cfg.currency, cost)}. Quotation ${quoteNo} ready for rates.`, 'sales.enquiry.priced');
+  await logEvent(tx, ctx, r.id, `Pricing done: cost ${fmtMoney(cfg.currency, cost)}${suggested ? `, suggested rates at ${r.markup}% markup` : ''}. Quotation ${quoteNo} ready for sales.`, 'sales.enquiry.priced');
   return { ok: true as const };
 }
 
@@ -348,21 +389,23 @@ export async function enquiryDetail(tx: Tx, ctx: SessionContext, id: string) {
   return {
     me,
     cfg,
-    enquiry: { ...e, owner: e.ownerId ? (people.get(e.ownerId) ?? '') : '' },
+    // Markup reveals cost: only for those who see costs. The costing basis (notes) is for everyone.
+    enquiry: { ...e, markup: seeCost ? e.markup : 0, owner: e.ownerId ? (people.get(e.ownerId) ?? '') : '' },
     customer: c,
     // Costs and margin stay with the estimator and management.
-    lines: seeCost ? lines : lines.map((l) => ({ ...l, cost: 0 })),
+    lines: seeCost ? lines : lines.map((l) => ({ ...l, cost: 0, material: 0, labour: 0, other: 0 })),
     totals: seeCost ? t : { ...t, cost: 0, margin: 0 },
     approver,
     order: order[0] ?? null,
-    docs: docs.map((d) => ({ ...d, by: d.byId ? (people.get(d.byId) ?? '') : '' })),
+    docs: docs.filter((d) => d.section === 'project').map((d) => ({ ...d, by: d.byId ? (people.get(d.byId) ?? '') : '' })),
+    costingDocs: seeCost ? docs.filter((d) => d.section === 'costing').map((d) => ({ ...d, by: d.byId ? (people.get(d.byId) ?? '') : '' })) : [],
     events: events.map((x) => ({ id: x.id, text: x.text, at: x.createdAt.toISOString(), by: x.byId ? (people.get(x.byId) ?? '') : '' })),
     can: {
       editProject: sales && projectOpen,
       editDocs: sales && projectOpen,
-      editLines: open && e.quoteStatus !== 'pending' && ((sales && (projectOpen || !!e.pricingDoneAt)) || (hasRole(me, 'estimator') && e.stage === 'costing')),
+      editLines: open && e.quoteStatus !== 'pending' && sales && (projectOpen || !!e.pricingDoneAt),
       editRatesOnly: !!e.pricingDoneAt,
-      editCost: hasRole(me, 'estimator') && e.stage === 'costing',
+      editCost: hasRole(me, 'estimator') && e.stage === 'costing' && !e.pricingDoneAt,
       seeCost,
       discount: sales && !!e.pricingDoneAt && open && e.quoteStatus !== 'pending',
       sendToCosting: sales && e.stage === 'enquiry',

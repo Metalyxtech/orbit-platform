@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { approverFor, DEFAULT_CONFIG, DOCS, fmtShort, quoteTotals } from './config';
+import { approverFor, DEFAULT_CONFIG, DOCS, docLimit, fmtShort, quoteTotals, suggestedRate, unitCost } from './config';
 
 describe('quoteTotals', () => {
   it('works out discount, GST, cost and margin', () => {
@@ -27,10 +27,15 @@ describe('approverFor', () => {
 });
 
 describe('project documents', () => {
-  it('allows ten PDFs of up to 100 MB', () => {
+  it('allows ten PDFs of up to 100 MB or images of up to 20 MB', () => {
     expect(DOCS.maxFiles).toBe(10);
-    expect(DOCS.maxPdfBytes).toBe(100 * 1024 * 1024);
-    expect(DOCS.types).toEqual(['application/pdf']);
+    expect(docLimit('application/pdf')).toBe(100 * 1024 * 1024);
+    expect(docLimit('image/jpeg')).toBe(20 * 1024 * 1024);
+    expect(docLimit('application/zip')).toBe(0);
+  });
+  it('suggests rates from cost and markup', () => {
+    expect(unitCost({ material: 40000, labour: 8000, other: 2000 })).toBe(50000);
+    expect(suggestedRate(50000, 18)).toBe(59000);
   });
 });
 

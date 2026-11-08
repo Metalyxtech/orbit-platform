@@ -50,8 +50,21 @@ export const SOURCES = ['Phone', 'Website', 'Referral', 'Tender', 'Existing cust
 export const UNITS = ['MT', 'kg', 'm²', 'm', 'nos', 'lot', 'set'];
 export const LOST_REASONS = ['Price: competitor lower', 'Delivery time', 'Project cancelled', 'No response from customer', 'Specification not met', 'Other'];
 
-/** Project documents: PDFs uploaded to Orbit, or links for bigger files (drawings over 2 GB, models). */
-export const DOCS = { maxFiles: 10, maxPdfBytes: 100 * 1024 * 1024, types: ['application/pdf'] };
+/**
+ * Documents on an enquiry, in two sections of up to 10 each: the customer's project documents
+ * (sales) and the estimator's costing attachments. PDFs up to 100 MB, photos and scans up to
+ * 20 MB, or links for anything bigger (drawings over 2 GB, models).
+ */
+export const DOCS = {
+  maxFiles: 10,
+  maxPdfBytes: 100 * 1024 * 1024,
+  maxImageBytes: 20 * 1024 * 1024,
+  types: ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'],
+  accept: 'application/pdf,.pdf,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp',
+};
+export type DocSection = 'project' | 'costing';
+/** Size limit for one file of this type (0 = type not allowed). */
+export const docLimit = (type: string) => (type === 'application/pdf' ? DOCS.maxPdfBytes : DOCS.types.includes(type) ? DOCS.maxImageBytes : 0);
 
 export interface SalesConfig {
   /** The sales manager approves discounts up to this %; above it goes to the GM. */
@@ -78,6 +91,11 @@ export const DEFAULT_CONFIG: SalesConfig = {
   terms: 'GST extra as applicable. Advance with order, balance against dispatch documents. Delivery as per approved drawings.',
   targets: {},
 };
+
+/** Unit cost of a line from its breakdown. */
+export const unitCost = (l: { material: number; labour: number; other: number }) => (l.material || 0) + (l.labour || 0) + (l.other || 0);
+/** Selling rate the estimator suggests: unit cost plus markup, rounded to the rupee. */
+export const suggestedRate = (cost: number, markup: number) => Math.round(cost * (1 + (markup || 0) / 100));
 
 export interface QuoteLine {
   qty: number;
@@ -108,4 +126,4 @@ export const fmtShort = (cur: string, v: number) =>
   !v ? `${cur}0` : Math.abs(v) >= 1e7 ? `${cur}${(v / 1e7).toFixed(2)} Cr` : Math.abs(v) >= 1e5 ? `${cur}${(v / 1e5).toFixed(1)} L` : fmtMoney(cur, v);
 export const fmtDate = (d: string | Date | null | undefined) =>
   d ? new Date(typeof d === 'string' && d.length === 10 ? `${d}T00:00:00Z` : d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '-';
-export const fmtBytes = (n: number | null | undefined) => (!n ? '' : n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+export const fmtBytes = (n: number | null | undefined) => (!n ? '' : n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1).replace(/\.0$/, '')} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);

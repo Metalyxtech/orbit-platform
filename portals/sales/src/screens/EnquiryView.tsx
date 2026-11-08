@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button, Chip, TopBar } from '@orbit/ui';
 import { fmtDate, fmtMoney, quoteTotals, LOST_REASONS, OPEN_STAGES, SOURCES, STAGES, stageLabel, type Stage } from '../config';
 import {
@@ -33,6 +33,8 @@ export function EnquiryView({ d }: { d: EnquiryDetail }) {
   // What sales has on screen but not saved yet: shown live in Totals and sent with the approval.
   const [draftLines, setDraftLines] = useState<LineView[] | null>(null);
   const [draftDisc, setDraftDisc] = useState<number | null>(null);
+  // A saved change (yours, or the manager's during approval) replaces whatever was typed before.
+  useEffect(() => setDraftDisc(null), [e.discount, e.quoteStatus, e.rev]);
   const onDraft = useCallback((l: LineView[] | null) => setDraftLines(l), []);
   const draft: Draft = { lines: draftLines, discount: draftDisc !== null && draftDisc !== e.discount ? draftDisc : null };
   return (
@@ -453,9 +455,18 @@ function ActionsPanel({ d, draft }: { d: EnquiryDetail; draft: Draft }) {
             </Button>
           </>
         )}
+        {c.send && !dirty && e.quoteStatus === 'approved' && (
+          <p className="muted" style={{ fontSize: 12, margin: 0 }}>
+            {d.sentBefore ? `Approved. Send the revised quotation to ${d.customer.name}; it goes out as Rev ${e.rev + 1}.` : `Approved. Send the quotation to ${d.customer.name}.`}
+          </p>
+        )}
         {c.send && !dirty && (
-          <Button variant="primary" disabled={busy} onClick={() => run(() => sendQuoteAction({ id: e.id }), 'Quotation sent.')}>
-            {e.quoteStatus === 'sent' ? 'Send a new revision' : 'Mark quotation sent'}
+          <Button variant="primary" disabled={busy} onClick={() => run(() => sendQuoteAction({ id: e.id }), d.sentBefore ? `Revised quotation Rev ${e.rev + 1} sent.` : 'Quotation sent.')}>
+            {e.quoteStatus === 'approved' && d.sentBefore
+              ? `Send revised quotation (Rev ${e.rev + 1})`
+              : e.quoteStatus === 'approved'
+                ? 'Send quotation to customer'
+                : `Send again as Rev ${e.rev + 1}`}
           </Button>
         )}
         {c.negotiate && <Button disabled={busy} onClick={() => run(() => toNegotiationAction({ id: e.id }), 'Moved to negotiation.')}>Customer is negotiating</Button>}

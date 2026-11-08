@@ -35,7 +35,7 @@ export async function reopenProjectAction(input: { id: string }) {
 export async function askApprovalAction(input: { id: string }) {
   return runAction((tx, ctx) => enquiries.askApproval(tx, ctx, input));
 }
-export async function decideQuoteAction(input: { id: string; approve: boolean; note?: string }) {
+export async function decideQuoteAction(input: In<typeof enquiries.decideQuote>) {
   return runAction((tx, ctx) => enquiries.decideQuote(tx, ctx, input));
 }
 export async function sendQuoteAction(input: { id: string }) {

@@ -64,6 +64,10 @@ export const salesEnquiries = pgTable(
     /** draft | pending (sales manager) | pending_gm (GM, final) | approved | rejected | sent */
     quoteStatus: text('quote_status').notNull().default('draft'),
     lostReason: text('lost_reason'),
+    /** Sent back in approval: to whom (exec | estimator | manager), why, and by which step (Sales manager | GM). Cleared when they act. */
+    returnedTo: text('returned_to'),
+    returnedNote: text('returned_note'),
+    returnedBy: text('returned_by'),
     /** Estimator's markup on cost for the suggested selling rates (%). */
     markup: numeric('markup', { precision: 5, scale: 2, mode: 'number' }).notNull().default(0),
     /** Estimator's basis: assumptions, inclusions and exclusions. */

@@ -43,13 +43,14 @@ async function build(tx: Tx, ctx: SessionContext): Promise<QueueItem[]> {
     );
     for (const { e, customer } of mine) {
       if (e.quoteStatus === 'approved') items.push({ id: `sa:${e.id}`, title: `Send ${e.quoteNo}`, detail: `${customer} · approved, ready to send`, href: enquiryHref(e.id) });
-      else if (e.quoteStatus === 'rejected') items.push({ id: `sr:${e.id}`, title: `${e.quoteNo} sent back`, detail: `${customer} · change the discount or rates`, href: enquiryHref(e.id), urgent: true });
+      else if (e.quoteStatus === 'rejected') items.push({ id: `sr:${e.id}`, title: `${e.quoteNo} sent back to you`, detail: `${e.returnedBy ?? 'Approver'}: ${e.returnedNote ?? 'change the discount or rates'}`.slice(0, 140), href: enquiryHref(e.id), urgent: true });
       else if (e.followUp) items.push({ id: `sf:${e.id}`, title: `Follow up ${e.number}`, detail: `${customer} · ${e.followUp < t0 ? 'overdue' : 'today'}`, href: enquiryHref(e.id), urgent: e.followUp < t0 });
     }
   }
   if (acts('estimator')) {
     for (const { e, customer } of await enq(and(eq(salesEnquiries.stage, 'costing'), isNull(salesEnquiries.pricingDoneAt)))) {
-      items.push({ id: `sc:${e.id}`, title: `Cost ${e.number}`, detail: `${customer} · ${e.title}`, href: enquiryHref(e.id) });
+      if (e.returnedTo === 'estimator') items.push({ id: `sc:${e.id}:back`, title: `Re-cost ${e.number}: sent back`, detail: `${e.returnedBy ?? 'Approver'}: ${e.returnedNote ?? ''}`.slice(0, 140), href: enquiryHref(e.id), urgent: true });
+      else items.push({ id: `sc:${e.id}`, title: `Cost ${e.number}`, detail: `${customer} · ${e.title}`, href: enquiryHref(e.id) });
     }
   }
   // Approval chain: the sales manager approves first, then the GM gives final approval.
@@ -61,6 +62,10 @@ async function build(tx: Tx, ctx: SessionContext): Promise<QueueItem[]> {
       for (const { e, customer } of waiting) {
         const t = quoteTotals(lines.filter((l) => l.enquiryId === e.id), e.discount, cfg.gst);
         const gmStep = e.quoteStatus === 'pending_gm';
+        if (!gmStep && e.returnedTo === 'manager') {
+          items.push({ id: `sp:${e.id}:back`, title: `Review ${e.quoteNo} again: GM sent it back`, detail: (e.returnedNote ?? '').slice(0, 140), href: enquiryHref(e.id), urgent: true });
+          continue;
+        }
         items.push({ id: `sp:${e.id}:${e.quoteStatus}`, title: `${gmStep ? 'Final approval' : 'Approve'} ${e.quoteNo}`, detail: `${customer} · ${e.discount}% discount · ${fmtShort(cfg.currency, t.net)}${gmStep ? ' · sales manager approved' : ''}`, href: enquiryHref(e.id), urgent: true });
       }
     }

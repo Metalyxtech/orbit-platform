@@ -3,9 +3,10 @@ import type { Workspace } from '@/management/types';
 import { companyAdminItems } from '@/company-admin-nav';
 import { portalNavItems } from '@/portal-nav';
 import { portalModules } from '@/portals';
+import { PROJECT_DOCS_HREF } from '@/project-docs';
 import { toEntries, type MenuSection } from '@orbit/ui';
 
-type Counts = { waiting: number; unread: number; badges: Record<string, number>; roles: Record<string, string | null> };
+type Counts = { waiting: number; unread: number; badges: Record<string, number>; roles: Record<string, string | null>; projectDocs?: boolean };
 
 /**
  * Sidebar for the Management workspace, as a short main menu with drop-downs:
@@ -19,7 +20,7 @@ export function manageNavSections(ctx: SessionContext, ws: Workspace, portals: s
   const name = (p: string) => portalModules[p].manifest.name;
   if (!ws.roles.includes(ctx.role)) {
     return [
-      { entries: [{ href: '/manage/messages', label: 'Messages', badge: c.unread }] },
+      { entries: [{ href: '/manage/messages', label: 'Messages', badge: c.unread }, ...(c.projectDocs ? [{ href: PROJECT_DOCS_HREF, label: 'Project documents' }] : [])] },
       { title: 'Portals', entries: open.map((p) => ({ href: `/${p}`, label: name(p) })) },
     ];
   }
@@ -29,6 +30,7 @@ export function manageNavSections(ctx: SessionContext, ws: Workspace, portals: s
         { href: '/manage', label: 'Overview' },
         { href: '/manage/approvals', label: 'My approvals', badge: c.waiting },
         { href: '/manage/messages', label: 'Messages', badge: c.unread },
+        ...(c.projectDocs ? [{ href: PROJECT_DOCS_HREF, label: 'Project documents' }] : []),
         // Management sees the change history here; company admins find it under Company admin.
         ...(ctx.role === 'management' ? [{ href: '/manage/company/history', label: 'Change history' }] : []),
       ],

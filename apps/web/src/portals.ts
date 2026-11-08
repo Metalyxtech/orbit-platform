@@ -7,6 +7,9 @@ import { custom1Routes } from '@orbit/portal-custom-1/routes';
 import { procurementManifest } from '@orbit/portal-procurement/manifest';
 import { procurementRoutes } from '@orbit/portal-procurement/routes';
 import { requests as procRequests } from '@orbit/portal-procurement/server';
+import { salesManifest } from '@orbit/portal-sales/manifest';
+import { salesRoutes } from '@orbit/portal-sales/routes';
+import { queue as salesQueue } from '@orbit/portal-sales/server';
 import { timesheetManifest } from '@orbit/portal-timesheet/manifest';
 import { timesheetRoutes } from '@orbit/portal-timesheet/routes';
 import { approvals } from '@orbit/portal-timesheet/server';
@@ -63,6 +66,12 @@ export const portalModules: Record<string, PortalModule> = {
         href: `/procurement/request?id=${r.id}`,
         urgent: r.late,
       })),
+  },
+  sales: {
+    manifest: salesManifest,
+    routes: salesRoutes,
+    queueCount: (tx, ctx) => salesQueue.countMyQueue(tx, ctx),
+    inboxItems: async (tx, ctx) => (await salesQueue.myQueue(tx, ctx)).map((i) => ({ ...i, id: `sl:${i.id}`, portal: 'Sales' })),
   },
   // Custom portals: one per custom customer, each in its own folder (portals/custom-*).
   'custom-1': { manifest: custom1Manifest, routes: custom1Routes },

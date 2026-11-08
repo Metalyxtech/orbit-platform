@@ -3,7 +3,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button, Chip, ConfirmDialog, DataTable, EmptyState, useToast } from '@orbit/ui';
 import { BundlePicker, CycleSwitch, PlanCards, trustFor } from '@/billing/PlanCards';
-import { cycleOf, money, planOf, portalName, portalsOutside, priceFor, taxNote, tierOf, type Bundle, type Cycle, type TierId } from '@/billing/plans';
+import { bundleFor, cycleOf, money, planOf, portalName, portalsOutside, priceFor, taxNote, tierOf, type Bundle, type Cycle, type TierId } from '@/billing/plans';
 import type { BillingState } from '@/billing/state';
 import { cancelPlanAction, confirmCheckoutAction, startCheckoutAction, startCustomCheckoutAction } from './actions';
 
@@ -55,7 +55,7 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
   const [cycle, setCycle] = useState<Cycle>((state.cycle as Cycle | null) ?? 'yearly');
   const used = state.usage.portals;
   const [bundle, setBundle] = useState<Bundle>(
-    (state.bundle as Bundle | null) ?? (used.includes('timesheet') && used.includes('procurement') ? 'both' : used.includes('procurement') ? 'purchase' : used.includes('timesheet') ? 'timesheet' : 'both'),
+    (state.bundle as Bundle | null) ?? bundleFor(used),
   );
   const [pick, setPick] = useState<TierId | null>(null);
   const [cancel, setCancel] = useState(false);
@@ -162,7 +162,7 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
             {statusChip}
           </div>
           <p className="muted" style={{ fontSize: 13, margin: '6px 0 0' }}>
-            {state.status === 'trial' && `${state.trialDaysLeft} days left, until ${date(state.trialEndsAt)}. Both portals for up to ${state.limits.users} people are included. Pick a plan any time; you are charged only when the trial ends.`}
+            {state.status === 'trial' && `${state.trialDaysLeft} days left, until ${date(state.trialEndsAt)}. Every portal for up to ${state.limits.users} people is included. Pick a plan any time; you are charged only when the trial ends.`}
             {state.status === 'trial_ended' && 'Your free trial has ended. Choose a plan to keep adding people and portals.'}
             {state.status === 'pending_payment' && 'Checkout was started but not paid. Choose the plan again to pay.'}
             {state.status === 'active' &&
@@ -181,7 +181,7 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
           </div>
           <div>
             <span>Portals</span>
-            <strong>{state.limits.portals.map((p) => (p === 'procurement' ? 'Purchase' : 'Timesheet')).join(' + ')}</strong>
+            <strong>{state.limits.portals.map(portalName).join(' + ')}</strong>
           </div>
         </div>
       </div>

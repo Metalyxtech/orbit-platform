@@ -134,6 +134,13 @@
       "when": 1795000000000,
       "tag": "0018_custom_installments",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1795100000000,
+      "tag": "0019_sales",
+      "breakpoints": true
     }
   ]
 }

@@ -2,7 +2,7 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { SessionContext } from '@orbit/core';
 import { auditLog, memberships, users, type Tx } from '@orbit/db';
 
-export type ChangeArea = 'Purchase' | 'Timesheet' | 'People and access' | 'Company';
+export type ChangeArea = 'Purchase' | 'Timesheet' | 'Sales' | 'People and access' | 'Company';
 
 /** Plain-language name and area for each recorded action. */
 const ACTIONS: Record<string, { area: ChangeArea; label: string }> = {
@@ -18,6 +18,24 @@ const ACTIONS: Record<string, { area: ChangeArea; label: string }> = {
   'procurement.supplier.add': { area: 'Purchase', label: 'Supplier added' },
   'procurement.item.add': { area: 'Purchase', label: 'Stock item added' },
   'procurement.request.create': { area: 'Purchase', label: 'Requisition raised' },
+  'sales.settings': { area: 'Sales', label: 'Sales settings changed' },
+  'sales.role': { area: 'Sales', label: 'Sales role changed' },
+  'sales.targets': { area: 'Sales', label: 'Sales targets changed' },
+  'sales.customer.add': { area: 'Sales', label: 'Customer added' },
+  'sales.enquiry.create': { area: 'Sales', label: 'Enquiry created' },
+  'sales.enquiry.costing': { area: 'Sales', label: 'Enquiry sent for costing' },
+  'sales.enquiry.priced': { area: 'Sales', label: 'Pricing done' },
+  'sales.enquiry.reopen': { area: 'Sales', label: 'Priced enquiry reopened' },
+  'sales.enquiry.won': { area: 'Sales', label: 'Enquiry won' },
+  'sales.enquiry.lost': { area: 'Sales', label: 'Enquiry lost' },
+  'sales.quote.ask': { area: 'Sales', label: 'Discount approval asked' },
+  'sales.quote.approve': { area: 'Sales', label: 'Discount approved' },
+  'sales.quote.reject': { area: 'Sales', label: 'Discount sent back' },
+  'sales.quote.send': { area: 'Sales', label: 'Quotation sent' },
+  'sales.order.confirm': { area: 'Sales', label: 'Sales order confirmed' },
+  'sales.order.status': { area: 'Sales', label: 'Sales order moved on' },
+  'sales.invoice.raise': { area: 'Sales', label: 'Invoice raised' },
+  'sales.payment': { area: 'Sales', label: 'Payment recorded' },
   'workflow.bind': { area: 'Timesheet', label: 'Timesheet approval workflow changed' },
   'ts_settings.update': { area: 'Timesheet', label: 'Timesheet settings changed' },
   'timesheet.form': { area: 'Timesheet', label: 'Timesheet form changed' },

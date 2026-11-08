@@ -6,7 +6,7 @@ import { TIERS, TRIAL_DAYS, taxNote, type Bundle, type Currency, type Cycle } fr
 
 export function PricingClient() {
   const [cycle, setCycle] = useState<Cycle>('yearly');
-  const [bundle, setBundle] = useState<Bundle>('both');
+  const [bundle, setBundle] = useState<Bundle>('all');
   const [currency, setCurrency] = useState<Currency>('INR');
   return (
     <main className="b-public">
@@ -25,8 +25,8 @@ export function PricingClient() {
         </div>
       </header>
       <section className="b-hero">
-        <h1>Timesheets and purchasing for site and project teams</h1>
-        <p>Take one portal or both. Pay monthly, quarterly, half-yearly or yearly. Try everything free for {TRIAL_DAYS} days.</p>
+        <h1>Timesheets, purchasing and sales for project companies</h1>
+        <p>Take one portal, or combine them and save up to 30%. Pay monthly, quarterly, half-yearly or yearly. Try everything free for {TRIAL_DAYS} days.</p>
       </section>
       <div className="b-public-body">
         <div className="b-steps" style={{ alignItems: 'center' }}>

@@ -12,6 +12,7 @@ import { workspaceFor } from '@/management/workspaces';
 import { manageNavSections } from './nav-groups';
 import { CompanySwitcher } from '@/CompanySwitcher';
 import { requireAgreement } from '@/legal/gate';
+import { projectDocsOn } from '@/project-docs';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +31,7 @@ export default async function ManageLayout({ children }: { children: ReactNode }
       unread: await unreadCount(tx, ctx),
       badges: await queueCounts(tx, ctx, portals),
       roles: await portalRolesFor(tx, ctx, portals),
+      projectDocs: await projectDocsOn(tx, ctx),
     };
   });
   const ctx = s.ctx;

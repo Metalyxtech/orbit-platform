@@ -80,6 +80,9 @@ export async function saveSettingsAction(input: In<typeof admin.saveSettings>) {
 export async function setSalesRoleAction(input: { membershipId: string; role: string }) {
   return runAction((tx, ctx) => admin.setSalesRole(tx, ctx, input));
 }
+export async function setSalesAccessAction(input: { membershipId: string; on: boolean }) {
+  return runAction((tx, ctx) => admin.setSalesAccess(tx, ctx, input));
+}
 export async function setTargetsAction(input: { targets: Record<string, number> }) {
   return runAction((tx, ctx) => admin.setTargets(tx, ctx, input));
 }

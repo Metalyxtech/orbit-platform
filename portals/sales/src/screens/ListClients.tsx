@@ -10,6 +10,7 @@ import {
   raiseInvoiceAction,
   recordPaymentAction,
   saveSettingsAction,
+  setSalesAccessAction,
   setSalesRoleAction,
   setTargetsAction,
 } from '../actions';
@@ -216,7 +217,7 @@ export function SettingsClient({ cfg, team }: { cfg: SalesConfig; team: SalesPer
         </div>
         <table className="o-table">
           <thead>
-            <tr><th>Person</th><th>Sales role</th><th>What they do</th></tr>
+            <tr><th>Person</th><th>Sales role</th><th>Portal access</th><th>What they do</th></tr>
           </thead>
           <tbody>
             {team.map((p) => (
@@ -226,11 +227,36 @@ export function SettingsClient({ cfg, team }: { cfg: SalesConfig; team: SalesPer
                   {p.companyRole === 'company_admin' ? (
                     <Chip tone="steel">{roleLabel('admin')}</Chip>
                   ) : (
-                    <select className="o-select" value={p.salesRole} disabled={busy} aria-label={`Sales role for ${p.name}`} onChange={(e) => run(() => setSalesRoleAction({ membershipId: p.membershipId, role: e.target.value }), 'Role saved.')}>
+                    <select
+                      className="o-select"
+                      value={p.salesRole}
+                      disabled={busy}
+                      aria-label={`Sales role for ${p.name}`}
+                      onChange={(e) => run(() => setSalesRoleAction({ membershipId: p.membershipId, role: e.target.value }), p.access === 'on' ? 'Role saved.' : `Role saved. ${p.name} can now open Sales.`)}
+                    >
                       {SALES_ROLES.filter((r) => r.id !== 'admin').map((r) => (
                         <option key={r.id} value={r.id}>{r.label}</option>
                       ))}
                     </select>
+                  )}
+                </td>
+                <td style={{ width: 200 }}>
+                  {p.companyRole === 'company_admin' || p.companyRole === 'management' ? (
+                    <Chip tone="ok">Always</Chip>
+                  ) : p.access === 'on' ? (
+                    <span className="o-row" style={{ gap: 6 }}>
+                      <Chip tone="ok">Can open Sales</Chip>
+                      <Button size="small" disabled={busy} onClick={() => confirm(`Close the Sales portal for ${p.name}?`) && run(() => setSalesAccessAction({ membershipId: p.membershipId, on: false }), 'Access removed.')}>
+                        Remove
+                      </Button>
+                    </span>
+                  ) : (
+                    <span className="o-row" style={{ gap: 6 }}>
+                      <Chip tone={p.access === 'requested' ? 'hivis' : 'grey'}>{p.access === 'requested' ? 'Asked for access' : 'No access'}</Chip>
+                      <Button size="small" variant="primary" disabled={busy} onClick={() => run(() => setSalesAccessAction({ membershipId: p.membershipId, on: true }), `${p.name} can now open Sales.`)}>
+                        Give access
+                      </Button>
+                    </span>
                   )}
                 </td>
                 <td className="muted" style={{ fontSize: 12 }}>{SALES_ROLES.find((r) => r.id === p.salesRole)?.detail}</td>

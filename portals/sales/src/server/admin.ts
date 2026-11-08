@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { audit, portalRoleFor, readPortalRoles, writePortalRole, type ActionContext, type SessionContext } from '@orbit/core';
-import { memberships, users, type Tx } from '@orbit/db';
+import { audit, legacyPortal, portalRoleFor, readMemberPortals, readPortalRoles, setMemberPortal, writePortalRole, type ActionContext, type SessionContext } from '@orbit/core';
+import { companyPortals, memberships, users, type Tx } from '@orbit/db';
 import { roleLabel, SALES_ROLES, type SalesConfig, type SalesRole } from '../config';
 import { salesManifest } from '../manifest';
 import { loadConfig, myRole, PORTAL, requireRole, saveConfig } from './shared';
@@ -18,6 +18,8 @@ export interface SalesPerson {
   email: string;
   companyRole: SessionContext['role'];
   salesRole: SalesRole;
+  /** on = can open the Sales portal; requested = waiting for the admin; off = no access. */
+  access: 'on' | 'requested' | 'off';
 }
 
 /** Active people with their sales role. */
@@ -27,9 +29,20 @@ export async function salesTeam(tx: Tx, ctx: SessionContext): Promise<SalesPerso
     .from(memberships)
     .innerJoin(users, eq(users.id, memberships.userId))
     .where(and(eq(memberships.companyId, ctx.companyId), eq(memberships.status, 'active')));
-  const roles = await readPortalRoles(tx, PORTAL, people.map((p) => p.id));
+  const ids = people.map((p) => p.id);
+  const [roles, rows] = await Promise.all([readPortalRoles(tx, PORTAL, ids), readMemberPortals(tx, ids)]);
   return people
-    .map((p) => ({ membershipId: p.id, name: p.name, email: p.email, companyRole: p.role, salesRole: portalRoleFor(salesManifest, p.role, roles.get(p.id)) as SalesRole }))
+    .map((p) => {
+      const mine = rows.filter((r) => r.membershipId === p.id);
+      const row = mine.find((r) => r.portal === PORTAL);
+      // Same rule as the app's portal access: admins and management always; others need Sales switched on for them.
+      const access: SalesPerson['access'] =
+        p.role === 'company_admin' || p.role === 'management' ? 'on'
+        : row ? (row.status === 'active' ? 'on' : row.status === 'requested' ? 'requested' : 'off')
+        : mine.length === 0 && legacyPortal(PORTAL) ? 'on'
+        : 'off';
+      return { membershipId: p.id, name: p.name, email: p.email, companyRole: p.role, salesRole: portalRoleFor(salesManifest, p.role, roles.get(p.id)) as SalesRole, access };
+    })
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -67,7 +80,28 @@ export async function setSalesRole(tx: Tx, ctx: ActionContext, raw: { membership
   if (v.role === 'admin') throw new Error('Make the person a company admin to give them sales admin');
   if (!(await writePortalRole(tx, { companyId: ctx.companyId, membershipId: m.membershipId, portal: PORTAL, role: v.role }))) throw new Error('Sales roles switch on after the latest database update.');
   await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'sales.role', entity: 'memberships', entityId: m.membershipId, data: { summary: [`${m.name}: ${roleLabel(m.salesRole)} → ${roleLabel(v.role)}`] }, requestId: ctx.requestId });
-  return { role: v.role };
+  // Giving someone a sales role means they work in Sales: open the portal for them too.
+  const granted = m.access !== 'on' && (await grantAccess(tx, ctx, m, true));
+  return { role: v.role, granted };
+}
+
+async function grantAccess(tx: Tx, ctx: ActionContext, m: SalesPerson, on: boolean) {
+  const [cp] = await tx.select({ enabled: companyPortals.enabled }).from(companyPortals).where(and(eq(companyPortals.companyId, ctx.companyId), eq(companyPortals.portal, PORTAL)));
+  if (!cp?.enabled) throw new Error('Sales is not switched on for your company yet. Request it in Company portals first.');
+  await setMemberPortal(tx, ctx.companyId, m.membershipId, PORTAL, on ? 'active' : 'off');
+  await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: on ? 'member_portal.grant' : 'member_portal.remove', entity: 'memberships', entityId: m.membershipId, data: { portal: PORTAL, summary: [`${m.name}: Sales portal ${on ? 'opened' : 'closed'}`] }, requestId: ctx.requestId });
+  return true;
+}
+
+/** Opens or closes the Sales portal for one person (same as the switch in People and portals). */
+export async function setSalesAccess(tx: Tx, ctx: ActionContext, raw: { membershipId: string; on: boolean }) {
+  requireAdmin(ctx);
+  const v = z.object({ membershipId: z.uuid(), on: z.boolean() }).parse(raw);
+  const m = (await salesTeam(tx, ctx)).find((x) => x.membershipId === v.membershipId);
+  if (!m) throw new Error('Person not found');
+  if (m.companyRole === 'company_admin' || m.companyRole === 'management') throw new Error('Company admins and management always have Sales');
+  await grantAccess(tx, ctx, m, v.on);
+  return { access: v.on ? ('on' as const) : ('off' as const) };
 }
 
 /** Monthly order targets per salesperson (0 removes the target). */

@@ -116,6 +116,11 @@ export async function saveLines(tx: Tx, ctx: ActionContext, raw: z.input<typeof 
   if (next.length) await tx.insert(salesLines).values(next.map((l, i) => ({ companyId: ctx.companyId, enquiryId: r.id, position: i, ...l })));
   // Changed lines are a new offer: it needs approval again (if the rule asks) and a new send.
   await tx.update(salesEnquiries).set({ quoteStatus: 'draft', updatedAt: new Date() }).where(eq(salesEnquiries.id, r.id));
+  // Record the new value so approvers (and everyone on the enquiry) see what changed.
+  const cfg = await loadConfig(tx, ctx.companyId);
+  const before = quoteTotals(old, r.discount, cfg.gst).net;
+  const after = quoteTotals(next, r.discount, cfg.gst).net;
+  if (Math.round(before) !== Math.round(after)) await logEvent(tx, ctx, r.id, `Rates updated: value ${fmtMoney(cfg.currency, before)} → ${fmtMoney(cfg.currency, after)} (before GST)`);
   return { ok: true as const };
 }
 
@@ -164,6 +169,7 @@ export async function setDiscount(tx: Tx, ctx: ActionContext, raw: { id: string;
   assertMineOrManager(me, r.ownerId, ctx);
   if (!OPEN_STAGES.includes(r.stage as Stage) || inApproval(r.quoteStatus)) throw new Error('The discount cannot change now');
   await tx.update(salesEnquiries).set({ discount: v.discount, quoteStatus: 'draft', updatedAt: new Date() }).where(eq(salesEnquiries.id, r.id));
+  if (v.discount !== r.discount) await logEvent(tx, ctx, r.id, `Discount ${r.discount}% → ${v.discount}%`);
   return { ok: true as const };
 }
 
@@ -220,10 +226,27 @@ async function quoteState(tx: Tx, r: typeof salesEnquiries.$inferSelect, company
 }
 
 /** Sales sends the priced quotation for approval: the sales manager first, then (if needed) the GM. */
-export async function askApproval(tx: Tx, ctx: ActionContext, raw: { id: string }) {
+const askInput = z.object({
+  id: z.uuid(),
+  /** Rates on screen (one per line) and the discount: saved first, so approvers see exactly what was sent. */
+  rates: z.array(z.number().min(0).max(1e12)).max(200).optional(),
+  discount: z.number().min(0).max(50).optional(),
+});
+
+export async function askApproval(tx: Tx, ctx: ActionContext, raw: z.input<typeof askInput>) {
+  const v = askInput.parse(raw);
   const me = await myRole(tx, ctx);
   requireRole(me, 'exec', 'manager');
-  const r = await lockEnquiry(tx, ctx, z.uuid().parse(raw.id));
+  if (v.rates) {
+    const cur = await tx.select().from(salesLines).where(eq(salesLines.enquiryId, v.id)).orderBy(asc(salesLines.position));
+    if (v.rates.length !== cur.length) throw new Error('The lines changed meanwhile. Reload the page.');
+    if (cur.some((l, i) => l.rate !== v.rates![i])) await saveLines(tx, ctx, { id: v.id, lines: cur.map((l, i) => ({ item: l.item, qty: l.qty, unit: l.unit, rate: v.rates![i] })) });
+  }
+  if (v.discount !== undefined) {
+    const [cur] = await tx.select({ discount: salesEnquiries.discount }).from(salesEnquiries).where(eq(salesEnquiries.id, v.id));
+    if (cur && cur.discount !== v.discount) await setDiscount(tx, ctx, { id: v.id, discount: v.discount });
+  }
+  const r = await lockEnquiry(tx, ctx, v.id);
   assertMineOrManager(me, r.ownerId, ctx);
   if (!r.pricingDoneAt || !['quoted', 'negotiation'].includes(r.stage)) throw new Error('The quotation is not ready');
   if (!['draft', 'rejected'].includes(r.quoteStatus)) throw new Error('This quotation is already in approval or approved');

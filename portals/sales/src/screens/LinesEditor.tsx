@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@orbit/ui';
 import { fmtMoney, UNITS } from '../config';
 import { saveLinesAction } from '../actions';
@@ -26,6 +26,7 @@ export function LinesEditor({
   editCost,
   seeCost,
   editRate,
+  onDraft,
 }: {
   enquiryId: string;
   lines: LineView[];
@@ -35,10 +36,13 @@ export function LinesEditor({
   editCost: boolean;
   seeCost: boolean;
   editRate: boolean;
+  /** Unsaved lines (or null when saved), so the page can show live totals and send them with the approval. */
+  onDraft?: (lines: LineView[] | null) => void;
 }) {
   const { busy, run } = useRun();
   const [lines, setLines] = useState<LineView[]>(initial);
   const [dirty, setDirty] = useState(false);
+  useEffect(() => onDraft?.(dirty ? lines : null), [dirty, lines, onDraft]);
   const set = (i: number, patch: Partial<LineView>) => {
     setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
     setDirty(true);
@@ -123,7 +127,11 @@ export function LinesEditor({
           </tbody>
         </table>
       </div>
-      {dirty && <p className="hivis" style={{ fontSize: 12, margin: '8px 16px' }}>Unsaved changes. Save lines before the next step.</p>}
+      {dirty && (
+        <p className="hivis" style={{ fontSize: 12, margin: '8px 16px' }}>
+          Not saved yet. The totals show the new value; Save lines, or Send for approval saves them for you.
+        </p>
+      )}
     </div>
   );
 }

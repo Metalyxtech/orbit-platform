@@ -32,7 +32,7 @@ export async function pricingDoneAction(input: { id: string }) {
 export async function reopenProjectAction(input: { id: string }) {
   return runAction((tx, ctx) => enquiries.reopenProject(tx, ctx, input));
 }
-export async function askApprovalAction(input: { id: string }) {
+export async function askApprovalAction(input: In<typeof enquiries.askApproval>) {
   return runAction((tx, ctx) => enquiries.askApproval(tx, ctx, input));
 }
 export async function decideQuoteAction(input: In<typeof enquiries.decideQuote>) {

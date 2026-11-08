@@ -1,7 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Button, Chip, TopBar } from '@orbit/ui';
-import { fmtDate, fmtMoney, LOST_REASONS, OPEN_STAGES, SOURCES, STAGES, stageLabel, type Stage } from '../config';
+import { fmtDate, fmtMoney, quoteTotals, LOST_REASONS, OPEN_STAGES, SOURCES, STAGES, stageLabel, type Stage } from '../config';
 import {
   askApprovalAction,
   decideQuoteAction,
@@ -18,7 +18,7 @@ import {
 import type { EnquiryDetail } from '../server';
 import { CostingSheet } from './CostingSheet';
 import { DocsPanel } from './DocsPanel';
-import { LinesEditor } from './LinesEditor';
+import { LinesEditor, type LineView } from './LinesEditor';
 import { QuoteChip, StageChip } from './ui';
 import { useRun } from './useRun';
 
@@ -30,6 +30,11 @@ export function EnquiryView({ d }: { d: EnquiryDetail }) {
   const flow = STAGES.filter((s) => s.id !== 'lost');
   const at = flow.findIndex((s) => s.id === stage);
   const linesKey = JSON.stringify(d.lines.map((l) => [l.item, l.qty, l.unit, l.rate, l.cost]));
+  // What sales has on screen but not saved yet: shown live in Totals and sent with the approval.
+  const [draftLines, setDraftLines] = useState<LineView[] | null>(null);
+  const [draftDisc, setDraftDisc] = useState<number | null>(null);
+  const onDraft = useCallback((l: LineView[] | null) => setDraftLines(l), []);
+  const draft: Draft = { lines: draftLines, discount: draftDisc !== null && draftDisc !== e.discount ? draftDisc : null };
   return (
     <>
       <TopBar crumbs={['Sales', 'Enquiries', e.number]} />
@@ -109,6 +114,7 @@ export function EnquiryView({ d }: { d: EnquiryDetail }) {
                 editCost={false}
                 seeCost={false}
                 editRate={d.can.editLines}
+                onDraft={onDraft}
               />
             )}
             {!d.can.seeCost && e.costingNotes && (
@@ -133,8 +139,8 @@ export function EnquiryView({ d }: { d: EnquiryDetail }) {
             </div>
           </div>
           <div className="o-stack">
-            {!d.can.editCost && <TotalsPanel d={d} />}
-            <ActionsPanel d={d} />
+            {!d.can.editCost && <TotalsPanel key={e.discount} d={d} draft={draft} setDraftDisc={setDraftDisc} />}
+            <ActionsPanel d={d} draft={draft} />
             {d.can.followUp && <FollowUpPanel d={d} />}
             <div className="o-panel">
               <h2>Customer</h2>
@@ -222,22 +228,40 @@ function ProjectPanel({ d }: { d: EnquiryDetail }) {
   );
 }
 
-function TotalsPanel({ d }: { d: EnquiryDetail }) {
+/** Rates and discount on screen that are not saved yet. */
+interface Draft {
+  lines: LineView[] | null;
+  discount: number | null;
+}
+const isDirty = (x: Draft) => !!x.lines || x.discount !== null;
+
+function TotalsPanel({ d, draft, setDraftDisc }: { d: EnquiryDetail; draft: Draft; setDraftDisc: (v: number | null) => void }) {
   const e = d.enquiry;
   const cur = d.cfg.currency;
-  const t = d.totals;
+  const live = isDirty(draft);
+  const disc = draft.discount ?? e.discount;
+  const t = live ? quoteTotals(draft.lines ?? d.lines, disc, d.cfg.gst) : d.totals;
   const { busy, run } = useRun();
-  const [disc, setDisc] = useState(String(e.discount));
+  const [discText, setDiscText] = useState(String(e.discount));
   return (
-    <div className="o-panel">
-      <h2>Totals</h2>
+    <div className="o-panel" style={live ? { borderColor: 'var(--hivis, #d97706)' } : undefined}>
+      <div className="o-panel-head" style={{ marginBottom: 8 }}>
+        <h2>Totals</h2>
+        {live && <Chip tone="hivis">Not saved</Chip>}
+      </div>
       <div className="p-dl" style={{ fontSize: 13 }}>
         <div><span>Gross</span><strong>{fmtMoney(cur, t.gross)}</strong></div>
-        <div><span>Discount {e.discount}%</span><strong>- {fmtMoney(cur, t.disc)}</strong></div>
+        <div><span>Discount {disc}%</span><strong>- {fmtMoney(cur, t.disc)}</strong></div>
         <div><span>Net (before GST)</span><strong>{fmtMoney(cur, t.net)}</strong></div>
         <div><span>GST {d.cfg.gst}%</span><strong>{fmtMoney(cur, t.tax)}</strong></div>
         <div><span>Total</span><strong>{fmtMoney(cur, t.total)}</strong></div>
-        {d.can.seeCost && t.cost > 0 && (
+        {live && (
+          <div>
+            <span>Saved value</span>
+            <strong className="muted">{fmtMoney(cur, d.totals.total)}</strong>
+          </div>
+        )}
+      {d.can.seeCost && t.cost > 0 && (
           <>
             <div><span>Cost</span><strong>{fmtMoney(cur, t.cost)}</strong></div>
             <div><span>Margin</span><strong className={t.margin < d.cfg.minMargin ? 'bad' : ''}>{t.margin.toFixed(1)}%</strong></div>
@@ -248,9 +272,21 @@ function TotalsPanel({ d }: { d: EnquiryDetail }) {
         <div className="o-row" style={{ marginTop: 12, alignItems: 'flex-end' }}>
           <label className="o-field" style={{ flex: 1 }}>
             Discount %
-            <input className="o-input" type="number" min={0} max={50} step="0.5" value={disc} onChange={(x) => setDisc(x.target.value)} />
+            <input
+              className="o-input"
+              type="number"
+              min={0}
+              max={50}
+              step="0.5"
+              value={discText}
+              onChange={(x) => {
+                setDiscText(x.target.value);
+                const n = Math.max(0, Math.min(50, Number(x.target.value) || 0));
+                setDraftDisc(n === e.discount ? null : n);
+              }}
+            />
           </label>
-          <Button size="small" disabled={busy || Number(disc) === e.discount} onClick={() => run(() => setDiscountAction({ id: e.id, discount: Number(disc) || 0 }), 'Discount saved.')}>
+          <Button size="small" disabled={busy || draft.discount === null} onClick={() => run(() => setDiscountAction({ id: e.id, discount: draft.discount ?? e.discount }), 'Discount saved.')}>
             Save
           </Button>
         </div>
@@ -310,16 +346,19 @@ function ApprovalChain({ status, gm }: { status: string; gm: boolean }) {
   );
 }
 
-function ActionsPanel({ d }: { d: EnquiryDetail }) {
+function ActionsPanel({ d, draft }: { d: EnquiryDetail; draft: Draft }) {
   const e = d.enquiry;
   const c = d.can;
+  const dirty = isDirty(draft);
+  // Changed rates or discount always go through approval again, even on an approved or sent quotation.
+  const canAsk = c.askApproval || (dirty && c.editLines && !!e.pricingDoneAt);
   const { busy, run } = useRun();
   const [note, setNote] = useState('');
   const [newDisc, setNewDisc] = useState(String(e.discount));
   const [sendTo, setSendTo] = useState<'exec' | 'estimator' | 'manager'>('exec');
   const [reason, setReason] = useState(LOST_REASONS[0]);
   const [advance, setAdvance] = useState(String(d.cfg.defaultAdvance));
-  const any = c.sendToCosting || c.reopen || c.askApproval || c.approve || c.send || c.negotiate || c.won || c.lost;
+  const any = c.sendToCosting || c.reopen || canAsk || c.approve || c.send || c.negotiate || c.won || c.lost;
   if (!any)
     return (
       <div className="o-panel">
@@ -395,13 +434,26 @@ function ActionsPanel({ d }: { d: EnquiryDetail }) {
             </div>
           </>
         )}
-        {c.askApproval && (
+        {canAsk && (
           <>
-            <p className="muted" style={{ fontSize: 12, margin: 0 }}>Check the rates and discount, then send for approval: sales manager{d.gm ? ', then the GM' : ''}.</p>
-            <Button variant="primary" disabled={busy} onClick={() => run(() => askApprovalAction({ id: e.id }), 'Sent to the sales manager for approval.')}>Send for approval</Button>
+            <p className="muted" style={{ fontSize: 12, margin: 0 }}>
+              {dirty ? 'Your new rates and discount are saved and sent together' : 'Check the rates and discount, then send for approval'}: sales manager{d.gm ? ', then the GM' : ''}.
+            </p>
+            <Button
+              variant="primary"
+              disabled={busy}
+              onClick={() =>
+                run(
+                  () => askApprovalAction({ id: e.id, rates: draft.lines?.map((l) => l.rate), discount: draft.discount ?? undefined }),
+                  dirty ? 'Changes saved and sent to the sales manager for approval.' : 'Sent to the sales manager for approval.',
+                )
+              }
+            >
+              {dirty ? 'Save and send for approval' : 'Send for approval'}
+            </Button>
           </>
         )}
-        {c.send && (
+        {c.send && !dirty && (
           <Button variant="primary" disabled={busy} onClick={() => run(() => sendQuoteAction({ id: e.id }), 'Quotation sent.')}>
             {e.quoteStatus === 'sent' ? 'Send a new revision' : 'Mark quotation sent'}
           </Button>

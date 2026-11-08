@@ -17,6 +17,9 @@ export async function setFollowUpAction(input: In<typeof enquiries.setFollowUp>)
 export async function saveLinesAction(input: In<typeof enquiries.saveLines>) {
   return runAction((tx, ctx) => enquiries.saveLines(tx, ctx, input));
 }
+export async function saveCostingAction(input: In<typeof enquiries.saveCosting>) {
+  return runAction((tx, ctx) => enquiries.saveCosting(tx, ctx, input));
+}
 export async function setDiscountAction(input: { id: string; discount: number }) {
   return runAction((tx, ctx) => enquiries.setDiscount(tx, ctx, input));
 }
@@ -74,14 +77,8 @@ export async function raiseInvoiceAction(input: { id: string }) {
 export async function recordPaymentAction(input: In<typeof orders.recordPayment>) {
   return runAction((tx, ctx) => orders.recordPayment(tx, ctx, input));
 }
-export async function saveSettingsAction(input: In<typeof admin.saveSettings>) {
-  return runAction((tx, ctx) => admin.saveSettings(tx, ctx, input));
-}
-export async function setSalesRoleAction(input: { membershipId: string; role: string }) {
-  return runAction((tx, ctx) => admin.setSalesRole(tx, ctx, input));
-}
-export async function setSalesAccessAction(input: { membershipId: string; on: boolean }) {
-  return runAction((tx, ctx) => admin.setSalesAccess(tx, ctx, input));
+export async function saveSalesAdminAction(input: In<typeof admin.saveSalesAdmin>) {
+  return runAction((tx, ctx) => admin.saveSalesAdmin(tx, ctx, input));
 }
 export async function setTargetsAction(input: { targets: Record<string, number> }) {
   return runAction((tx, ctx) => admin.setTargets(tx, ctx, input));

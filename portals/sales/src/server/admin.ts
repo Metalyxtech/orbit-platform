@@ -70,38 +70,50 @@ export async function saveSettings(tx: Tx, ctx: ActionContext, raw: z.input<type
 
 const roleIds = SALES_ROLES.map((r) => r.id) as [SalesRole, ...SalesRole[]];
 
-/** Gives a person their sales role. Company admins are always sales admins. */
-export async function setSalesRole(tx: Tx, ctx: ActionContext, raw: { membershipId: string; role: string }) {
-  requireAdmin(ctx);
-  const v = z.object({ membershipId: z.uuid(), role: z.enum(roleIds) }).parse(raw);
-  const m = (await salesTeam(tx, ctx)).find((x) => x.membershipId === v.membershipId);
-  if (!m) throw new Error('Person not found');
-  if (m.companyRole === 'company_admin') throw new Error('Company admins are always sales admins');
-  if (v.role === 'admin') throw new Error('Make the person a company admin to give them sales admin');
-  if (!(await writePortalRole(tx, { companyId: ctx.companyId, membershipId: m.membershipId, portal: PORTAL, role: v.role }))) throw new Error('Sales roles switch on after the latest database update.');
-  await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'sales.role', entity: 'memberships', entityId: m.membershipId, data: { summary: [`${m.name}: ${roleLabel(m.salesRole)} → ${roleLabel(v.role)}`] }, requestId: ctx.requestId });
-  // Giving someone a sales role means they work in Sales: open the portal for them too.
-  const granted = m.access !== 'on' && (await grantAccess(tx, ctx, m, true));
-  return { role: v.role, granted };
-}
-
 async function grantAccess(tx: Tx, ctx: ActionContext, m: SalesPerson, on: boolean) {
   const [cp] = await tx.select({ enabled: companyPortals.enabled }).from(companyPortals).where(and(eq(companyPortals.companyId, ctx.companyId), eq(companyPortals.portal, PORTAL)));
   if (!cp?.enabled) throw new Error('Sales is not switched on for your company yet. Request it in Company portals first.');
   await setMemberPortal(tx, ctx.companyId, m.membershipId, PORTAL, on ? 'active' : 'off');
   await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: on ? 'member_portal.grant' : 'member_portal.remove', entity: 'memberships', entityId: m.membershipId, data: { portal: PORTAL, summary: [`${m.name}: Sales portal ${on ? 'opened' : 'closed'}`] }, requestId: ctx.requestId });
-  return true;
 }
 
-/** Opens or closes the Sales portal for one person (same as the switch in People and portals). */
-export async function setSalesAccess(tx: Tx, ctx: ActionContext, raw: { membershipId: string; on: boolean }) {
+const adminInput = z.object({
+  settings: settingsInput.optional(),
+  team: z
+    .array(z.object({ membershipId: z.uuid(), role: z.enum(roleIds).optional(), access: z.enum(['on', 'off']).optional() }))
+    .max(1000)
+    .default([]),
+});
+
+/**
+ * Saves the Sales settings page in one go: settings, sales roles and portal access. The page keeps
+ * every edit as a draft, so nothing reaches the portal until the admin presses Save changes.
+ */
+export async function saveSalesAdmin(tx: Tx, ctx: ActionContext, raw: z.input<typeof adminInput>) {
   requireAdmin(ctx);
-  const v = z.object({ membershipId: z.uuid(), on: z.boolean() }).parse(raw);
-  const m = (await salesTeam(tx, ctx)).find((x) => x.membershipId === v.membershipId);
-  if (!m) throw new Error('Person not found');
-  if (m.companyRole === 'company_admin' || m.companyRole === 'management') throw new Error('Company admins and management always have Sales');
-  await grantAccess(tx, ctx, m, v.on);
-  return { access: v.on ? ('on' as const) : ('off' as const) };
+  const v = adminInput.parse(raw);
+  if (v.settings) await saveSettings(tx, ctx, v.settings);
+  if (!v.team.length) return { ok: true as const, changed: 0 };
+  const team = new Map((await salesTeam(tx, ctx)).map((p) => [p.membershipId, p]));
+  let changed = 0;
+  for (const c of v.team) {
+    const m = team.get(c.membershipId);
+    if (!m) throw new Error('Someone on the list has left the company. Reload the page.');
+    const fixed = m.companyRole === 'company_admin';
+    if (c.role && c.role !== m.salesRole) {
+      if (fixed) throw new Error('Company admins are always sales admins');
+      if (c.role === 'admin') throw new Error('Make the person a company admin to give them sales admin');
+      if (!(await writePortalRole(tx, { companyId: ctx.companyId, membershipId: m.membershipId, portal: PORTAL, role: c.role }))) throw new Error('Sales roles switch on after the latest database update.');
+      await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'sales.role', entity: 'memberships', entityId: m.membershipId, data: { summary: [`${m.name}: ${roleLabel(m.salesRole)} → ${roleLabel(c.role)}`] }, requestId: ctx.requestId });
+      changed++;
+    }
+    if (c.access && c.access !== m.access) {
+      if (fixed || m.companyRole === 'management') throw new Error('Company admins and management always have Sales');
+      await grantAccess(tx, ctx, m, c.access === 'on');
+      changed++;
+    }
+  }
+  return { ok: true as const, changed };
 }
 
 /** Monthly order targets per salesperson (0 removes the target). */

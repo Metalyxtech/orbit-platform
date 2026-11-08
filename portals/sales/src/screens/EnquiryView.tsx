@@ -76,6 +76,8 @@ export function EnquiryView({ d }: { d: EnquiryDetail }) {
           />
         )}
 
+        {e.returnedTo && <SentBack d={d} />}
+
         <div className="o-cols-wide">
           <div className="o-stack">
             <ProjectPanel d={d} />
@@ -258,6 +260,28 @@ function TotalsPanel({ d }: { d: EnquiryDetail }) {
   );
 }
 
+const RETURN_ROLE: Record<string, string> = { exec: 'sales executive', estimator: 'estimator', manager: 'sales manager' };
+
+/** Banner while a quotation is back with someone: who sent it, to whom, why, and what happens next. */
+function SentBack({ d }: { d: EnquiryDetail }) {
+  const e = d.enquiry;
+  const to = e.returnedTo ?? 'exec';
+  const mine = (to === 'exec' && d.can.askApproval) || (to === 'estimator' && d.can.editCost) || (to === 'manager' && d.can.approve === 'manager');
+  const next = to === 'estimator' ? 'Update the costing sheet, then press Pricing done.' : to === 'manager' ? 'Review it again, then approve or send it back.' : 'Change the rates, discount or terms, then send for approval again.';
+  return (
+    <div className="o-panel" style={{ borderLeft: '4px solid var(--hivis, #d97706)', background: mine ? 'var(--hivis-tint, #fff7e6)' : undefined }}>
+      <div className="o-row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <strong>
+          {mine ? 'Sent back to you' : `Sent back to the ${RETURN_ROLE[to]}`} by the {e.returnedBy === 'GM' ? 'GM' : 'sales manager'}
+        </strong>
+        <Chip tone="hivis">Approval starts again after the change</Chip>
+      </div>
+      <p style={{ margin: '8px 0 4px', fontSize: 14, whiteSpace: 'pre-wrap' }}>“{e.returnedNote}”</p>
+      <p className="muted" style={{ margin: 0, fontSize: 12 }}>{mine ? next : `Waiting for the ${RETURN_ROLE[to]}.`}</p>
+    </div>
+  );
+}
+
 /** Approval route for the quotation: sales manager, then (when needed) the GM's final approval. */
 function ApprovalChain({ status, gm }: { status: string; gm: boolean }) {
   const steps = [
@@ -292,6 +316,7 @@ function ActionsPanel({ d }: { d: EnquiryDetail }) {
   const { busy, run } = useRun();
   const [note, setNote] = useState('');
   const [newDisc, setNewDisc] = useState(String(e.discount));
+  const [sendTo, setSendTo] = useState<'exec' | 'estimator' | 'manager'>('exec');
   const [reason, setReason] = useState(LOST_REASONS[0]);
   const [advance, setAdvance] = useState(String(d.cfg.defaultAdvance));
   const any = c.sendToCosting || c.reopen || c.askApproval || c.approve || c.send || c.negotiate || c.won || c.lost;
@@ -346,7 +371,25 @@ function ActionsPanel({ d }: { d: EnquiryDetail }) {
               >
                 {c.approve === 'gm' ? 'Give final approval' : 'Approve'}
               </Button>
-              <Button variant="danger" disabled={busy || !note.trim()} title={!note.trim() ? 'Add a comment first' : undefined} onClick={() => run(() => decideQuoteAction({ id: e.id, approve: false, note }), 'Sent back.')}>
+            </div>
+            <div className="o-stack" style={{ gap: 6, borderTop: '1px solid var(--line-2)', paddingTop: 10 }}>
+              <span className="muted" style={{ fontSize: 12 }}>
+                Not right? Send it back to the person who should change it. They get a task, and approval starts again after their change.
+              </span>
+              <label className="o-field">
+                Send back to
+                <select className="o-select" value={sendTo} onChange={(x) => setSendTo(x.target.value as typeof sendTo)}>
+                  <option value="exec">Sales executive: rates, discount or terms</option>
+                  <option value="estimator">Estimator: costing or scope</option>
+                  {c.approve === 'gm' && <option value="manager">Sales manager: review again</option>}
+                </select>
+              </label>
+              <Button
+                variant="danger"
+                disabled={busy || !note.trim()}
+                title={!note.trim() ? 'Add a comment first' : undefined}
+                onClick={() => run(() => decideQuoteAction({ id: e.id, approve: false, note, sendTo }), `Sent back to the ${sendTo === 'exec' ? 'sales executive' : sendTo === 'estimator' ? 'estimator' : 'sales manager'}.`)}
+              >
                 Send back
               </Button>
             </div>
@@ -399,6 +442,7 @@ function FollowUpPanel({ d }: { d: EnquiryDetail }) {
   const [prob, setProb] = useState(String(e.probability));
   const [note, setNote] = useState('');
   const [newDisc, setNewDisc] = useState(String(e.discount));
+  const [sendTo, setSendTo] = useState<'exec' | 'estimator' | 'manager'>('exec');
   return (
     <div className="o-panel">
       <h2>Follow-up</h2>

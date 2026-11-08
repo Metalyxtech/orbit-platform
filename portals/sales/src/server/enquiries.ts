@@ -195,7 +195,7 @@ export async function pricingDone(tx: Tx, ctx: ActionContext, raw: { id: string 
     suggested++;
   }
   const quoteNo = r.quoteNo ?? (await nextNumber(tx, ctx.companyId, 'qt'));
-  await tx.update(salesEnquiries).set({ stage: 'quoted', pricingDoneAt: new Date(), quoteNo, quoteStatus: 'draft', updatedAt: new Date() }).where(eq(salesEnquiries.id, r.id));
+  await tx.update(salesEnquiries).set({ stage: 'quoted', pricingDoneAt: new Date(), quoteNo, quoteStatus: 'draft', ...clearReturn, updatedAt: new Date() }).where(eq(salesEnquiries.id, r.id));
   const cost = lines.reduce((n, l) => n + l.qty * l.cost, 0);
   const cfg = await loadConfig(tx, ctx.companyId);
   await logEvent(tx, ctx, r.id, `Pricing done: cost ${fmtMoney(cfg.currency, cost)}${suggested ? `, suggested rates at ${r.markup}% markup` : ''}. Quotation ${quoteNo} ready for sales.`, 'sales.enquiry.priced');
@@ -229,7 +229,7 @@ export async function askApproval(tx: Tx, ctx: ActionContext, raw: { id: string 
   if (!['draft', 'rejected'].includes(r.quoteStatus)) throw new Error('This quotation is already in approval or approved');
   const q = await quoteState(tx, r, ctx.companyId);
   if (!q.lines.length || q.lines.some((l) => l.qty > 0 && !(l.rate > 0))) throw new Error('Enter a rate for every line');
-  await tx.update(salesEnquiries).set({ quoteStatus: 'pending', updatedAt: new Date() }).where(eq(salesEnquiries.id, r.id));
+  await tx.update(salesEnquiries).set({ quoteStatus: 'pending', ...clearReturn, updatedAt: new Date() }).where(eq(salesEnquiries.id, r.id));
   await logEvent(tx, ctx, r.id, `${r.quoteNo} with ${r.discount}% discount sent to the sales manager for approval${q.gm ? ', then the GM' : ''}`, 'sales.quote.ask');
   return { gm: q.gm };
 }
@@ -240,7 +240,12 @@ const decideInput = z.object({
   note: z.string().trim().max(1000).optional(),
   /** The sales manager may change the discount while approving. */
   discount: z.number().min(0).max(50).optional(),
+  /** On send-back: who fixes it. The sales manager can send to sales or the estimator; the GM also to the sales manager. */
+  sendTo: z.enum(['exec', 'estimator', 'manager']).optional(),
 });
+
+const RETURN_LABEL = { exec: 'the sales executive', estimator: 'the estimator', manager: 'the sales manager' } as const;
+const clearReturn = { returnedTo: null, returnedNote: null, returnedBy: null };
 
 /**
  * Approval chain. Step 1, the sales manager: approve (optionally with a new discount) or send
@@ -255,18 +260,34 @@ export async function decideQuote(tx: Tx, ctx: ActionContext, raw: z.input<typeo
   const step = r.quoteStatus === 'pending' ? 'manager' : 'gm';
   if (step === 'manager') requireRole(me, 'manager', 'gm');
   else requireRole(me, 'gm');
+  const who = step === 'manager' ? 'Sales manager' : 'GM';
+  if (!v.approve) {
+    const to = v.sendTo ?? 'exec';
+    if (to === 'manager' && step !== 'gm') throw new Error('Only the GM can send it back to the sales manager');
+    const note = v.note!.slice(0, 1000);
+    const back = { returnedTo: to, returnedNote: note, returnedBy: who, updatedAt: new Date() };
+    if (to === 'estimator') {
+      // Back to costing: the estimator reprices; sales can change the project again until pricing is done.
+      await tx.update(salesEnquiries).set({ ...back, stage: 'costing', pricingDoneAt: null, quoteStatus: 'draft' }).where(eq(salesEnquiries.id, r.id));
+    } else if (to === 'manager') {
+      await tx.update(salesEnquiries).set({ ...back, quoteStatus: 'pending' }).where(eq(salesEnquiries.id, r.id));
+    } else {
+      await tx.update(salesEnquiries).set({ ...back, quoteStatus: 'rejected' }).where(eq(salesEnquiries.id, r.id));
+    }
+    await logEvent(tx, ctx, r.id, `${who} sent ${r.quoteNo} back to ${RETURN_LABEL[to]}. Comment: ${note}`, 'sales.quote.reject');
+    return { status: to === 'estimator' ? 'costing' : to === 'manager' ? 'pending' : 'rejected' };
+  }
   let discount = r.discount;
-  if (step === 'manager' && v.approve && v.discount !== undefined && v.discount !== r.discount) {
+  if (step === 'manager' && v.discount !== undefined && v.discount !== r.discount) {
     discount = v.discount;
     await logEvent(tx, ctx, r.id, `Discount changed by the sales manager: ${r.discount}% → ${discount}%`);
   }
   const q = await quoteState(tx, { ...r, discount }, ctx.companyId);
   // The GM approving at step 1 is final; otherwise the GM step follows when the rule asks for it.
-  const next = !v.approve ? 'rejected' : step === 'manager' && q.gm && me !== 'gm' ? 'pending_gm' : 'approved';
-  await tx.update(salesEnquiries).set({ quoteStatus: next, discount, updatedAt: new Date() }).where(eq(salesEnquiries.id, r.id));
-  const who = step === 'manager' ? 'Sales manager' : 'GM';
-  const what = !v.approve ? 'sent back' : next === 'pending_gm' ? 'approved; now with the GM for final approval' : step === 'gm' ? 'gave final approval' : 'approved';
-  await logEvent(tx, ctx, r.id, `${who} ${what}: ${r.quoteNo} at ${discount}% discount${v.note ? `. Comment: ${v.note.slice(0, 500)}` : ''}`, v.approve ? 'sales.quote.approve' : 'sales.quote.reject');
+  const next = step === 'manager' && q.gm && me !== 'gm' ? 'pending_gm' : 'approved';
+  await tx.update(salesEnquiries).set({ quoteStatus: next, discount, ...clearReturn, updatedAt: new Date() }).where(eq(salesEnquiries.id, r.id));
+  const what = next === 'pending_gm' ? 'approved; now with the GM for final approval' : step === 'gm' ? 'gave final approval' : 'approved';
+  await logEvent(tx, ctx, r.id, `${who} ${what}: ${r.quoteNo} at ${discount}% discount${v.note ? `. Comment: ${v.note.slice(0, 500)}` : ''}`, 'sales.quote.approve');
   return { status: next };
 }
 

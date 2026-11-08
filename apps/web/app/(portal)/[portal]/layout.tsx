@@ -16,6 +16,14 @@ import { PROJECT_DOCS_HREF, projectDocsOn } from '@/project-docs';
 
 export const dynamic = 'force-dynamic';
 
+const COMPANY_ROLE: Record<string, string> = {
+  employee: 'Employee',
+  supervisor: 'Supervisor',
+  project_manager: 'Project manager',
+  management: 'Management',
+  company_admin: 'Company admin',
+};
+
 export default async function PortalLayout({ children, params }: { children: ReactNode; params: Promise<{ portal: string }> }) {
   const { portal } = await params;
   const mod = portalModules[portal];
@@ -45,6 +53,8 @@ export default async function PortalLayout({ children, params }: { children: Rea
   nav.push({ href: '/manage/messages', label: 'Messages', section: 'main', badge: unread || undefined });
   // One Company admin menu (company pages and every portal's settings), the same in every portal.
   const adminNav = companyAdminItems(ctx, enabled, roles).map((n) => ({ ...n, section: 'admin' as const, badge: undefined }));
+  // The footer shows who the person is in this portal (e.g. "Estimator · Sales"), not their job title elsewhere.
+  const roleHere = mod.manifest.portalRoles?.find((r) => r.id === portalRole)?.label ?? COMPANY_ROLE[ctx.role] ?? ctx.role;
   const shellNav = [...nav.filter((n) => n.section !== 'admin'), ...adminNav];
 
   return (
@@ -56,7 +66,7 @@ export default async function PortalLayout({ children, params }: { children: Rea
       companies={companies}
       onSwitchCompany={switchCompanyAction}
       nav={shellNav}
-      user={{ name: ctx.name, title: ctx.title }}
+      user={{ name: ctx.name, title: `${roleHere} · ${mod.manifest.name}` }}
       signOutHref="/auth/sign-out"
     >
       <BillingBanner role={ctx.role} />

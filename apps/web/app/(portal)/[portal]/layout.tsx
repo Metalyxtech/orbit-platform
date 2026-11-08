@@ -12,6 +12,7 @@ import { portalRolesFor, queueCounts } from '@/portal-role';
 import { BRAND, portalModules } from '@/portals';
 import { switchCompanyAction } from '@/session-actions';
 import { requireAgreement } from '@/legal/gate';
+import { PROJECT_DOCS_HREF, projectDocsOn } from '@/project-docs';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,12 +22,13 @@ export default async function PortalLayout({ children, params }: { children: Rea
   if (!mod) notFound();
   await requireAgreement(await getSession());
 
-  const { ctx, enabled, waiting, unread, roles } = await query(async (tx, ctx) => ({
+  const { ctx, enabled, waiting, unread, roles, docs } = await query(async (tx, ctx) => ({
     ctx,
     enabled: await accessiblePortals(tx, ctx),
     waiting: (await queueCounts(tx, ctx, [portal]))[portal],
     unread: await unreadCount(tx, ctx),
     roles: await portalRolesFor(tx, ctx, Object.keys(portalModules)),
+    docs: portal !== 'sales' && (await projectDocsOn(tx, ctx)),
   }));
   const portalRole = roles[portal];
   if (!enabled.includes(portal)) redirect('/');
@@ -38,6 +40,8 @@ export default async function PortalLayout({ children, params }: { children: Rea
   if (isManager(ctx)) {
     nav.unshift({ href: workspaceFor(ctx).modules[portal] ? `/manage/${portal}` : '/manage', label: 'Management view', section: 'main', badge: undefined });
   }
+  // Customer project documents from Sales, readable from every other portal.
+  if (docs) nav.push({ href: PROJECT_DOCS_HREF, label: 'Project documents', section: 'main', badge: undefined });
   nav.push({ href: '/manage/messages', label: 'Messages', section: 'main', badge: unread || undefined });
   // One Company admin menu (company pages and every portal's settings), the same in every portal.
   const adminNav = companyAdminItems(ctx, enabled, roles).map((n) => ({ ...n, section: 'admin' as const, badge: undefined }));

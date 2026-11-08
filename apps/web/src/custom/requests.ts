@@ -12,6 +12,7 @@ import { customRequestFiles, customRequests, type Tx } from '@orbit/db';
 export const AREAS = [
   { id: 'timesheet', label: 'Timesheet (change or new form)' },
   { id: 'procurement', label: 'Purchase (change or new form)' },
+  { id: 'sales', label: 'Sales (change or new form)' },
   { id: 'new', label: 'A new custom portal' },
   { id: 'other', label: 'Something else (report, workflow, integration)' },
 ] as const;

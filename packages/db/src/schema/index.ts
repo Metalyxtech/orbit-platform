@@ -7,3 +7,4 @@ export * from './procurement';
 export * from './billing';
 export * from './legal';
 export * from './custom';
+export * from './sales';

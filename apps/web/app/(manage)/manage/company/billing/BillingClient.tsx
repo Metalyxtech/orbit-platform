@@ -181,7 +181,7 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
           </div>
           <div>
             <span>Portals</span>
-            <strong>{state.limits.portals.map((p) => (p === 'procurement' ? 'Purchase' : 'Timesheet')).join(' + ')}</strong>
+            <strong>{state.limits.portals.map(portalName).join(' + ')}</strong>
           </div>
         </div>
       </div>

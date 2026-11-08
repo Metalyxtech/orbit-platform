@@ -55,8 +55,14 @@ export const CYCLES: { id: Cycle; label: string; months: number; discount: numbe
   { id: 'yearly', label: 'Yearly', months: 12, discount: 1 / 6, badge: '2 months free', per: 'year', rz: { period: 'yearly', interval: 1, totalCount: 10 } },
 ];
 
+/**
+ * Portals not priced in any plan yet (Sales): included with every plan and the trial, never paused
+ * by a plan change. Give one a bundle and a price above, then remove it from here.
+ */
+export const UNPRICED_PORTALS = ['sales'];
+
 /** Limits while on the free trial: every portal, Growth team size. */
-export const TRIAL_LIMITS = { users: 40, portals: ['timesheet', 'procurement'] };
+export const TRIAL_LIMITS = { users: 40, portals: ['timesheet', 'procurement', ...UNPRICED_PORTALS] };
 
 export const cycleOf = (c: string) => CYCLES.find((x) => x.id === c) ?? CYCLES[0];
 export const bundleOf = (b: string) => BUNDLES.find((x) => x.id === b);
@@ -69,11 +75,11 @@ export function planOf(id: string) {
   const bundle = bundleOf(b);
   const tier = tierOf(t);
   if (!bundle || !tier) return undefined;
-  return { id: id as PlanId, bundle: bundle.id, tier: tier.id, name: `${bundle.name} ${tier.name}`, users: tier.users, portals: bundle.portals };
+  return { id: id as PlanId, bundle: bundle.id, tier: tier.id, name: `${bundle.name} ${tier.name}`, users: tier.users, portals: [...bundle.portals, ...UNPRICED_PORTALS] };
 }
 
 /** Display name of a portal id. */
-export const portalName = (p: string) => (p === 'procurement' ? 'Purchase' : p === 'timesheet' ? 'Timesheet' : p);
+export const portalName = (p: string) => (({ procurement: 'Purchase', timesheet: 'Timesheet', sales: 'Sales' }) as Record<string, string>)[p] ?? p;
 
 /** Portals in use that a plan does not include: they are paused when the company moves to it. */
 export function portalsOutside(id: string, inUse: string[]) {

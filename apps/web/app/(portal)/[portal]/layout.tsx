@@ -66,7 +66,7 @@ export default async function PortalLayout({ children, params }: { children: Rea
       companies={companies}
       onSwitchCompany={switchCompanyAction}
       nav={shellNav}
-      user={{ name: ctx.name, title: `${roleHere} · ${mod.manifest.name}` }}
+      user={{ name: ctx.name, role: roleHere, title: `${mod.manifest.name} portal` }}
       signOutHref="/auth/sign-out"
     >
       <BillingBanner role={ctx.role} />

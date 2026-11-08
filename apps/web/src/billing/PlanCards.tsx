@@ -1,22 +1,40 @@
 'use client';
 import type { ReactNode } from 'react';
-import { BUNDLES, CYCLES, TIERS, TRIAL_DAYS, bundleSaving, cycleOf, money, monthly, perMonthFor, priceFor, savingFor, taxNote, type Bundle, type Currency, type Cycle, type TierId } from './plans';
+import { BUNDLES, CYCLES, TIERS, TRIAL_DAYS, bundleSaving, bundleSavingPct, cycleOf, isCombo, separatelyFor, money, monthly, perMonthFor, priceFor, savingFor, taxNote, type Bundle, type Currency, type Cycle, type TierId } from './plans';
 
-/** Step 1: which portals. */
+/** Step 1: which portals. One portal, or a combination at a lower price. */
 export function BundlePicker({ bundle, onChange, currency = 'INR' }: { bundle: Bundle; onChange: (b: Bundle) => void; currency?: Currency }) {
   const m = (v: number) => money(v, currency);
+  const group = (title: string, list: typeof BUNDLES) => (
+    <div className="o-stack" style={{ gap: 6 }}>
+      <span className="muted" style={{ fontSize: 12, fontWeight: 600 }}>
+        {title}
+      </span>
+      <div className="b-bundles" role="radiogroup" aria-label={title}>
+        {list.map((b) => (
+          <button key={b.id} type="button" role="radio" aria-checked={bundle === b.id} className={`b-bundle${bundle === b.id ? ' on' : ''}`} onClick={() => onChange(b.id)}>
+            <span className="b-radio" aria-hidden />
+            <span>
+              <strong>
+                {b.name}
+                {b.best && (
+                  <span className="b-save" style={{ marginLeft: 6, whiteSpace: 'nowrap', display: 'inline-block' }}>
+                    Best value
+                  </span>
+                )}
+              </strong>
+              <small>{b.desc}</small>
+            </span>
+            <em>{isCombo(b.id) ? `Save ${bundleSavingPct(b.id)}%` : `from ${m(monthly(b.id, 'starter', currency))}/mo`}</em>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
   return (
-    <div className="b-bundles" role="radiogroup" aria-label="Portals">
-      {BUNDLES.map((b) => (
-        <button key={b.id} type="button" role="radio" aria-checked={bundle === b.id} className={`b-bundle${bundle === b.id ? ' on' : ''}`} onClick={() => onChange(b.id)}>
-          <span className="b-radio" aria-hidden />
-          <span>
-            <strong>{b.name}</strong>
-            <small>{b.desc}</small>
-          </span>
-          <em>{b.id === 'both' ? `Save ${m(bundleSaving('growth', currency))}/mo` : `from ${m(monthly(b.id, 'starter', currency))}/mo`}</em>
-        </button>
-      ))}
+    <div className="o-stack" style={{ gap: 12, flex: 1 }}>
+      {group('One portal', BUNDLES.filter((b) => !isCombo(b.id)))}
+      {group('Combine portals and save', BUNDLES.filter((b) => isCombo(b.id)))}
     </div>
   );
 }
@@ -65,9 +83,9 @@ export function PlanCards({
           <p className="b-billed">
             {c.months === 1 ? `Billed monthly · ${taxNote(currency)}` : `${m(priceFor(bundle, t.id, cycle, currency))} per ${c.per} · save ${m(savingFor(bundle, t.id, cycle, currency))}`}
           </p>
-          {bundle === 'both' && (
+          {isCombo(bundle) && (
             <p className="b-combo">
-              {m(monthly('timesheet', t.id, currency) + monthly('purchase', t.id, currency))} separately · you save {m(bundleSaving(t.id, currency))}/mo
+              <s>{m(separatelyFor(bundle, t.id, currency))}</s> separately · you save {m(bundleSaving(t.id, currency, bundle))}/mo ({bundleSavingPct(bundle, t.id)}%)
             </p>
           )}
           <ul>

@@ -9,8 +9,11 @@ import { useRun } from './useRun';
 // Sales settings for the company admin. Every edit stays a draft on this page: nothing reaches
 // the portal until Save changes (with a confirmation). Discard puts everything back.
 
-type Settings = Pick<SalesConfig, 'managerDiscount' | 'minMargin' | 'gst' | 'currency' | 'validityDays' | 'paymentTermsDays' | 'defaultAdvance' | 'terms'>;
-type Draft = Record<string, { role: SalesRole; access: SalesPerson['access'] }>;
+type Settings = Pick<SalesConfig, 'managerDiscount' | 'minMargin' | 'gst' | 'currency' | 'validityDays' | 'paymentTermsDays' | 'defaultAdvance' | 'terms' | 'gmApproval'>;
+type Draft = Record<string, { role: SalesRole; access: SalesPerson['access']; covers: SalesRole[] }>;
+/** Jobs a company admin can also do in Sales (their task list follows these). */
+const COVERABLE: SalesRole[] = ['manager', 'gm', 'accounts', 'estimator'];
+const sameSet = (a: SalesRole[], b: SalesRole[]) => a.length === b.length && a.every((x) => b.includes(x));
 
 const pickSettings = (c: SalesConfig): Settings => ({
   managerDiscount: c.managerDiscount,
@@ -21,8 +24,9 @@ const pickSettings = (c: SalesConfig): Settings => ({
   paymentTermsDays: c.paymentTermsDays,
   defaultAdvance: c.defaultAdvance,
   terms: c.terms,
+  gmApproval: c.gmApproval,
 });
-const teamDraft = (team: SalesPerson[]): Draft => Object.fromEntries(team.map((p) => [p.membershipId, { role: p.salesRole, access: p.access }]));
+const teamDraft = (team: SalesPerson[]): Draft => Object.fromEntries(team.map((p) => [p.membershipId, { role: p.salesRole, access: p.access, covers: p.covers }]));
 
 export function SettingsClient({ cfg, team }: { cfg: SalesConfig; team: SalesPerson[] }) {
   const { busy, run } = useRun();
@@ -32,14 +36,19 @@ export function SettingsClient({ cfg, team }: { cfg: SalesConfig; team: SalesPer
   const [t, setT] = useState<Draft>(savedTeam);
 
   const settingsChanged = (Object.keys(saved) as (keyof Settings)[]).filter((k) => saved[k] !== f[k]);
-  const teamChanges = team.filter((p) => t[p.membershipId].role !== p.salesRole || t[p.membershipId].access !== p.access);
+  const teamChanges = team.filter((p) => t[p.membershipId].role !== p.salesRole || t[p.membershipId].access !== p.access || !sameSet(t[p.membershipId].covers, p.covers));
   const dirty = settingsChanged.length > 0 || teamChanges.length > 0;
   const changedRow = (id: string) => teamChanges.some((p) => p.membershipId === id);
 
   const setRole = (p: SalesPerson, role: SalesRole) =>
     // A sales role means the person works in Sales: open the portal for them in the same draft.
-    setT({ ...t, [p.membershipId]: { role, access: p.access === 'on' ? t[p.membershipId].access : role !== p.salesRole ? 'on' : p.access } });
+    setT({ ...t, [p.membershipId]: { ...t[p.membershipId], role, access: p.access === 'on' ? t[p.membershipId].access : role !== p.salesRole ? 'on' : p.access } });
   const setAccess = (p: SalesPerson, on: boolean) => setT({ ...t, [p.membershipId]: { ...t[p.membershipId], access: on ? 'on' : p.access === 'on' ? 'off' : p.access } });
+
+  const toggleCover = (p: SalesPerson, r: SalesRole, on: boolean) => {
+    const cur = t[p.membershipId].covers;
+    setT({ ...t, [p.membershipId]: { ...t[p.membershipId], covers: on ? [...cur, r] : cur.filter((x) => x !== r) } });
+  };
 
   const numField = (k: Exclude<keyof Settings, 'currency' | 'terms'>, label: string, help?: string) => (
     <label className="o-field">
@@ -53,7 +62,11 @@ export function SettingsClient({ cfg, team }: { cfg: SalesConfig; team: SalesPer
     ...settingsChanged.map((k) => `${k}: ${String(saved[k]).slice(0, 30)} → ${String(f[k]).slice(0, 30)}`),
     ...teamChanges.map((p) => {
       const d = t[p.membershipId];
-      const parts = [d.role !== p.salesRole ? `${roleLabel(p.salesRole)} → ${roleLabel(d.role)}` : '', d.access !== p.access ? (d.access === 'on' ? 'gets Sales access' : 'loses Sales access') : ''].filter(Boolean);
+      const parts = [
+        d.role !== p.salesRole ? `${roleLabel(p.salesRole)} → ${roleLabel(d.role)}` : '',
+        d.access !== p.access ? (d.access === 'on' ? 'gets Sales access' : 'loses Sales access') : '',
+        !sameSet(d.covers, p.covers) ? `also works as ${d.covers.length ? d.covers.map(roleLabel).join(', ') : 'nothing else'}` : '',
+      ].filter(Boolean);
       return `${p.name}: ${parts.join(', ')}`;
     }),
   ];
@@ -73,6 +86,14 @@ export function SettingsClient({ cfg, team }: { cfg: SalesConfig; team: SalesPer
           {numField('validityDays', 'Quotation valid for days')}
           {numField('paymentTermsDays', 'Invoice due after days')}
           {numField('defaultAdvance', 'Default advance %')}
+          <label className="o-field">
+            GM final approval
+            <select className="o-select" value={f.gmApproval} onChange={(e) => setF({ ...f, gmApproval: e.target.value as Settings['gmApproval'] })}>
+              <option value="always">Every quotation (after the sales manager)</option>
+              <option value="over_limit">Only above the manager&apos;s discount limit or under the minimum margin</option>
+            </select>
+            <span className="help">The sales manager always approves first, with a comment and can change the discount.</span>
+          </label>
         </div>
         <label className="o-field" style={{ marginTop: 10 }}>
           Terms printed on quotations
@@ -110,7 +131,18 @@ export function SettingsClient({ cfg, team }: { cfg: SalesConfig; team: SalesPer
                     </td>
                     <td style={{ width: 220 }}>
                       {p.companyRole === 'company_admin' ? (
-                        <Chip tone="steel">{roleLabel('admin')}</Chip>
+                        <div className="o-stack" style={{ gap: 4 }}>
+                          <Chip tone="steel">{roleLabel('admin')}</Chip>
+                          <span className="muted" style={{ fontSize: 11 }}>
+                            Also works as:
+                          </span>
+                          {COVERABLE.map((r) => (
+                            <label key={r} className="o-row" style={{ gap: 6, fontSize: 12, cursor: 'pointer' }}>
+                              <input type="checkbox" checked={d.covers.includes(r)} disabled={busy} onChange={(e) => toggleCover(p, r, e.target.checked)} aria-label={`${p.name} also works as ${roleLabel(r)}`} />
+                              {roleLabel(r)}
+                            </label>
+                          ))}
+                        </div>
                       ) : (
                         <select className="o-select" value={d.role} disabled={busy} aria-label={`Sales role for ${p.name}`} onChange={(e) => setRole(p, e.target.value as SalesRole)}>
                           {SALES_ROLES.filter((r) => r.id !== 'admin').map((r) => (
@@ -132,7 +164,7 @@ export function SettingsClient({ cfg, team }: { cfg: SalesConfig; team: SalesPer
                       )}
                     </td>
                     <td className="muted" style={{ fontSize: 12 }}>
-                      {SALES_ROLES.find((r) => r.id === (p.companyRole === 'company_admin' ? 'admin' : d.role))?.detail}
+                      {p.companyRole === 'company_admin' ? `Everything, plus sales settings. Task list: ${d.covers.length ? d.covers.map(roleLabel).join(', ') : 'none'}.` : SALES_ROLES.find((r) => r.id === d.role)?.detail}
                     </td>
                   </tr>
                 );
@@ -165,7 +197,12 @@ export function SettingsClient({ cfg, team }: { cfg: SalesConfig; team: SalesPer
             () =>
               saveSalesAdminAction({
                 settings: settingsChanged.length ? f : undefined,
-                team: teamChanges.map((p) => ({ membershipId: p.membershipId, role: t[p.membershipId].role !== p.salesRole ? t[p.membershipId].role : undefined, access: t[p.membershipId].access !== p.access ? (t[p.membershipId].access === 'on' ? 'on' : 'off') : undefined })),
+                team: teamChanges.map((p) => ({
+                  membershipId: p.membershipId,
+                  role: t[p.membershipId].role !== p.salesRole ? t[p.membershipId].role : undefined,
+                  access: t[p.membershipId].access !== p.access ? (t[p.membershipId].access === 'on' ? 'on' : 'off') : undefined,
+                  covers: !sameSet(t[p.membershipId].covers, p.covers) ? (t[p.membershipId].covers.filter((r) => r !== 'admin') as ('exec' | 'estimator' | 'manager' | 'gm' | 'accounts')[]) : undefined,
+                })),
               }),
             'Sales settings saved.',
           )

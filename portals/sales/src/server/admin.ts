@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { audit, legacyPortal, portalRoleFor, readMemberPortals, readPortalRoles, setMemberPortal, writePortalRole, type ActionContext, type SessionContext } from '@orbit/core';
 import { companyPortals, memberships, users, type Tx } from '@orbit/db';
-import { roleLabel, SALES_ROLES, type SalesConfig, type SalesRole } from '../config';
+import { DEFAULT_ADMIN_COVERS, roleLabel, SALES_ROLES, type SalesConfig, type SalesRole } from '../config';
 import { salesManifest } from '../manifest';
 import { loadConfig, myRole, PORTAL, requireRole, saveConfig } from './shared';
 
@@ -20,6 +20,8 @@ export interface SalesPerson {
   salesRole: SalesRole;
   /** on = can open the Sales portal; requested = waiting for the admin; off = no access. */
   access: 'on' | 'requested' | 'off';
+  /** Company admins only: the other jobs they do (their task list follows these). */
+  covers: SalesRole[];
 }
 
 /** Active people with their sales role. */
@@ -30,7 +32,7 @@ export async function salesTeam(tx: Tx, ctx: SessionContext): Promise<SalesPerso
     .innerJoin(users, eq(users.id, memberships.userId))
     .where(and(eq(memberships.companyId, ctx.companyId), eq(memberships.status, 'active')));
   const ids = people.map((p) => p.id);
-  const [roles, rows] = await Promise.all([readPortalRoles(tx, PORTAL, ids), readMemberPortals(tx, ids)]);
+  const [roles, rows, cfg] = await Promise.all([readPortalRoles(tx, PORTAL, ids), readMemberPortals(tx, ids), loadConfig(tx, ctx.companyId)]);
   return people
     .map((p) => {
       const mine = rows.filter((r) => r.membershipId === p.id);
@@ -41,7 +43,8 @@ export async function salesTeam(tx: Tx, ctx: SessionContext): Promise<SalesPerso
         : row ? (row.status === 'active' ? 'on' : row.status === 'requested' ? 'requested' : 'off')
         : mine.length === 0 && legacyPortal(PORTAL) ? 'on'
         : 'off';
-      return { membershipId: p.id, name: p.name, email: p.email, companyRole: p.role, salesRole: portalRoleFor(salesManifest, p.role, roles.get(p.id)) as SalesRole, access };
+      const covers = p.role === 'company_admin' ? (cfg.adminCovers[p.id] ?? DEFAULT_ADMIN_COVERS) : [];
+      return { membershipId: p.id, name: p.name, email: p.email, companyRole: p.role, salesRole: portalRoleFor(salesManifest, p.role, roles.get(p.id)) as SalesRole, access, covers };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -55,6 +58,7 @@ const settingsInput = z.object({
   paymentTermsDays: z.number().int().min(0).max(365),
   defaultAdvance: z.number().int().min(0).max(100),
   terms: z.string().trim().max(2000),
+  gmApproval: z.enum(['always', 'over_limit']).optional(),
 });
 
 export async function saveSettings(tx: Tx, ctx: ActionContext, raw: z.input<typeof settingsInput>) {
@@ -80,7 +84,14 @@ async function grantAccess(tx: Tx, ctx: ActionContext, m: SalesPerson, on: boole
 const adminInput = z.object({
   settings: settingsInput.optional(),
   team: z
-    .array(z.object({ membershipId: z.uuid(), role: z.enum(roleIds).optional(), access: z.enum(['on', 'off']).optional() }))
+    .array(
+      z.object({
+        membershipId: z.uuid(),
+        role: z.enum(roleIds).optional(),
+        access: z.enum(['on', 'off']).optional(),
+        covers: z.array(z.enum(['exec', 'estimator', 'manager', 'gm', 'accounts'])).max(5).optional(),
+      }),
+    )
     .max(1000)
     .default([]),
 });
@@ -105,6 +116,14 @@ export async function saveSalesAdmin(tx: Tx, ctx: ActionContext, raw: z.input<ty
       if (c.role === 'admin') throw new Error('Make the person a company admin to give them sales admin');
       if (!(await writePortalRole(tx, { companyId: ctx.companyId, membershipId: m.membershipId, portal: PORTAL, role: c.role }))) throw new Error('Sales roles switch on after the latest database update.');
       await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'sales.role', entity: 'memberships', entityId: m.membershipId, data: { summary: [`${m.name}: ${roleLabel(m.salesRole)} → ${roleLabel(c.role)}`] }, requestId: ctx.requestId });
+      changed++;
+    }
+    if (c.covers) {
+      if (!fixed) throw new Error('Only company admins can cover other sales jobs; give others a sales role instead');
+      const cfg = await loadConfig(tx, ctx.companyId);
+      const covers = [...new Set(c.covers)] as SalesRole[];
+      await saveConfig(tx, ctx.companyId, { ...cfg, adminCovers: { ...cfg.adminCovers, [m.membershipId]: covers } });
+      await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'sales.role', entity: 'memberships', entityId: m.membershipId, data: { summary: [`${m.name}: sales admin, also works as ${covers.length ? covers.map(roleLabel).join(', ') : 'nothing else'}`] }, requestId: ctx.requestId });
       changed++;
     }
     if (c.access && c.access !== m.access) {

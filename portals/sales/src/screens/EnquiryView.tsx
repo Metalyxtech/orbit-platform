@@ -253,11 +253,35 @@ function TotalsPanel({ d }: { d: EnquiryDetail }) {
           </Button>
         </div>
       )}
-      {d.approver && e.pricingDoneAt && (
-        <p className="muted" style={{ fontSize: 12, margin: '10px 0 0' }}>
-          Needs {d.approver === 'gm' ? 'GM' : 'sales manager'} approval before sending (manager up to {d.cfg.managerDiscount}% discount; under {d.cfg.minMargin}% margin goes to the GM).
-        </p>
-      )}
+      {e.pricingDoneAt && <ApprovalChain status={e.quoteStatus} gm={d.gm} />}
+    </div>
+  );
+}
+
+/** Approval route for the quotation: sales manager, then (when needed) the GM's final approval. */
+function ApprovalChain({ status, gm }: { status: string; gm: boolean }) {
+  const steps = [
+    { label: 'Sales manager', state: status === 'pending' ? 'now' : ['pending_gm', 'approved', 'sent'].includes(status) ? 'done' : status === 'rejected' ? 'bad' : 'todo' },
+    ...(gm ? [{ label: 'GM (final)', state: status === 'pending_gm' ? 'now' : ['approved', 'sent'].includes(status) ? 'done' : 'todo' }] : []),
+  ];
+  const mark = (x: string) => (x === 'done' ? '✓' : x === 'now' ? '●' : x === 'bad' ? '✕' : '○');
+  return (
+    <div style={{ marginTop: 12, borderTop: '1px solid var(--line-2)', paddingTop: 10 }}>
+      <div className="muted" style={{ fontSize: 11, marginBottom: 6 }}>
+        Approval before sending
+      </div>
+      {steps.map((x, i) => (
+        <div key={x.label} className="o-row" style={{ fontSize: 13, gap: 8, marginBottom: 4 }}>
+          <span className={x.state === 'done' ? 'ok' : x.state === 'bad' ? 'bad' : x.state === 'now' ? 'hivis' : 'faint'} style={{ width: 14, textAlign: 'center' }}>
+            {mark(x.state)}
+          </span>
+          <span>
+            {i + 1}. {x.label}
+          </span>
+          {x.state === 'now' && <Chip tone="hivis">Waiting</Chip>}
+          {x.state === 'bad' && <Chip tone="bad">Sent back</Chip>}
+        </div>
+      ))}
     </div>
   );
 }
@@ -267,6 +291,7 @@ function ActionsPanel({ d }: { d: EnquiryDetail }) {
   const c = d.can;
   const { busy, run } = useRun();
   const [note, setNote] = useState('');
+  const [newDisc, setNewDisc] = useState(String(e.discount));
   const [reason, setReason] = useState(LOST_REASONS[0]);
   const [advance, setAdvance] = useState(String(d.cfg.defaultAdvance));
   const any = c.sendToCosting || c.reopen || c.askApproval || c.approve || c.send || c.negotiate || c.won || c.lost;
@@ -275,7 +300,7 @@ function ActionsPanel({ d }: { d: EnquiryDetail }) {
       <div className="o-panel">
         <h2>Next step</h2>
         <p className="muted" style={{ fontSize: 13, margin: 0 }}>
-          {c.pricingDone ? 'Fill in the costing sheet, save it, then press Pricing done.' : e.stage === 'costing' ? 'With the estimator for costing.' : e.quoteStatus === 'pending' ? 'Waiting for approval.' : OPEN_STAGES.includes(e.stage as Stage) ? 'Nothing for you here right now.' : `This enquiry is ${stageLabel(e.stage).toLowerCase()}.`}
+          {c.pricingDone ? 'Fill in the costing sheet, save it, then press Pricing done.' : e.stage === 'costing' ? 'With the estimator for costing.' : e.quoteStatus === 'pending' ? 'Waiting for the sales manager to approve.' : e.quoteStatus === 'pending_gm' ? 'Sales manager approved. Waiting for the GM’s final approval.' : OPEN_STAGES.includes(e.stage as Stage) ? 'Nothing for you here right now.' : `This enquiry is ${stageLabel(e.stage).toLowerCase()}.`}
         </p>
       </div>
     );
@@ -291,19 +316,50 @@ function ActionsPanel({ d }: { d: EnquiryDetail }) {
         )}
         {c.approve && (
           <>
+            <p className="muted" style={{ fontSize: 12, margin: 0 }}>
+              {c.approve === 'manager'
+                ? d.gm
+                  ? 'Step 1 of 2: review the rates and discount. After you approve, it goes to the GM for final approval.'
+                  : 'Review the rates and discount, then approve.'
+                : 'Final approval: the sales manager has approved this quotation.'}
+            </p>
+            {c.approve === 'manager' && (
+              <label className="o-field">
+                Discount % (you can change it)
+                <input className="o-input" type="number" min={0} max={50} step="0.5" value={newDisc} onChange={(x) => setNewDisc(x.target.value)} />
+              </label>
+            )}
             <label className="o-field">
-              Comment
-              <textarea className="o-textarea" value={note} maxLength={300} onChange={(x) => setNote(x.target.value)} />
+              Comment {c.approve === 'manager' ? '(goes in the history)' : ''}
+              <textarea className="o-textarea" value={note} maxLength={1000} placeholder="Required to send back" onChange={(x) => setNote(x.target.value)} />
             </label>
             <div className="o-row">
-              <Button variant="ok" disabled={busy} onClick={() => run(() => decideQuoteAction({ id: e.id, approve: true, note }), 'Approved.')}>Approve</Button>
-              <Button variant="danger" disabled={busy} onClick={() => run(() => decideQuoteAction({ id: e.id, approve: false, note }), 'Sent back.')}>Send back</Button>
+              <Button
+                variant="ok"
+                disabled={busy}
+                onClick={() =>
+                  run(
+                    () => decideQuoteAction({ id: e.id, approve: true, note, ...(c.approve === 'manager' ? { discount: Math.max(0, Math.min(50, Number(newDisc) || 0)) } : {}) }),
+                    c.approve === 'manager' && d.gm ? 'Approved. Sent to the GM for final approval.' : 'Approved.',
+                  )
+                }
+              >
+                {c.approve === 'gm' ? 'Give final approval' : 'Approve'}
+              </Button>
+              <Button variant="danger" disabled={busy || !note.trim()} title={!note.trim() ? 'Add a comment first' : undefined} onClick={() => run(() => decideQuoteAction({ id: e.id, approve: false, note }), 'Sent back.')}>
+                Send back
+              </Button>
             </div>
           </>
         )}
-        {c.askApproval && <Button variant="primary" disabled={busy} onClick={() => run(() => askApprovalAction({ id: e.id }), 'Sent for approval.')}>Ask for approval</Button>}
+        {c.askApproval && (
+          <>
+            <p className="muted" style={{ fontSize: 12, margin: 0 }}>Check the rates and discount, then send for approval: sales manager{d.gm ? ', then the GM' : ''}.</p>
+            <Button variant="primary" disabled={busy} onClick={() => run(() => askApprovalAction({ id: e.id }), 'Sent to the sales manager for approval.')}>Send for approval</Button>
+          </>
+        )}
         {c.send && (
-          <Button variant={c.askApproval ? undefined : 'primary'} disabled={busy || (!!d.approver && e.quoteStatus !== 'approved' && e.quoteStatus !== 'sent')} onClick={() => run(() => sendQuoteAction({ id: e.id }), 'Quotation sent.')}>
+          <Button variant="primary" disabled={busy} onClick={() => run(() => sendQuoteAction({ id: e.id }), 'Quotation sent.')}>
             {e.quoteStatus === 'sent' ? 'Send a new revision' : 'Mark quotation sent'}
           </Button>
         )}
@@ -342,6 +398,7 @@ function FollowUpPanel({ d }: { d: EnquiryDetail }) {
   const [date, setDate] = useState(e.followUp ?? '');
   const [prob, setProb] = useState(String(e.probability));
   const [note, setNote] = useState('');
+  const [newDisc, setNewDisc] = useState(String(e.discount));
   return (
     <div className="o-panel">
       <h2>Follow-up</h2>

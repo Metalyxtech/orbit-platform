@@ -27,14 +27,19 @@ export const stageLabel = (s: string) => STAGES.find((x) => x.id === s)?.label ?
 export const stageTone = (s: string): 'steel' | 'warn' | 'hivis' | 'ok' | 'bad' | 'grey' =>
   (({ enquiry: 'grey', costing: 'warn', quoted: 'steel', negotiation: 'hivis', won: 'ok', lost: 'bad' }) as const)[s as Stage] ?? 'grey';
 
-export type QuoteStatus = 'draft' | 'pending' | 'approved' | 'rejected' | 'sent';
+/** pending = with the sales manager; pending_gm = sales manager approved, with the GM for final approval. */
+export type QuoteStatus = 'draft' | 'pending' | 'pending_gm' | 'approved' | 'rejected' | 'sent';
 export const QUOTE_STATUS: Record<QuoteStatus, { label: string; tone: 'grey' | 'hivis' | 'ok' | 'bad' | 'steel' }> = {
   draft: { label: 'Draft', tone: 'grey' },
-  pending: { label: 'Waiting approval', tone: 'hivis' },
+  pending: { label: 'With sales manager', tone: 'hivis' },
+  pending_gm: { label: 'With GM (final)', tone: 'hivis' },
   approved: { label: 'Approved', tone: 'ok' },
   rejected: { label: 'Sent back', tone: 'bad' },
   sent: { label: 'Sent to customer', tone: 'steel' },
 };
+
+/** The quotation is in the approval chain and cannot change. */
+export const inApproval = (s: string) => s === 'pending' || s === 'pending_gm';
 
 export type OrderStatus = 'awaiting' | 'confirmed' | 'production' | 'dispatched' | 'invoiced';
 export const ORDER_FLOW: { id: OrderStatus; label: string }[] = [
@@ -79,6 +84,13 @@ export interface SalesConfig {
   terms: string;
   /** Monthly order target per salesperson (membership id). */
   targets: Record<string, number>;
+  /**
+   * After the sales manager approves, the GM gives final approval on every quotation ('always'),
+   * or only above the manager's discount limit or under the minimum margin ('over_limit').
+   */
+  gmApproval: 'always' | 'over_limit';
+  /** Company admins (sales admins) who also do another job, e.g. accounts: their task list follows these roles. */
+  adminCovers: Record<string, SalesRole[]>;
 }
 export const DEFAULT_CONFIG: SalesConfig = {
   managerDiscount: 10,
@@ -90,7 +102,11 @@ export const DEFAULT_CONFIG: SalesConfig = {
   defaultAdvance: 30,
   terms: 'GST extra as applicable. Advance with order, balance against dispatch documents. Delivery as per approved drawings.',
   targets: {},
+  gmApproval: 'always',
+  adminCovers: {},
 };
+/** What a sales admin's task list covers when the company admin has not chosen. */
+export const DEFAULT_ADMIN_COVERS: SalesRole[] = ['manager', 'gm', 'accounts'];
 
 /** Unit cost of a line from its breakdown. */
 export const unitCost = (l: { material: number; labour: number; other: number }) => (l.material || 0) + (l.labour || 0) + (l.other || 0);
@@ -113,11 +129,12 @@ export function quoteTotals(lines: QuoteLine[], discount: number, gst: number) {
   return { gross, disc, net, cost, margin, tax, total: net + tax };
 }
 
-/** Who must approve a quotation before it goes out: nobody, the sales manager or the GM. */
-export function approverFor(discount: number, margin: number, hasCost: boolean, cfg: Pick<SalesConfig, 'managerDiscount' | 'minMargin'>): null | 'manager' | 'gm' {
-  if (discount > cfg.managerDiscount || (hasCost && margin < cfg.minMargin)) return 'gm';
-  if (discount > 0) return 'manager';
-  return null;
+/**
+ * Every quotation is approved by the sales manager first (who can comment and adjust the
+ * discount). True when the GM must then give final approval.
+ */
+export function needsGm(discount: number, margin: number, hasCost: boolean, cfg: Pick<SalesConfig, 'managerDiscount' | 'minMargin' | 'gmApproval'>): boolean {
+  return cfg.gmApproval !== 'over_limit' || discount > cfg.managerDiscount || (hasCost && margin < cfg.minMargin);
 }
 
 /** Indian money: ₹12,34,567 and short forms ₹12.3 L / ₹1.25 Cr. */

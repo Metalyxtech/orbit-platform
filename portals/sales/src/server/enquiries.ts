@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import type { ActionContext, SessionContext } from '@orbit/core';
 import { salesCustomers, salesEnquiries, salesEvents, salesLines, salesOrders, type Tx } from '@orbit/db';
-import { approverFor, fmtMoney, LOST_REASONS, OPEN_STAGES, quoteTotals, SOURCES, stageLabel, suggestedRate, unitCost, type QuoteStatus, type Stage } from '../config';
+import { inApproval, needsGm, fmtMoney, LOST_REASONS, OPEN_STAGES, quoteTotals, SOURCES, stageLabel, suggestedRate, unitCost, type QuoteStatus, type Stage } from '../config';
 import { addCustomer, customerInput } from './customers';
 import { listDocs } from './doc-store';
 import { addDays, hasRole, loadConfig, lockEnquiry, logEvent, myRole, nextNumber, peopleById, requireRole, today } from './shared';
@@ -101,7 +101,7 @@ export async function saveLines(tx: Tx, ctx: ActionContext, raw: z.input<typeof 
   requireRole(me, 'exec', 'manager');
   const r = await lockEnquiry(tx, ctx, v.id);
   if (!OPEN_STAGES.includes(r.stage as Stage)) throw new Error('This enquiry is closed');
-  if (r.quoteStatus === 'pending') throw new Error('The quotation is waiting for approval; it cannot change now');
+  if (inApproval(r.quoteStatus)) throw new Error('The quotation is waiting for approval; it cannot change now');
   assertMineOrManager(me, r.ownerId, ctx);
   const old = await tx.select().from(salesLines).where(eq(salesLines.enquiryId, r.id)).orderBy(asc(salesLines.position));
   const keepCost = (i: number) => ({ cost: old[i]?.cost ?? 0, material: old[i]?.material ?? 0, labour: old[i]?.labour ?? 0, other: old[i]?.other ?? 0 });
@@ -162,7 +162,7 @@ export async function setDiscount(tx: Tx, ctx: ActionContext, raw: { id: string;
   requireRole(me, 'exec', 'manager');
   const r = await lockEnquiry(tx, ctx, v.id);
   assertMineOrManager(me, r.ownerId, ctx);
-  if (!OPEN_STAGES.includes(r.stage as Stage) || r.quoteStatus === 'pending') throw new Error('The discount cannot change now');
+  if (!OPEN_STAGES.includes(r.stage as Stage) || inApproval(r.quoteStatus)) throw new Error('The discount cannot change now');
   await tx.update(salesEnquiries).set({ discount: v.discount, quoteStatus: 'draft', updatedAt: new Date() }).where(eq(salesEnquiries.id, r.id));
   return { ok: true as const };
 }
@@ -206,7 +206,7 @@ export async function pricingDone(tx: Tx, ctx: ActionContext, raw: { id: string 
 export async function reopenProject(tx: Tx, ctx: ActionContext, raw: { id: string }) {
   requireRole(await myRole(tx, ctx), 'manager');
   const r = await lockEnquiry(tx, ctx, z.uuid().parse(raw.id));
-  if (!['quoted', 'negotiation'].includes(r.stage) || r.quoteStatus === 'pending') throw new Error('Only a priced, open enquiry can be reopened');
+  if (!['quoted', 'negotiation'].includes(r.stage) || inApproval(r.quoteStatus)) throw new Error('Only a priced, open enquiry can be reopened');
   await tx.update(salesEnquiries).set({ stage: 'costing', pricingDoneAt: null, quoteStatus: 'draft', updatedAt: new Date() }).where(eq(salesEnquiries.id, r.id));
   await logEvent(tx, ctx, r.id, 'Reopened for changes and repricing', 'sales.enquiry.reopen');
   return { ok: true as const };
@@ -216,33 +216,58 @@ async function quoteState(tx: Tx, r: typeof salesEnquiries.$inferSelect, company
   const cfg = await loadConfig(tx, companyId);
   const lines = await tx.select().from(salesLines).where(eq(salesLines.enquiryId, r.id));
   const t = quoteTotals(lines, r.discount, cfg.gst);
-  return { cfg, lines, t, approver: approverFor(r.discount, t.margin, t.cost > 0, cfg) };
+  return { cfg, lines, t, gm: needsGm(r.discount, t.margin, t.cost > 0, cfg) };
 }
 
+/** Sales sends the priced quotation for approval: the sales manager first, then (if needed) the GM. */
 export async function askApproval(tx: Tx, ctx: ActionContext, raw: { id: string }) {
   const me = await myRole(tx, ctx);
   requireRole(me, 'exec', 'manager');
   const r = await lockEnquiry(tx, ctx, z.uuid().parse(raw.id));
   assertMineOrManager(me, r.ownerId, ctx);
   if (!r.pricingDoneAt || !['quoted', 'negotiation'].includes(r.stage)) throw new Error('The quotation is not ready');
+  if (!['draft', 'rejected'].includes(r.quoteStatus)) throw new Error('This quotation is already in approval or approved');
   const q = await quoteState(tx, r, ctx.companyId);
-  if (q.lines.some((l) => l.qty > 0 && !(l.rate > 0))) throw new Error('Enter a rate for every line');
-  if (!q.approver) throw new Error('No approval is needed: send the quotation');
+  if (!q.lines.length || q.lines.some((l) => l.qty > 0 && !(l.rate > 0))) throw new Error('Enter a rate for every line');
   await tx.update(salesEnquiries).set({ quoteStatus: 'pending', updatedAt: new Date() }).where(eq(salesEnquiries.id, r.id));
-  await logEvent(tx, ctx, r.id, `${r.quoteNo} with ${r.discount}% discount sent for ${q.approver === 'gm' ? 'GM' : 'sales manager'} approval`, 'sales.quote.ask');
-  return { approver: q.approver };
+  await logEvent(tx, ctx, r.id, `${r.quoteNo} with ${r.discount}% discount sent to the sales manager for approval${q.gm ? ', then the GM' : ''}`, 'sales.quote.ask');
+  return { gm: q.gm };
 }
 
-export async function decideQuote(tx: Tx, ctx: ActionContext, raw: { id: string; approve: boolean; note?: string }) {
+const decideInput = z.object({
+  id: z.uuid(),
+  approve: z.boolean(),
+  note: z.string().trim().max(1000).optional(),
+  /** The sales manager may change the discount while approving. */
+  discount: z.number().min(0).max(50).optional(),
+});
+
+/**
+ * Approval chain. Step 1, the sales manager: approve (optionally with a new discount) or send
+ * back, with a comment. Step 2, the GM: final approval. A send-back needs a comment.
+ */
+export async function decideQuote(tx: Tx, ctx: ActionContext, raw: z.input<typeof decideInput>) {
+  const v = decideInput.parse(raw);
   const me = await myRole(tx, ctx);
-  const r = await lockEnquiry(tx, ctx, z.uuid().parse(raw.id));
-  if (r.quoteStatus !== 'pending') throw new Error('Nothing is waiting for approval on this quotation');
-  const q = await quoteState(tx, r, ctx.companyId);
-  if (q.approver === 'gm') requireRole(me, 'gm');
-  else requireRole(me, 'manager', 'gm');
-  await tx.update(salesEnquiries).set({ quoteStatus: raw.approve ? 'approved' : 'rejected', updatedAt: new Date() }).where(eq(salesEnquiries.id, r.id));
-  await logEvent(tx, ctx, r.id, `${raw.approve ? 'Approved' : 'Sent back'} ${r.quoteNo} (${r.discount}% discount)${raw.note ? `: ${String(raw.note).slice(0, 300)}` : ''}`, raw.approve ? 'sales.quote.approve' : 'sales.quote.reject');
-  return { ok: true as const };
+  const r = await lockEnquiry(tx, ctx, v.id);
+  if (!inApproval(r.quoteStatus)) throw new Error('Nothing is waiting for approval on this quotation');
+  if (!v.approve && !v.note) throw new Error('Add a comment to say why it goes back');
+  const step = r.quoteStatus === 'pending' ? 'manager' : 'gm';
+  if (step === 'manager') requireRole(me, 'manager', 'gm');
+  else requireRole(me, 'gm');
+  let discount = r.discount;
+  if (step === 'manager' && v.approve && v.discount !== undefined && v.discount !== r.discount) {
+    discount = v.discount;
+    await logEvent(tx, ctx, r.id, `Discount changed by the sales manager: ${r.discount}% → ${discount}%`);
+  }
+  const q = await quoteState(tx, { ...r, discount }, ctx.companyId);
+  // The GM approving at step 1 is final; otherwise the GM step follows when the rule asks for it.
+  const next = !v.approve ? 'rejected' : step === 'manager' && q.gm && me !== 'gm' ? 'pending_gm' : 'approved';
+  await tx.update(salesEnquiries).set({ quoteStatus: next, discount, updatedAt: new Date() }).where(eq(salesEnquiries.id, r.id));
+  const who = step === 'manager' ? 'Sales manager' : 'GM';
+  const what = !v.approve ? 'sent back' : next === 'pending_gm' ? 'approved; now with the GM for final approval' : step === 'gm' ? 'gave final approval' : 'approved';
+  await logEvent(tx, ctx, r.id, `${who} ${what}: ${r.quoteNo} at ${discount}% discount${v.note ? `. Comment: ${v.note.slice(0, 500)}` : ''}`, v.approve ? 'sales.quote.approve' : 'sales.quote.reject');
+  return { status: next };
 }
 
 /** Sends the quotation to the customer (a new revision each time it goes out again). */
@@ -254,7 +279,7 @@ export async function sendQuote(tx: Tx, ctx: ActionContext, raw: { id: string })
   if (!r.pricingDoneAt || !['quoted', 'negotiation'].includes(r.stage)) throw new Error('The quotation is not ready');
   const q = await quoteState(tx, r, ctx.companyId);
   if (q.lines.some((l) => l.qty > 0 && !(l.rate > 0))) throw new Error('Enter a rate for every line');
-  if (q.approver && r.quoteStatus !== 'approved') throw new Error(`This discount needs ${q.approver === 'gm' ? 'the GM' : 'the sales manager'} to approve it first`);
+  if (r.quoteStatus !== 'approved' && r.quoteStatus !== 'sent') throw new Error('The quotation needs approval first (sales manager, then GM)');
   const rev = r.quoteStatus === 'sent' || (await wasSent(tx, r.id, r.quoteNo)) ? r.rev + 1 : r.rev;
   await tx.update(salesEnquiries).set({ quoteStatus: 'sent', rev, followUp: addDays(today(), 3), updatedAt: new Date() }).where(eq(salesEnquiries.id, r.id));
   await logEvent(tx, ctx, r.id, `Sent ${r.quoteNo} Rev ${rev} for ${fmtMoney(q.cfg.currency, q.t.total)} incl. GST`, 'sales.quote.send');
@@ -298,7 +323,7 @@ export async function markLost(tx: Tx, ctx: ActionContext, raw: { id: string; re
   requireRole(me, 'exec', 'manager');
   const r = await lockEnquiry(tx, ctx, v.id);
   assertMineOrManager(me, r.ownerId, ctx);
-  if (!OPEN_STAGES.includes(r.stage as Stage) || r.quoteStatus === 'pending') throw new Error('This enquiry cannot be closed now');
+  if (!OPEN_STAGES.includes(r.stage as Stage) || inApproval(r.quoteStatus)) throw new Error('This enquiry cannot be closed now');
   await tx.update(salesEnquiries).set({ stage: 'lost', probability: 0, followUp: null, lostReason: v.reason, updatedAt: new Date() }).where(eq(salesEnquiries.id, r.id));
   await logEvent(tx, ctx, r.id, `Lost: ${v.reason}`, 'sales.enquiry.lost');
   return { ok: true as const };
@@ -354,7 +379,7 @@ export async function listEnquiries(tx: Tx, ctx: SessionContext, f: EnquiryFilte
         total: t.total,
         margin: seeCost ? t.margin : null,
         hasCost: t.cost > 0,
-        approver: approverFor(e.discount, t.margin, t.cost > 0, cfg),
+        gm: needsGm(e.discount, t.margin, t.cost > 0, cfg),
       };
     });
 }
@@ -380,7 +405,7 @@ export async function enquiryDetail(tx: Tx, ctx: SessionContext, id: string) {
   ]);
   const people = await peopleById(tx, [e.ownerId, ...events.map((x) => x.byId), ...docs.map((d) => d.byId)]);
   const t = quoteTotals(lines, e.discount, cfg.gst);
-  const approver = approverFor(e.discount, t.margin, t.cost > 0, cfg);
+  const gm = needsGm(e.discount, t.margin, t.cost > 0, cfg);
   const seeCost = hasRole(me, 'estimator', 'manager', 'gm');
   const mineOrManager = hasRole(me, 'manager') || e.ownerId === ctx.membershipId;
   const sales = hasRole(me, 'exec', 'manager') && mineOrManager;
@@ -395,7 +420,7 @@ export async function enquiryDetail(tx: Tx, ctx: SessionContext, id: string) {
     // Costs and margin stay with the estimator and management.
     lines: seeCost ? lines : lines.map((l) => ({ ...l, cost: 0, material: 0, labour: 0, other: 0 })),
     totals: seeCost ? t : { ...t, cost: 0, margin: 0 },
-    approver,
+    gm,
     order: order[0] ?? null,
     docs: docs.filter((d) => d.section === 'project').map((d) => ({ ...d, by: d.byId ? (people.get(d.byId) ?? '') : '' })),
     costingDocs: seeCost ? docs.filter((d) => d.section === 'costing').map((d) => ({ ...d, by: d.byId ? (people.get(d.byId) ?? '') : '' })) : [],
@@ -403,20 +428,21 @@ export async function enquiryDetail(tx: Tx, ctx: SessionContext, id: string) {
     can: {
       editProject: sales && projectOpen,
       editDocs: sales && projectOpen,
-      editLines: open && e.quoteStatus !== 'pending' && sales && (projectOpen || !!e.pricingDoneAt),
+      editLines: open && !inApproval(e.quoteStatus) && sales && (projectOpen || !!e.pricingDoneAt),
       editRatesOnly: !!e.pricingDoneAt,
       editCost: hasRole(me, 'estimator') && e.stage === 'costing' && !e.pricingDoneAt,
       seeCost,
-      discount: sales && !!e.pricingDoneAt && open && e.quoteStatus !== 'pending',
+      discount: sales && !!e.pricingDoneAt && open && !inApproval(e.quoteStatus),
       sendToCosting: sales && e.stage === 'enquiry',
       pricingDone: hasRole(me, 'estimator') && e.stage === 'costing',
-      reopen: hasRole(me, 'manager') && ['quoted', 'negotiation'].includes(e.stage) && e.quoteStatus !== 'pending',
-      askApproval: sales && !!e.pricingDoneAt && open && !!approver && !['pending', 'approved'].includes(e.quoteStatus),
-      approve: e.quoteStatus === 'pending' && (approver === 'gm' ? hasRole(me, 'gm') : hasRole(me, 'manager', 'gm')),
-      send: sales && !!e.pricingDoneAt && open && e.quoteStatus !== 'pending' && (!approver || e.quoteStatus === 'approved' || e.quoteStatus === 'sent'),
+      reopen: hasRole(me, 'manager') && ['quoted', 'negotiation'].includes(e.stage) && !inApproval(e.quoteStatus),
+      askApproval: sales && !!e.pricingDoneAt && open && ['draft', 'rejected'].includes(e.quoteStatus),
+      /** manager = step 1 (can change the discount), gm = final step. */
+      approve: (e.quoteStatus === 'pending' && hasRole(me, 'manager', 'gm') ? 'manager' : e.quoteStatus === 'pending_gm' && hasRole(me, 'gm') ? 'gm' : null) as null | 'manager' | 'gm',
+      send: sales && !!e.pricingDoneAt && open && (e.quoteStatus === 'approved' || e.quoteStatus === 'sent'),
       negotiate: sales && e.stage === 'quoted' && e.quoteStatus === 'sent',
       won: sales && ['quoted', 'negotiation'].includes(e.stage) && e.quoteStatus === 'sent',
-      lost: sales && open && e.quoteStatus !== 'pending',
+      lost: sales && open && !inApproval(e.quoteStatus),
       followUp: sales && open,
     },
   };

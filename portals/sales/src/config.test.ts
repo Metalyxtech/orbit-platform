@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { approverFor, DEFAULT_CONFIG, DOCS, docLimit, fmtShort, quoteTotals, suggestedRate, unitCost } from './config';
+import { needsGm, DEFAULT_CONFIG, DOCS, docLimit, fmtShort, quoteTotals, suggestedRate, unitCost } from './config';
 
 describe('quoteTotals', () => {
   it('works out discount, GST, cost and margin', () => {
@@ -17,13 +17,14 @@ describe('quoteTotals', () => {
   });
 });
 
-describe('approverFor', () => {
-  const cfg = DEFAULT_CONFIG; // manager up to 10%, GM under 12% margin
-  it('needs nobody without a discount and a healthy margin', () => expect(approverFor(0, 30, true, cfg)).toBeNull());
-  it('sends small discounts to the sales manager', () => expect(approverFor(8, 30, true, cfg)).toBe('manager'));
-  it('sends big discounts to the GM', () => expect(approverFor(12, 30, true, cfg)).toBe('gm'));
-  it('sends low margins to the GM even without a discount', () => expect(approverFor(0, 5, true, cfg)).toBe('gm'));
-  it('ignores margin before costs are in', () => expect(approverFor(0, 0, false, cfg)).toBeNull());
+describe('needsGm', () => {
+  const always = DEFAULT_CONFIG; // GM gives final approval on every quotation
+  const limit = { ...DEFAULT_CONFIG, gmApproval: 'over_limit' as const }; // manager up to 10%, GM under 12% margin
+  it('always goes to the GM by default', () => expect(needsGm(0, 30, true, always)).toBe(true));
+  it('stops at the sales manager within limits', () => expect(needsGm(8, 30, true, limit)).toBe(false));
+  it('sends big discounts to the GM', () => expect(needsGm(12, 30, true, limit)).toBe(true));
+  it('sends low margins to the GM', () => expect(needsGm(0, 5, true, limit)).toBe(true));
+  it('ignores margin before costs are in', () => expect(needsGm(0, 0, false, limit)).toBe(false));
 });
 
 describe('project documents', () => {

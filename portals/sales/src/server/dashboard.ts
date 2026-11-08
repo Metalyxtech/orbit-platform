@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, inArray } from 'drizzle-orm';
 import type { SessionContext } from '@orbit/core';
 import { memberships, salesEnquiries, salesEvents, salesInvoices, salesOrders, users, type Tx } from '@orbit/db';
-import { OPEN_STAGES, STAGES, type Stage } from '../config';
+import { inApproval, OPEN_STAGES, STAGES, type Stage } from '../config';
 import { listEnquiries } from './enquiries';
 import { hasRole, loadConfig, myRole, peopleById, today } from './shared';
 
@@ -54,7 +54,7 @@ export async function dashboard(tx: Tx, ctx: SessionContext) {
       const list = open.filter((e) => e.stage === s.id);
       return { id: s.id as Stage, label: s.label, count: list.length, value: list.reduce((n, e) => n + e.net, 0) };
     }),
-    attention: open.filter((e) => e.late || e.quoteStatus === 'pending' || e.quoteStatus === 'rejected').slice(0, 8),
+    attention: open.filter((e) => e.late || inApproval(e.quoteStatus) || e.quoteStatus === 'rejected').slice(0, 8),
     recent: events.map((e) => ({ id: e.id, text: e.text, at: e.at.toISOString(), by: e.byId ? (people.get(e.byId) ?? '') : '', enquiryId: e.enquiryId, number: e.number })),
   };
 }

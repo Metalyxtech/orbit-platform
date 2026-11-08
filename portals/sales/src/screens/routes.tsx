@@ -2,7 +2,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { query } from '@orbit/core/next';
 import { Chip, EmptyState, KpiStrip, TopBar } from '@orbit/ui';
-import { fmtMoney, fmtShort, OPEN_STAGES, roleLabel, STAGES, stageLabel, type Stage } from '../config';
+import { fmtMoney, fmtShort, inApproval, OPEN_STAGES, roleLabel, STAGES, stageLabel, type Stage } from '../config';
 import { admin, customers, dashboard, enquiries, loadConfig, myRole, NOT_READY, notReady, orders, queue } from '../server';
 import { EnquiryView } from './EnquiryView';
 import { CustomersClient, InvoicesTable, OrdersTable, TargetsClient } from './ListClients';
@@ -162,7 +162,7 @@ const Pipeline: Screen = async () => {
                         <span>{r.net ? fmtShort(cur, r.net) : '-'}</span>
                         <span className="muted">{r.owner}</span>
                       </div>
-                      {(r.late || r.quoteStatus === 'pending') && <div style={{ marginTop: 4 }}>{r.late ? <Chip tone="bad">Follow-up late</Chip> : <Chip tone="hivis">Waiting approval</Chip>}</div>}
+                      {(r.late || inApproval(r.quoteStatus)) && <div style={{ marginTop: 4 }}>{r.late ? <Chip tone="bad">Follow-up late</Chip> : <Chip tone="hivis">{r.quoteStatus === 'pending_gm' ? 'With GM' : 'With sales manager'}</Chip>}</div>}
                     </Link>
                   ))}
                 </div>

@@ -1,8 +1,8 @@
 import { and, eq, inArray, isNull, lte, or } from 'drizzle-orm';
 import type { SessionContext } from '@orbit/core';
 import { salesCustomers, salesEnquiries, salesInvoices, salesLines, salesOrders, type Tx } from '@orbit/db';
-import { approverFor, fmtShort, OPEN_STAGES, quoteTotals } from '../config';
-import { hasRole, loadConfig, myRole, notReady, today } from './shared';
+import { DEFAULT_ADMIN_COVERS, fmtShort, OPEN_STAGES, quoteTotals, type SalesRole } from '../config';
+import { loadConfig, myRole, notReady, today } from './shared';
 
 // What is waiting for the signed-in person, by sales role (menu badge and notification pop-up).
 
@@ -18,6 +18,10 @@ const enquiryHref = (id: string) => `/sales/enquiry?id=${id}`;
 
 async function build(tx: Tx, ctx: SessionContext): Promise<QueueItem[]> {
   const me = await myRole(tx, ctx);
+  const cfg = await loadConfig(tx, ctx.companyId);
+  // A sales admin's task list follows the jobs the company admin chose for them (e.g. accounts).
+  const covers: SalesRole[] = me === 'admin' ? (cfg.adminCovers[ctx.membershipId] ?? DEFAULT_ADMIN_COVERS) : [me];
+  const acts = (...roles: SalesRole[]) => roles.some((r) => covers.includes(r));
   const t0 = today();
   const items: QueueItem[] = [];
   const enq = (where: Parameters<typeof and>[number]) =>
@@ -28,7 +32,7 @@ async function build(tx: Tx, ctx: SessionContext): Promise<QueueItem[]> {
       .where(and(eq(salesEnquiries.companyId, ctx.companyId), where))
       .limit(200);
 
-  if (me === 'exec' || me === 'manager') {
+  if (me === 'exec' || me === 'manager' || me === 'admin') {
     // My follow-ups due, quotations sent back or approved and ready to send.
     const mine = await enq(
       and(
@@ -43,29 +47,29 @@ async function build(tx: Tx, ctx: SessionContext): Promise<QueueItem[]> {
       else if (e.followUp) items.push({ id: `sf:${e.id}`, title: `Follow up ${e.number}`, detail: `${customer} · ${e.followUp < t0 ? 'overdue' : 'today'}`, href: enquiryHref(e.id), urgent: e.followUp < t0 });
     }
   }
-  if (hasRole(me, 'estimator') && me !== 'manager' && me !== 'gm') {
+  if (acts('estimator')) {
     for (const { e, customer } of await enq(and(eq(salesEnquiries.stage, 'costing'), isNull(salesEnquiries.pricingDoneAt)))) {
       items.push({ id: `sc:${e.id}`, title: `Cost ${e.number}`, detail: `${customer} · ${e.title}`, href: enquiryHref(e.id) });
     }
   }
-  if (hasRole(me, 'manager', 'gm')) {
-    const pending = await enq(eq(salesEnquiries.quoteStatus, 'pending'));
-    if (pending.length) {
-      const cfg = await loadConfig(tx, ctx.companyId);
-      const lines = await tx.select().from(salesLines).where(inArray(salesLines.enquiryId, pending.map((p) => p.e.id)));
-      for (const { e, customer } of pending) {
+  // Approval chain: the sales manager approves first, then the GM gives final approval.
+  if (acts('manager', 'gm')) {
+    const steps = [...(acts('manager') ? ['pending'] : []), ...(acts('gm') ? ['pending_gm'] : [])];
+    const waiting = await enq(inArray(salesEnquiries.quoteStatus, steps));
+    if (waiting.length) {
+      const lines = await tx.select().from(salesLines).where(inArray(salesLines.enquiryId, waiting.map((p) => p.e.id)));
+      for (const { e, customer } of waiting) {
         const t = quoteTotals(lines.filter((l) => l.enquiryId === e.id), e.discount, cfg.gst);
-        const who = approverFor(e.discount, t.margin, t.cost > 0, cfg);
-        const mineToApprove = who === 'gm' ? hasRole(me, 'gm') : me === 'manager' || me === 'admin';
-        if (mineToApprove) items.push({ id: `sp:${e.id}`, title: `Approve ${e.quoteNo}`, detail: `${customer} · ${e.discount}% discount · ${fmtShort(cfg.currency, t.net)}`, href: enquiryHref(e.id), urgent: true });
+        const gmStep = e.quoteStatus === 'pending_gm';
+        items.push({ id: `sp:${e.id}:${e.quoteStatus}`, title: `${gmStep ? 'Final approval' : 'Approve'} ${e.quoteNo}`, detail: `${customer} · ${e.discount}% discount · ${fmtShort(cfg.currency, t.net)}${gmStep ? ' · sales manager approved' : ''}`, href: enquiryHref(e.id), urgent: true });
       }
     }
-    if (me !== 'gm') {
+    if (acts('manager')) {
       const awaiting = await tx.select({ id: salesOrders.id, number: salesOrders.number, title: salesOrders.title }).from(salesOrders).where(and(eq(salesOrders.companyId, ctx.companyId), eq(salesOrders.status, 'awaiting')));
       for (const o of awaiting) items.push({ id: `so:${o.id}`, title: `Confirm ${o.number}`, detail: o.title, href: '/sales/orders' });
     }
   }
-  if (hasRole(me, 'accounts') && me !== 'manager' && me !== 'gm') {
+  if (acts('accounts')) {
     const toBill = await tx.select({ id: salesOrders.id, number: salesOrders.number, title: salesOrders.title }).from(salesOrders).where(and(eq(salesOrders.companyId, ctx.companyId), eq(salesOrders.status, 'dispatched')));
     for (const o of toBill) items.push({ id: `si:${o.id}`, title: `Invoice ${o.number}`, detail: `${o.title} · dispatched`, href: '/sales/orders' });
     const due = await tx.select({ id: salesInvoices.id, number: salesInvoices.number, amount: salesInvoices.amount, paid: salesInvoices.paid, due: salesInvoices.due }).from(salesInvoices).where(and(eq(salesInvoices.companyId, ctx.companyId), lte(salesInvoices.due, t0)));

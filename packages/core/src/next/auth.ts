@@ -17,7 +17,13 @@ export interface AuthIdentity {
 }
 
 /** Local-only shortcut: pick a seeded user without WorkOS. Never active outside APP_STAGE=local. */
-export const devAuthEnabled = () => process.env.APP_STAGE === 'local' && process.env.APP_AUTH_MODE === 'dev';
+export const devAuthEnabled = () =>
+  process.env.APP_STAGE === 'local' &&
+  process.env.APP_AUTH_MODE === 'dev' &&
+  // Belt and braces: a mis-set APP_STAGE on a hosted runtime must not open the dev sign-in.
+  !process.env.AWS_LAMBDA_FUNCTION_NAME &&
+  !process.env.AWS_EXECUTION_ENV &&
+  !process.env.VERCEL;
 
 let workos: Promise<WorkOS> | undefined;
 export function getWorkOS() {
@@ -47,6 +53,8 @@ export async function completeSignIn(code: string): Promise<AuthIdentity> {
     code,
     clientId: process.env.NEXT_PUBLIC_WORKOS_CLIENT_ID!,
   });
+  // Accounts are matched to invited users by email, so the address must be proven.
+  if (!res.user.emailVerified) throw new Error('Email address is not verified');
   const sid = JSON.parse(Buffer.from(res.accessToken.split('.')[1], 'base64url').toString()).sid as string | undefined;
   const identity: AuthIdentity = {
     workosUserId: res.user.id,

@@ -17,20 +17,21 @@ export const timesheetManifest: PortalManifest = {
   workflowKind: 'timesheet.submit',
   defaultWorkflowKey: 'timesheet.two_level_overtime',
   nav: [
-    { path: '', label: 'My week', section: 'main' },
-    { path: 'history', label: 'My history', section: 'main' },
+    { path: '', icon: 'calendar', label: 'My week', section: 'main' },
+    { path: 'history', icon: 'clock', label: 'My history', section: 'main' },
     {
       path: 'approvals',
+      icon: 'check',
       label: 'Approvals',
       section: 'main',
       roles: ['supervisor', 'project_manager', 'company_admin'],
       badge: 'approvals',
     },
-    { path: 'team', label: 'Team overview', section: 'main', roles: ['supervisor', 'project_manager', 'company_admin'] },
-    { path: 'reports', label: 'Reports', section: 'main', roles: ['project_manager', 'company_admin'] },
-    { path: 'admin/users', label: 'Users', section: 'admin', roles: ['company_admin'] },
-    { path: 'admin/projects', label: 'Projects and cost codes', section: 'admin', roles: ['company_admin'] },
-    { path: 'admin/settings', label: 'Timesheet settings', section: 'admin', roles: ['company_admin'] },
+    { path: 'team', icon: 'team', label: 'Team overview', section: 'main', roles: ['supervisor', 'project_manager', 'company_admin'] },
+    { path: 'reports', icon: 'chart', label: 'Reports', section: 'main', roles: ['project_manager', 'company_admin'] },
+    { path: 'admin/users', icon: 'user', label: 'Users', section: 'admin', roles: ['company_admin'] },
+    { path: 'admin/projects', icon: 'folder', label: 'Projects and cost codes', section: 'admin', roles: ['company_admin'] },
+    { path: 'admin/settings', icon: 'sliders', label: 'Timesheet settings', section: 'admin', roles: ['company_admin'] },
   ],
   settingsSchema: {
     groups: [

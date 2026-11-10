@@ -20,6 +20,8 @@ export interface PortalNavItem {
   section: 'main' | 'admin';
   roles?: MemberRole[]; // omitted = everyone
   badge?: 'approvals';
+  /** Icon name from @orbit/ui (calendar, clock, check, team, chart, user, folder, sliders). */
+  icon?: string;
 }
 
 export interface PortalManifest {

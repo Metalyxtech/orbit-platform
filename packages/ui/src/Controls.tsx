@@ -92,7 +92,7 @@ export function EmptyState({ title, children }: { title: string; children?: Reac
   return (
     <div className="o-empty">
       <div style={{ fontWeight: 600, color: 'var(--ink)' }}>{title}</div>
-      {children}
+      {children && <div>{children}</div>}
     </div>
   );
 }
@@ -124,7 +124,7 @@ export function ConfirmDialog({
   return (
     <dialog ref={ref} className="o-dialog" onCancel={onCancel}>
       <h2>{title}</h2>
-      <div style={{ marginBottom: 16 }}>{children}</div>
+      <div className="muted" style={{ marginBottom: 20 }}>{children}</div>
       <div className="o-row" style={{ justifyContent: 'flex-end' }}>
         <Button onClick={onCancel}>Cancel</Button>
         <Button variant={variant} onClick={onConfirm}>

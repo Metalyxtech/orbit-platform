@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { headers, cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
@@ -36,7 +36,13 @@ export const getSession = cache(async (): Promise<SessionState> => {
     [user] = await db
       .insert(users)
       .values({ workosUserId: identity.workosUserId, email: identity.email, name: identity.name })
-      .onConflictDoUpdate({ target: users.email, set: { workosUserId: identity.workosUserId } })
+      .onConflictDoUpdate({
+        target: users.email,
+        set: { workosUserId: identity.workosUserId },
+        // Link only rows that still hold a placeholder id (seed| / invite|). A row already bound to a
+        // real WorkOS user is never re-bound to a different one that merely shares the email.
+        setWhere: sql`${users.workosUserId} not like 'user\\_%'`,
+      })
       .returning();
   }
   if (!user) return { state: 'signed_out' };

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { query } from '@orbit/core/next';
-import { DataTable, EmptyState, HBarChart, KpiStrip, StatusChip, TopBar } from '@orbit/ui';
+import { Avatar, DataTable, EmptyState, HBarChart, KpiStrip, StatusChip, TopBar } from '@orbit/ui';
 import { admin, approvals, reports, week } from '../server';
 import { ApprovalsClient } from './ApprovalsClient';
 import { HistoryClient } from './HistoryClient';
@@ -41,15 +41,24 @@ const Team: Screen = async ({ searchParams }) => {
       <div className="o-page">
         <div>
           <h1>Team overview, week {data.week}</h1>
-          <p className="muted" style={{ fontSize: 12, margin: '4px 0 0' }}>Where each person's timesheet is for last week.</p>
+          <p className="o-page-sub">Where each person's timesheet is for last week.</p>
         </div>
-        <div className="o-panel flush">
+        <div className="o-panel flush o-scroll">
           <DataTable
             rows={data.rows}
             rowKey={(r) => r.membershipId}
             empty={<EmptyState title="Nobody reports to you yet." />}
             columns={[
-              { key: 'n', header: 'Name', render: (r) => r.name },
+              {
+                key: 'n',
+                header: 'Name',
+                render: (r) => (
+                  <div className="o-row" style={{ gap: 10 }}>
+                    <Avatar name={r.name} size="sm" />
+                    {r.name}
+                  </div>
+                ),
+              },
               { key: 't', header: 'Title', render: (r) => <span className="muted">{r.title}</span> },
               { key: 'h', header: 'Total', num: true, render: (r) => r.total.toFixed(1) },
               { key: 'o', header: 'Overtime', num: true, render: (r) => (r.overtime ? <span className="hivis">{r.overtime.toFixed(1)}</span> : '0.0') },
@@ -81,7 +90,7 @@ const Reports: Screen = async ({ searchParams }) => {
       <div className="o-page">
         <div>
           <h1>Labour hours, {monthLabel}</h1>
-          <p className="muted" style={{ fontSize: 12, margin: '4px 0 0' }}>
+          <p className="o-page-sub">
             Approved hours for projects you manage. Figures update when a timesheet is approved.
           </p>
         </div>
@@ -116,7 +125,7 @@ const Reports: Screen = async ({ searchParams }) => {
           </div>
           <div className="o-stack">
             <div className="o-panel flush">
-              <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
+              <div className="o-panel-head">
                 <h2>Waiting by approver</h2>
               </div>
               <DataTable
@@ -130,7 +139,7 @@ const Reports: Screen = async ({ searchParams }) => {
                     render: (r) => (
                       <div>
                         {r.name}
-                        <div className="faint" style={{ fontSize: 11 }}>{r.title}</div>
+                        <div className="sub">{r.title}</div>
                       </div>
                     ),
                   },
@@ -140,7 +149,7 @@ const Reports: Screen = async ({ searchParams }) => {
               />
             </div>
             <div className="o-panel flush">
-              <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
+              <div className="o-panel-head">
                 <h2>Highest overtime this month</h2>
               </div>
               <DataTable

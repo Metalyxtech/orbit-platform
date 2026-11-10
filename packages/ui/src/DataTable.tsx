@@ -43,9 +43,8 @@ export function DataTable<T>({
           rows.map((r) => (
             <tr
               key={rowKey(r)}
-              className={selectedKey === rowKey(r) ? 'selected' : undefined}
+              className={[selectedKey === rowKey(r) ? 'selected' : '', onRowClick ? 'clickable' : ''].join(' ').trim() || undefined}
               onClick={onRowClick ? () => onRowClick(r) : undefined}
-              style={onRowClick ? { cursor: 'pointer' } : undefined}
             >
               {columns.map((c) => (
                 <td key={c.key} className={c.num ? 'num' : undefined}>

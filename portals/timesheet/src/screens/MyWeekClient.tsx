@@ -9,6 +9,7 @@ import {
   Button,
   ConfirmDialog,
   DayBarChart,
+  Icon,
   PhoneDayTabs,
   StatusChip,
   Stepper,
@@ -294,18 +295,24 @@ export function MyWeekClient({ view, draftKey }: { view: WeekView; draftKey: str
   return (
     <>
       <TopBar crumbs={['Timesheet', 'My week']}>
-        <span className={`o-saved ${saveState === 'offline' || saveState === 'error' ? 'off' : ''}`} aria-live="polite">
+        <span
+          className={`o-saved ${saveState === 'offline' || saveState === 'error' ? 'off' : ''} ${saveState === 'saving' ? 'busy' : ''}`}
+          aria-live="polite"
+        >
           {savedText[saveState]}
         </span>
-        <Link className="o-btn small" href={`?week=${addDays(view.weekStart, -7)}`}>
-          Previous
-        </Link>
-        <span className="o-btn small" style={{ cursor: 'default' }}>
-          <strong>{weekLabel}</strong> <span className="muted">{view.rangeLabel}</span>
-        </span>
-        <Link className="o-btn small" href={`?week=${addDays(view.weekStart, 7)}`}>
-          Next
-        </Link>
+        <div className="o-pager">
+          <Link href={`?week=${addDays(view.weekStart, -7)}`} aria-label="Previous week" title="Previous week">
+            <Icon name="left" />
+          </Link>
+          <span>
+            <b>{weekLabel}</b>
+            <span className="muted">{view.rangeLabel}</span>
+          </span>
+          <Link href={`?week=${addDays(view.weekStart, 7)}`} aria-label="Next week" title="Next week">
+            <Icon name="right" />
+          </Link>
+        </div>
       </TopBar>
 
       <div className="o-page">
@@ -335,8 +342,14 @@ export function MyWeekClient({ view, draftKey }: { view: WeekView; draftKey: str
               </div>
               {!readOnly && (
                 <div className="o-row">
-                  <Button onClick={copyLastWeek}>Copy last week</Button>
-                  <Button onClick={addRow}>Add row</Button>
+                  <Button onClick={copyLastWeek}>
+                    <Icon name="copy" />
+                    Copy last week
+                  </Button>
+                  <Button onClick={addRow}>
+                    <Icon name="plus" />
+                    Add row
+                  </Button>
                 </div>
               )}
             </div>
@@ -368,7 +381,7 @@ export function MyWeekClient({ view, draftKey }: { view: WeekView; draftKey: str
                 Over {view.rules.stdDayHours} h standard day
               </span>
               <span>
-                <i style={{ background: '#fafbfa' }} />
+                <i style={{ background: 'var(--wash)' }} />
                 Weekly off ({view.days.filter((d) => d.weeklyOff).map((d) => d.name).join(', ') || 'none'})
               </span>
               <span>Use the arrow keys to move, type to enter hours</span>
@@ -398,7 +411,8 @@ export function MyWeekClient({ view, draftKey }: { view: WeekView; draftKey: str
                   </div>
                 ))}
                 {!readOnly && (
-                  <button type="button" className="o-btn block" style={{ borderStyle: 'dashed' }} onClick={addRow}>
+                  <button type="button" className="o-btn block dashed" onClick={addRow}>
+                    <Icon name="plus" />
                     Add project or cost code
                   </button>
                 )}

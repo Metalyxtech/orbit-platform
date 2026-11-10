@@ -53,7 +53,7 @@ export function HistoryClient({ rows, timezone }: { rows: HistoryRow[]; timezone
             <p>Every week you have opened, with where it is now. Approved weeks are locked; ask for a correction if something is wrong.</p>
           </div>
         </div>
-        <div className="o-panel flush" style={{ overflowX: 'auto' }}>
+        <div className="o-panel flush o-scroll">
           <DataTable
             rows={rows}
             rowKey={(r) => r.id}
@@ -86,21 +86,19 @@ export function HistoryClient({ rows, timezone }: { rows: HistoryRow[]; timezone
           />
         </div>
 
-        <div className="o-cols" style={{ gridTemplateColumns: '1fr 1fr' }}>
-          {returned ? (
+        <div className="o-cols" style={returned ? { gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' } : { gridTemplateColumns: 'minmax(0, 560px)' }}>
+          {returned && (
             <div className="o-panel">
               <h2>Week {returned.weekNumber} was returned to you</h2>
               <div className="o-banner">{returned.whereItIs}</div>
-              <p className="muted" style={{ fontSize: 12 }}>
+              <p className="muted" style={{ fontSize: 13, margin: '12px 0 0' }}>
                 Open the week, fix the row, and submit again. The approval starts again from step 1.
               </p>
             </div>
-          ) : (
-            <div />
           )}
           <div className="o-panel">
             <h2>Request a correction for a locked week</h2>
-            <p className="muted" style={{ fontSize: 12, marginTop: -6 }}>
+            <p className="muted" style={{ fontSize: 13, marginTop: -6 }}>
               Choose the week and say what is wrong. Your company admin reopens it as a new revision. The approved version stays on record.
             </p>
             {locked.length === 0 ? (
@@ -124,7 +122,7 @@ export function HistoryClient({ rows, timezone }: { rows: HistoryRow[]; timezone
             )}
           </div>
         </div>
-        <p className="faint" style={{ fontSize: 11 }}>Times shown in {timezone}.</p>
+        <p className="faint" style={{ fontSize: 12, margin: 0 }}>Times shown in {timezone}.</p>
       </div>
     </>
   );

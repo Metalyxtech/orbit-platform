@@ -1,4 +1,5 @@
 export * from './AppShell';
+export * from './Icon';
 export * from './StatusChip';
 export * from './KpiStrip';
 export * from './Charts';

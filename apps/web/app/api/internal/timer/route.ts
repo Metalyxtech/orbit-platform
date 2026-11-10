@@ -20,7 +20,13 @@ export async function POST(req: NextRequest) {
   if (!verifySignature(secret, body, req.headers.get('x-orbit-signature'))) {
     return NextResponse.json({ error: 'bad signature' }, { status: 401 });
   }
-  const parsed = payloadSchema.safeParse(JSON.parse(body));
+  let json: unknown;
+  try {
+    json = JSON.parse(body);
+  } catch {
+    return NextResponse.json({ error: 'bad payload' }, { status: 400 });
+  }
+  const parsed = payloadSchema.safeParse(json);
   if (!parsed.success) return NextResponse.json({ error: 'bad payload' }, { status: 400 });
   const requestId = req.headers.get('x-request-id') ?? crypto.randomUUID();
   try {

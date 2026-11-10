@@ -11,13 +11,13 @@ export default async function Register() {
   if (s.state !== 'no_company') redirect('/');
   return (
     <AuthCard title="Register your company">
-      <p className="muted" style={{ fontSize: 13 }}>
+      <p className="muted" style={{ marginBottom: 20 }}>
         Signed in as {s.email}. If your company already uses Orbit, ask your company admin to invite you instead.
       </p>
-      <form action={registerCompanyAction} className="o-stack" style={{ gap: 12 }}>
+      <form action={registerCompanyAction} className="o-stack" style={{ gap: 14 }}>
         <label className="o-field">
           Company name
-          <input className="o-input" name="name" required minLength={2} maxLength={120} />
+          <input className="o-input" name="name" autoComplete="organization" required minLength={2} maxLength={120} />
         </label>
         <label className="o-field">
           Your job title
@@ -34,6 +34,9 @@ export default async function Register() {
         <button className="o-btn primary block" type="submit">
           Register company
         </button>
+        <span className="faint" style={{ fontSize: 12 }}>
+          Orbit reviews new companies before they go live. You will get an email when yours is approved.
+        </span>
       </form>
     </AuthCard>
   );

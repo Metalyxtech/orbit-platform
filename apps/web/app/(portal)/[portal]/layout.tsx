@@ -37,6 +37,7 @@ export default async function PortalLayout({ children, params }: { children: Rea
       href: `/${portal}${n.path ? `/${n.path}` : ''}`,
       label: n.label,
       section: n.section,
+      icon: n.icon,
       badge: n.badge === 'approvals' ? waiting : undefined,
     }));
 
@@ -44,19 +45,15 @@ export default async function PortalLayout({ children, params }: { children: Rea
     <AppShell
       brand={BRAND}
       companyName={ctx.companyName}
+      companyStage={ctx.companyStage}
       portalName={mod.manifest.name}
       portals={enabled.filter((p) => portalModules[p]).map((p) => ({ id: p, name: portalModules[p].manifest.name }))}
       companies={companies}
       onSwitchCompany={switchCompanyAction}
       nav={nav}
       user={{ name: ctx.name, title: ctx.title }}
-      signOutHref="/auth/sign-out"
+      signOutAction="/auth/sign-out"
     >
-      {ctx.companyStage === 'sandbox' && (
-        <div className="o-banner info" style={{ borderRadius: 0 }}>
-          Sandbox company: emails only go to verified test addresses.
-        </div>
-      )}
       {children}
     </AppShell>
   );

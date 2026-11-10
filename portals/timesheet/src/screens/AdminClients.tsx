@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import type { SettingsField } from '@orbit/core/portals';
-import { Button, DataTable, Field, Segmented, Select, StatusChip, Toggle, TopBar, useToast } from '@orbit/ui';
+import { Avatar, Button, DataTable, Field, Icon, Segmented, Select, StatusChip, Toggle, TopBar, useToast } from '@orbit/ui';
 import {
   decideCorrectionAction,
   exportAction,
@@ -100,14 +100,14 @@ export function SettingsClient({
       <div className="o-page">
         <div>
           <h1>Timesheet settings</h1>
-          <p className="muted" style={{ fontSize: 12, margin: '4px 0 0' }}>
+          <p className="o-page-sub">
             These rules apply to everyone in {companyName}. Changes apply from the next week that starts. Time zone: {timezone}.
           </p>
         </div>
         <div className="o-cols-wide">
           <div className="o-panel o-stack">
             {timesheetManifest.settingsSchema.groups.map((g) => (
-              <section key={g.title} className="o-stack" style={{ gap: 10 }}>
+              <section key={g.title} className="o-stack o-section" style={{ gap: 12 }}>
                 <h2 style={{ margin: 0 }}>{g.title}</h2>
                 <div className="o-grid2">
                   {g.fields
@@ -140,7 +140,7 @@ export function SettingsClient({
               </p>
             </div>
             <div className="o-panel flush">
-              <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
+              <div className="o-panel-head">
                 <h2>Projects and cost codes</h2>
                 <Link className="o-btn small" href="/timesheet/admin/projects">
                   Import CSV
@@ -204,7 +204,7 @@ export function ProjectsClient({ projects }: { projects: { id: string; code: str
                 { key: 'n', header: 'Project', render: (p) => p.name },
                 { key: 'm', header: 'Project manager', render: (p) => p.pm },
                 { key: 'k', header: 'Cost codes', num: true, render: (p) => p.costCodes },
-                { key: 's', header: 'Status', render: (p) => <span className={`o-chip ${p.status === 'active' ? 'ok' : ''}`}>{p.status}</span> },
+                { key: 's', header: 'Status', render: (p) => <StatusChip status={p.status} /> },
               ]}
             />
           </div>
@@ -214,7 +214,9 @@ export function ProjectsClient({ projects }: { projects: { id: string; code: str
               Columns: project_code, project_name, pm_email, cost_code, cost_code_name. Existing projects and cost codes are updated.
             </p>
             <input
+              className="o-file"
               type="file"
+              aria-label="CSV file"
               accept=".csv,text/csv"
               onChange={async (e) => {
                 const f = e.target.files?.[0];
@@ -303,7 +305,7 @@ export function UsersClient({ users, corrections }: { users: UserRow[]; correcti
         <h1>Users</h1>
         {corrections.length > 0 && (
           <div className="o-panel flush">
-            <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
+            <div className="o-panel-head">
               <h2>Correction requests</h2>
             </div>
             <DataTable
@@ -331,7 +333,7 @@ export function UsersClient({ users, corrections }: { users: UserRow[]; correcti
             />
           </div>
         )}
-        <div className="o-panel flush" style={{ overflowX: 'auto' }}>
+        <div className="o-panel flush o-scroll">
           <DataTable
             rows={users}
             rowKey={(u) => u.membershipId}
@@ -340,9 +342,12 @@ export function UsersClient({ users, corrections }: { users: UserRow[]; correcti
                 key: 'n',
                 header: 'Name',
                 render: (u) => (
-                  <div>
-                    <div>{u.name}</div>
-                    <div className="faint" style={{ fontSize: 11 }}>{u.email}</div>
+                  <div className="o-row" style={{ gap: 10 }}>
+                    <Avatar name={u.name} size="sm" />
+                    <div>
+                      <div>{u.name}</div>
+                      <div className="sub">{u.email}</div>
+                    </div>
                   </div>
                 ),
               },
@@ -352,6 +357,7 @@ export function UsersClient({ users, corrections }: { users: UserRow[]; correcti
                 render: (u) => (
                   <input
                     className="o-input"
+                    aria-label={`Title for ${u.name}`}
                     defaultValue={u.title ?? ''}
                     onBlur={(e) => e.target.value !== (u.title ?? '') && update({ membershipId: u.membershipId, title: e.target.value || null })}
                   />
@@ -360,6 +366,7 @@ export function UsersClient({ users, corrections }: { users: UserRow[]; correcti
               {
                 key: 'r',
                 header: 'Role',
+                width: 190,
                 render: (u) => (
                   <Select
                     value={u.role as (typeof ROLES)[number]['value']}
@@ -374,6 +381,7 @@ export function UsersClient({ users, corrections }: { users: UserRow[]; correcti
                 render: (u) => (
                   <select
                     className="o-select"
+                    aria-label={`Supervisor for ${u.name}`}
                     value={u.supervisorId ?? ''}
                     onChange={(e) => update({ membershipId: u.membershipId, supervisorId: e.target.value || null })}
                   >

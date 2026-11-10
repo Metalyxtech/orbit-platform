@@ -15,7 +15,7 @@ export function DayBarChart({ days, standard }: { days: { label: string; hours: 
           );
         })}
       </div>
-      <div className="o-bars" style={{ height: 'auto', paddingTop: 0 }}>
+      <div className="o-bars labels">
         {days.map((d) => (
           <div className="o-bar-l" key={d.label}>
             {d.label}

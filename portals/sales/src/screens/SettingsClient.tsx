@@ -1,6 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { Chip, SaveBar } from '@orbit/ui';
+import { Chip, RoleCoverage, SaveBar } from '@orbit/ui';
 import { roleLabel, SALES_ROLES, type SalesConfig, type SalesRole } from '../config';
 import { saveSalesAdminAction } from '../actions';
 import type { SalesPerson } from '../server';
@@ -39,6 +39,11 @@ export function SettingsClient({ cfg, team }: { cfg: SalesConfig; team: SalesPer
   const teamChanges = team.filter((p) => t[p.membershipId].role !== p.salesRole || t[p.membershipId].access !== p.access || !sameSet(t[p.membershipId].covers, p.covers));
   const dirty = settingsChanged.length > 0 || teamChanges.length > 0;
   const changedRow = (id: string) => teamChanges.some((p) => p.membershipId === id);
+  // Coverage counts the draft: role holders with Sales access, plus admins who also work as the role.
+  const workRoles = SALES_ROLES.filter((r) => r.id !== 'admin');
+  const counts = Object.fromEntries(
+    workRoles.map((r) => [r.id, team.filter((p) => (p.companyRole === 'company_admin' ? t[p.membershipId].covers.includes(r.id) : t[p.membershipId].access === 'on' && t[p.membershipId].role === r.id)).length]),
+  );
 
   const setRole = (p: SalesPerson, role: SalesRole) =>
     // A sales role means the person works in Sales: open the portal for them in the same draft.
@@ -100,6 +105,7 @@ export function SettingsClient({ cfg, team }: { cfg: SalesConfig; team: SalesPer
           <textarea className="o-textarea" rows={4} value={f.terms} maxLength={2000} onChange={(e) => setF({ ...f, terms: e.target.value })} />
         </label>
       </div>
+      <RoleCoverage roles={workRoles} counts={counts} note="Every sales role needs at least one person with Sales access, or a company admin who also works as it." />
       <div className="o-panel flush">
         <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
           <h2>Sales team</h2>

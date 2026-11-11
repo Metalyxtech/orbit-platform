@@ -9,3 +9,5 @@ export type { InboxRow } from './approvals';
 export type { CsvPreviewRow } from './admin';
 export * as executive from './executive';
 export * as forms from './forms';
+export * as covers from './covers';
+export type { AdminCoverView } from './covers';

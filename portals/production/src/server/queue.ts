@@ -2,6 +2,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import type { SessionContext } from '@orbit/core';
 import { prodMaterials, prodOperations, prodWorkOrders, type Tx } from '@orbit/db';
 import { OPEN_STATUSES, type ProdRole } from '../config';
+import { productionTeam } from './admin';
 import { myRole, notReady, today } from './shared';
 
 // What is waiting for the signed-in person, by production role (menu badge and notifications).
@@ -18,7 +19,9 @@ const woHref = (id: string) => `/production/order?id=${id}`;
 
 async function build(tx: Tx, ctx: SessionContext): Promise<QueueItem[]> {
   const me = await myRole(tx, ctx);
-  const acts = (...r: ProdRole[]) => me === 'admin' || r.includes(me);
+  // A production admin gets only the tasks of the roles they cover (Production settings).
+  const covers: ProdRole[] = me === 'admin' ? ((await productionTeam(tx, ctx)).find((p) => p.membershipId === ctx.membershipId)?.covers ?? []) : [me];
+  const acts = (...r: ProdRole[]) => r.some((x) => covers.includes(x));
   const items: QueueItem[] = [];
   const wos = await tx.select().from(prodWorkOrders).where(and(eq(prodWorkOrders.companyId, ctx.companyId), inArray(prodWorkOrders.status, [...OPEN_STATUSES, 'completed'])));
   if (!wos.length) return items;

@@ -1,7 +1,9 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import type { SessionContext } from '@orbit/core';
 import { qcInspections, type Tx } from '@orbit/db';
-import { hasRole, myRole, notReady } from './shared';
+import type { QcRole } from '../config';
+import { qualityTeam } from './admin';
+import { myRole, notReady } from './shared';
 
 export interface QueueItem {
   id: string;
@@ -13,7 +15,9 @@ export interface QueueItem {
 
 async function build(tx: Tx, ctx: SessionContext): Promise<QueueItem[]> {
   const me = await myRole(tx, ctx);
-  const steps = [...(hasRole(me, 'inspector') ? ['pending'] : []), ...(hasRole(me, 'manager') ? ['submitted'] : [])];
+  // A quality admin gets only the inspections of the roles they cover (Quality settings).
+  const covers: QcRole[] = me === 'admin' ? ((await qualityTeam(tx, ctx)).find((p) => p.membershipId === ctx.membershipId)?.covers ?? []) : [me];
+  const steps = [...(covers.includes('inspector') ? ['pending'] : []), ...(covers.includes('manager') ? ['submitted'] : [])];
   if (!steps.length) return [];
   const rows = await tx.select().from(qcInspections).where(and(eq(qcInspections.companyId, ctx.companyId), inArray(qcInspections.status, steps)));
   return rows

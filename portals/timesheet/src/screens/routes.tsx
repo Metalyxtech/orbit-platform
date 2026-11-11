@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { query } from '@orbit/core/next';
 import { DataTable, EmptyState, HBarChart, KpiStrip, StatusChip, TopBar } from '@orbit/ui';
-import { admin, approvals, forms, reports, week } from '../server';
+import { admin, approvals, covers, forms, reports, week } from '../server';
 import { ApprovalsClient } from './ApprovalsClient';
 import { HistoryClient } from './HistoryClient';
 import { FormsClient } from './FormsClient';
@@ -409,8 +409,9 @@ const Users: Screen = async () => {
     users: await admin.listUsers(tx, ctx),
     corrections: await admin.listCorrections(tx, ctx),
     portals: await admin.portalAccess(tx, ctx),
+    covers: await covers.adminCovers(tx, ctx),
   }));
-  return <UsersClient users={data.users} corrections={data.corrections} portals={data.portals} />;
+  return <UsersClient users={data.users} corrections={data.corrections} portals={data.portals} covers={data.covers} />;
 };
 
 const Projects: Screen = async () => {

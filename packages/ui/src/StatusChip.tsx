@@ -19,7 +19,7 @@ export function StatusChip({ status, revision }: { status: string; revision?: nu
   const s = STATUS[status] ?? { label: status, tone: 'grey' as const };
   return (
     <span className="o-row" style={{ gap: 4, display: 'inline-flex' }}>
-      <span className={`o-chip ${s.tone === 'grey' ? '' : s.tone}`}>{s.label}</span>
+      <span className={`o-chip dot ${s.tone === 'grey' ? '' : s.tone}`}>{s.label}</span>
       {revision ? <span className="o-chip">Revision {revision}</span> : null}
     </span>
   );

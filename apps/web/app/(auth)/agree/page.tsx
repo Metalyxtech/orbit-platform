@@ -59,9 +59,9 @@ export default async function Agree({ searchParams }: { searchParams: Promise<{ 
             Your name, the date and time, and the versions you sign are recorded{admin ? ' for your company and for Orbit' : ''}.
           </p>
           <div className="o-row" style={{ gap: 8, justifyContent: 'space-between' }}>
-            <a className="o-btn" href="/auth/sign-out">
+            <button className="o-btn" type="submit" formAction="/auth/sign-out" formMethod="post" formNoValidate>
               Sign out
-            </a>
+            </button>
             <button className="o-btn primary" type="submit">
               Agree and sign
             </button>

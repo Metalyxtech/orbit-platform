@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { getSession, query } from '@orbit/core/next';
 import { approvals } from '@orbit/portal-timesheet/server';
-import { NotificationCenter, SideMenu } from '@orbit/ui';
+import { NotificationCenter, SideFoot, SideMenu } from '@orbit/ui';
 import { BillingBanner } from '@/billing/BillingBanner';
 import { unreadCount } from '@/messages';
 import { accessiblePortals } from '@/portal-access';
@@ -47,25 +47,9 @@ export default async function ManageLayout({ children }: { children: ReactNode }
           <NotificationCenter />
         </div>
         <SideMenu sections={manageNavSections(ctx, ws, d.portals, d)} />
-        <div className="o-side-foot">
-          <strong>{ctx.name}</strong>
-          {ctx.title ?? (ctx.role === 'management' ? 'Management' : 'Company admin')}
+        <SideFoot name={ctx.name} title={ctx.title ?? (ctx.role === 'management' ? 'Management' : 'Company admin')}>
           <CompanySwitcher companies={s.companies} current={ctx.companyId} />
-          <div>
-            <a href="/auth/sign-out" style={{ color: '#9aa3ab', fontSize: 12 }}>
-              Sign out
-            </a>
-          </div>
-          <div style={{ fontSize: 11, marginTop: 6 }}>
-            <a href="/legal/terms" target="_blank" rel="noreferrer" style={{ color: '#9aa3ab' }}>
-              Terms
-            </a>
-            <span style={{ color: '#5d666e' }}> · </span>
-            <a href="/legal/privacy" target="_blank" rel="noreferrer" style={{ color: '#9aa3ab' }}>
-              Privacy
-            </a>
-          </div>
-        </div>
+        </SideFoot>
       </aside>
       <div className="o-main">
         <BillingBanner role={ctx.role} />

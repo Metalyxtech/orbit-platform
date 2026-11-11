@@ -1,5 +1,6 @@
 import { eq, inArray } from 'drizzle-orm';
 import { audit, portalRoleFor, readPortalRoles, type ActionContext, type SessionContext } from '@orbit/core';
+import { assertNotHeld } from '@orbit/core/holds';
 import { memberships, qcEvents, qcInspections, qcSettings, users, type Tx } from '@orbit/db';
 import type { QcConfig, QcRole } from '../config';
 import { qualityManifest } from '../manifest';
@@ -35,6 +36,7 @@ export async function logEvent(tx: Tx, ctx: ActionContext, inspectionId: string,
 export async function lockInspection(tx: Tx, ctx: SessionContext, id: string) {
   const [r] = await tx.select().from(qcInspections).where(eq(qcInspections.id, id)).for('update');
   if (!r || r.companyId !== ctx.companyId) throw new Error('Inspection not found');
+  await assertNotHeld(tx, ctx.companyId, 'qc_inspection', r.id, r.number);
   return r;
 }
 

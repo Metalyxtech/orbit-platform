@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
+import { processThread } from '@orbit/core/holds';
 import type { ActionContext, SessionContext } from '@orbit/core';
 import { salesCustomers, salesEnquiries, salesEvents, salesLines, salesOrders, type Tx } from '@orbit/db';
 import { inApproval, needsGm, fmtMoney, LOST_REASONS, OPEN_STAGES, quoteTotals, SOURCES, stageLabel, suggestedRate, unitCost, type QuoteStatus, type Stage } from '../config';
@@ -455,7 +456,9 @@ export async function enquiryDetail(tx: Tx, ctx: SessionContext, id: string) {
   const sales = hasRole(me, 'exec', 'manager') && mineOrManager;
   const open = OPEN_STAGES.includes(e.stage as Stage);
   const projectOpen = !e.pricingDoneAt && ['enquiry', 'costing'].includes(e.stage);
+  const control = await processThread(tx, ctx, 'sales_enquiry', id);
   return {
+    control,
     me,
     cfg,
     // Markup reveals cost: only for those who see costs. The costing basis (notes) is for everyone.
@@ -494,3 +497,9 @@ export async function enquiryDetail(tx: Tx, ctx: SessionContext, id: string) {
   };
 }
 export type EnquiryDetail = NonNullable<Awaited<ReturnType<typeof enquiryDetail>>>;
+
+/** Names an enquiry for GM process control. */
+export async function describeEnquiry(tx: Tx, companyId: string, id: string) {
+  const [r] = await tx.select({ number: salesEnquiries.number, title: salesEnquiries.title }).from(salesEnquiries).where(and(eq(salesEnquiries.id, id), eq(salesEnquiries.companyId, companyId)));
+  return r ? { ref: r.number, title: r.title, href: `/sales/enquiry?id=${id}` } : null;
+}

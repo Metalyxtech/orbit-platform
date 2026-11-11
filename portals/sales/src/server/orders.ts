@@ -1,5 +1,6 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { assertNotHeld } from '@orbit/core/holds';
 import { audit, type ActionContext, type SessionContext } from '@orbit/core';
 import { salesCustomers, salesInvoices, salesOrders, salesPayments, type Tx } from '@orbit/db';
 import { fmtMoney, orderLabel, type OrderStatus } from '../config';
@@ -10,6 +11,8 @@ import { addDays, hasRole, loadConfig, myRole, nextNumber, peopleById, requireRo
 async function lockOrder(tx: Tx, ctx: SessionContext, id: string) {
   const [o] = await tx.select().from(salesOrders).where(eq(salesOrders.id, z.uuid().parse(id))).for('update');
   if (!o || o.companyId !== ctx.companyId) throw new Error('Order not found');
+  // An order belongs to its enquiry: stopping the enquiry stops its order and invoicing too.
+  if (o.enquiryId) await assertNotHeld(tx, ctx.companyId, 'sales_enquiry', o.enquiryId, o.number);
   return o;
 }
 const note = (tx: Tx, ctx: ActionContext, id: string, action: string, line: string) =>

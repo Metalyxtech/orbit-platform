@@ -10,3 +10,4 @@ export * from './custom';
 export * from './sales';
 export * from './production';
 export * from './quality';
+export * from './control';

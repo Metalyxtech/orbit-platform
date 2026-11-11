@@ -1,5 +1,6 @@
 import { eq, inArray, sql } from 'drizzle-orm';
 import { audit, portalRoleFor, readPortalRoles, type ActionContext, type SessionContext } from '@orbit/core';
+import { assertNotHeld } from '@orbit/core/holds';
 import { memberships, prodEvents, prodSettings, prodWorkOrders, users, type Tx } from '@orbit/db';
 import { DEFAULT_CONFIG, type ProdConfig, type ProdRole } from '../config';
 import { productionManifest } from '../manifest';
@@ -61,10 +62,11 @@ export async function logEvent(tx: Tx, ctx: ActionContext, workOrderId: string, 
   if (action) await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action, entity: 'prod_work_orders', entityId: workOrderId, data: { summary: [text] }, requestId: ctx.requestId });
 }
 
-/** Locks the work order row for a change and checks it belongs to this company. */
+/** Locks the work order row for a change and checks it belongs to this company and is not on hold by the GM. */
 export async function lockWo(tx: Tx, ctx: SessionContext, id: string) {
   const [r] = await tx.select().from(prodWorkOrders).where(eq(prodWorkOrders.id, id)).for('update');
   if (!r || r.companyId !== ctx.companyId) throw new Error('Work order not found');
+  await assertNotHeld(tx, ctx.companyId, 'work_order', r.id, r.number);
   return r;
 }
 

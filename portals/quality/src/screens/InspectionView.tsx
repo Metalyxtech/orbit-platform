@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
-import { Button, Chip, TopBar } from '@orbit/ui';
+import { addProcessCommentAction, setHoldAction } from '@orbit/core/holds-actions';
+import { Button, Chip, HoldBanner, ProcessControl, TopBar } from '@orbit/ui';
 import { fmtDateTime, SOURCE_PORTAL, SOURCES, type Finding } from '../config';
 import { decideAction, submitReportAction } from '../actions';
 import type { QcDetail } from '../server';
@@ -51,6 +52,7 @@ export function InspectionView({ d }: { d: QcDetail }) {
           </div>
         )}
 
+        <HoldBanner thread={d.control} />
         <div className="o-cols-wide">
           <div className="o-stack">
             <div className="o-panel">
@@ -119,6 +121,7 @@ export function InspectionView({ d }: { d: QcDetail }) {
           </div>
           <div className="o-stack">
             {d.can.approve ? <ApprovePanel d={d} /> : <NextStep d={d} />}
+            <ProcessControl thread={d.control} setHold={setHoldAction} comment={addProcessCommentAction} />
             {d.rounds.length > 1 && (
               <div className="o-panel">
                 <h2>Inspection rounds</h2>

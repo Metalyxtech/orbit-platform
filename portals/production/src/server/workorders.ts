@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { ActionContext, SessionContext } from '@orbit/core';
 import { latestInspection } from '@orbit/core/quality';
+import { processThread } from '@orbit/core/holds';
 import { prodEvents, prodMaterials, prodOperations, prodReports, prodWorkOrders, salesCustomers, salesOrders, type Tx } from '@orbit/db';
 import { OPEN_STATUSES, WO_STATUS, type OpStatus, type ProdRole, type WoStatus } from '../config';
 import { TRADES, tradeOf } from '../trades';
@@ -192,6 +193,8 @@ export async function workOrderDetail(tx: Tx, ctx: SessionContext, id: string) {
     wo: { ...wo, status, createdByName: name(wo.createdBy), releasedByName: name(wo.releasedBy), salesOrder, late: !!wo.due && wo.due < today() && OPEN_STATUSES.includes(status) },
     ops: ops.map((o) => ({ ...o, status: o.status as OpStatus })),
     materials: mats,
+    /** GM hold and comments. */
+    control: await processThread(tx, ctx, 'work_order', wo.id),
     /** Material requests on this work order (empty before migration 0027). */
     mrs: await tx.transaction((sp) => listMrs(sp, ctx, { workOrderId: wo.id })).catch((): MrRow[] => []),
     reports: reports.map((r) => ({ ...r, operation: opName.get(r.operationId) ?? '', by: name(r.byId), createdAt: r.createdAt.toISOString() })),
@@ -257,3 +260,9 @@ export async function countByStatus(tx: Tx, ctx: SessionContext) {
 }
 
 export const rolesThatPlan: ProdRole[] = ['engineer', 'manager', 'admin'];
+
+/** Names a work order for GM process control. */
+export async function describeWo(tx: Tx, companyId: string, id: string) {
+  const [w] = await tx.select({ number: prodWorkOrders.number, title: prodWorkOrders.title }).from(prodWorkOrders).where(and(eq(prodWorkOrders.id, id), eq(prodWorkOrders.companyId, companyId)));
+  return w ? { ref: w.number, title: w.title, href: `/production/order?id=${id}` } : null;
+}

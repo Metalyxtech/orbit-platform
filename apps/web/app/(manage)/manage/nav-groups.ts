@@ -6,7 +6,7 @@ import { portalModules } from '@/portals';
 import { PROJECT_DOCS_HREF } from '@/project-docs';
 import { adminSections, type MenuSection } from '@orbit/ui';
 
-type Counts = { waiting: number; unread: number; badges: Record<string, number>; roles: Record<string, string | null>; projectDocs?: boolean };
+type Counts = { waiting: number; unread: number; badges: Record<string, number>; roles: Record<string, string | null>; projectDocs?: boolean; held?: number };
 
 /**
  * Sidebar for the Management workspace, as a short main menu with drop-downs:
@@ -29,6 +29,8 @@ export function manageNavSections(ctx: SessionContext, ws: Workspace, portals: s
       entries: [
         { href: '/manage', label: 'Overview' },
         { href: '/manage/approvals', label: 'My approvals', badge: c.waiting },
+        // GM and company admins: everything on hold and the latest comments, across portals.
+        ...(ctx.role === 'management' || ctx.role === 'company_admin' ? [{ href: '/manage/control', label: 'Process control', badge: c.held }] : []),
         { href: '/manage/messages', label: 'Messages', badge: c.unread },
         ...(c.projectDocs ? [{ href: PROJECT_DOCS_HREF, label: 'Project documents' }] : []),
         // Management sees the change history here; company admins find it under Company admin.

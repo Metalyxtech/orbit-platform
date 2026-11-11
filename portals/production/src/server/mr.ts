@@ -1,6 +1,7 @@
 import { and, count, desc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import type { ActionContext, SessionContext } from '@orbit/core';
+import { assertNotHeld, processThread } from '@orbit/core/holds';
 import { deliverToProduction, purchaseOn, purchaseStatus, raisePurchase, type SupplyUpdate } from '@orbit/core/supply';
 import { prodIssues, prodMaterials, prodMatRequests, prodReceipts, prodWorkOrders, type MrLine, type MrStatus, type Tx } from '@orbit/db';
 import { fmtQty, MR_STATUS } from '../config';
@@ -19,6 +20,7 @@ const left = (l: MrLine) => r3(l.qty - l.issued);
 async function lockMr(tx: Tx, ctx: SessionContext, id: string) {
   const [m] = await tx.select().from(prodMatRequests).where(and(eq(prodMatRequests.id, id), eq(prodMatRequests.companyId, ctx.companyId))).for('update');
   if (!m) throw new Error('Material request not found');
+  await assertNotHeld(tx, ctx.companyId, 'mat_request', m.id, m.number);
   return m;
 }
 async function save(tx: Tx, id: string, set: Partial<typeof prodMatRequests.$inferInsert>) {
@@ -317,6 +319,8 @@ export async function mrDetail(tx: Tx, ctx: SessionContext, id: string) {
     purchase,
     purchaseUsed: await purchaseOn(tx, ctx.companyId),
     receipts: receipts.map((r) => ({ id: r.id, number: r.number, reference: r.reference, status: r.status, at: r.createdAt.toISOString() })),
+    /** GM hold and comments. */
+    control: await processThread(tx, ctx, 'mat_request', m.id),
     can: {
       // While Purchase is still buying, whatever has already arrived can be issued.
       issue: (m.status === 'store' || m.status === 'ready' || (m.status === 'purchase' && m.lines.some((l) => l.received > 0 && l.issued < l.qty - 1e-9))) && hasRole(me, 'store', 'manager'),
@@ -334,4 +338,14 @@ export type MrDetail = NonNullable<Awaited<ReturnType<typeof mrDetail>>>;
 export async function openForWos(tx: Tx, ids: string[]) {
   if (!ids.length) return [];
   return tx.select({ id: prodMatRequests.id, workOrderId: prodMatRequests.workOrderId, status: prodMatRequests.status }).from(prodMatRequests).where(and(inArray(prodMatRequests.workOrderId, ids), inArray(prodMatRequests.status, OPEN)));
+}
+
+/** Names a material request for GM process control. */
+export async function describeMr(tx: Tx, companyId: string, id: string) {
+  const [r] = await tx
+    .select({ number: prodMatRequests.number, wo: prodWorkOrders.number })
+    .from(prodMatRequests)
+    .innerJoin(prodWorkOrders, eq(prodWorkOrders.id, prodMatRequests.workOrderId))
+    .where(and(eq(prodMatRequests.id, id), eq(prodMatRequests.companyId, companyId)));
+  return r ? { ref: r.number, title: `Material for ${r.wo}`, href: `/production/mr?id=${id}` } : null;
 }

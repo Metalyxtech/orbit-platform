@@ -2,7 +2,7 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { SessionContext } from '@orbit/core';
 import { auditLog, memberships, users, type Tx } from '@orbit/db';
 
-export type ChangeArea = 'Purchase' | 'Timesheet' | 'Sales' | 'Production' | 'Quality' | 'People and access' | 'Company';
+export type ChangeArea = 'Purchase' | 'Timesheet' | 'Sales' | 'Production' | 'Quality' | 'People and access' | 'GM control' | 'Company';
 
 /** Plain-language name and area for each recorded action. */
 const ACTIONS: Record<string, { area: ChangeArea; label: string }> = {
@@ -61,6 +61,9 @@ const ACTIONS: Record<string, { area: ChangeArea; label: string }> = {
   'production.mr.cancel': { area: 'Production', label: 'Material request cancelled' },
   'production.mr.delivery': { area: 'Production', label: 'Material received at the production store' },
   'production.stock.adjust': { area: 'Production', label: 'Production stock adjusted' },
+  'control.hold': { area: 'GM control', label: 'Process stopped (on hold)' },
+  'control.release': { area: 'GM control', label: 'Process resumed' },
+  'control.comment': { area: 'GM control', label: 'Comment on a process' },
   'quality.report.pass': { area: 'Quality', label: 'Inspection passed' },
   'quality.report.fail': { area: 'Quality', label: 'Inspection failed, NCR raised' },
   'quality.report.return': { area: 'Quality', label: 'Report sent back to QC engineer' },

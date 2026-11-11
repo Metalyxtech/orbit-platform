@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { Button, Chip, TopBar } from '@orbit/ui';
+import { addProcessCommentAction, setHoldAction } from '@orbit/core/holds-actions';
+import { Button, Chip, HoldBanner, ProcessControl, TopBar } from '@orbit/ui';
 import { fmtDate, fmtMoney, quoteTotals, LOST_REASONS, OPEN_STAGES, SOURCES, STAGES, stageLabel, type Stage } from '../config';
 import {
   askApprovalAction,
@@ -85,6 +86,7 @@ export function EnquiryView({ d }: { d: EnquiryDetail }) {
 
         {e.returnedTo && <SentBack d={d} />}
 
+        <HoldBanner thread={d.control} />
         <div className="o-cols-wide">
           <div className="o-stack">
             <ProjectPanel d={d} />
@@ -143,6 +145,7 @@ export function EnquiryView({ d }: { d: EnquiryDetail }) {
           <div className="o-stack">
             {!d.can.editCost && <TotalsPanel key={e.discount} d={d} draft={draft} setDraftDisc={setDraftDisc} />}
             <ActionsPanel d={d} draft={draft} />
+            <ProcessControl thread={d.control} setHold={setHoldAction} comment={addProcessCommentAction} />
             {d.can.followUp && <FollowUpPanel d={d} />}
             <div className="o-panel">
               <h2>Customer</h2>

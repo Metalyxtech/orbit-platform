@@ -1,5 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { audit, type ActionContext } from '@orbit/core';
+import { assertNotHeld } from '@orbit/core/holds';
 import type { SupplyDelivery, SupplyRequest } from '@orbit/core/supply';
 import { procItems, procLines, procRequests, type Tx } from '@orbit/db';
 import { stageLabel, type RequestOrigin, type Stage } from '../config';
@@ -41,6 +42,7 @@ export async function raiseFromProduction(tx: Tx, ctx: ActionContext, req: Suppl
 /** The production store records goods delivered to the shop floor for a request it raised. */
 export async function deliverFromProduction(tx: Tx, ctx: ActionContext, d: SupplyDelivery) {
   const r = await lockRequest(tx, ctx, d.purchaseId);
+  await assertNotHeld(tx, ctx.companyId, 'proc_request', r.id, r.number);
   const origin = (r.header as { _from?: RequestOrigin })._from;
   if (!origin) throw new Error('This purchase was not raised by Production');
   if (r.stage !== 'receiving') throw new Error(`Purchase ${r.number} is at ${stageLabel(await loadConfig(tx, ctx.companyId), r.stage as Stage)}, not waiting for delivery`);

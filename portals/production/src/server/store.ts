@@ -4,9 +4,10 @@ import type { ActionContext, SessionContext } from '@orbit/core';
 import { prodIssues, prodMaterials, prodWorkOrders, type Tx } from '@orbit/db';
 import { fmtQty } from '../config';
 import { loadConfig, lockWo, logEvent, myRole, requireRole } from './shared';
+import { stockIn, stockOut } from './stock';
 
-// Store: issues materials against a work order's bill of materials (a negative quantity is a
-// return) and dispatches finished work orders.
+// Store: issues materials against a work order's bill of materials from the production store stock
+// (a negative quantity is a return) and dispatches finished work orders.
 
 const issueInput = z.object({
   workOrderId: z.uuid(),
@@ -30,6 +31,9 @@ export async function issueMaterials(tx: Tx, ctx: ActionContext, raw: z.input<ty
     const next = m.issuedQty + l.qty;
     if (next < -1e-9) throw new Error(`${m.item}: cannot return more than was issued (${fmtQty(m.issuedQty)} ${m.unit})`);
     if (next > m.qty * (1 + cfg.overrunPct / 100) + 1e-9) throw new Error(`${m.item}: ${fmtQty(next)} ${m.unit} is more than planned (${fmtQty(m.qty)}, +${cfg.overrunPct}%)`);
+    // Issues come out of the production store stock; returns go back into it.
+    if (l.qty > 0) await stockOut(tx, ctx, { item: m.item, qty: l.qty, unit: m.unit }, wo.number, v.note || 'Issued to work order');
+    else await stockIn(tx, ctx, [{ item: m.item, qty: -l.qty, unit: m.unit }], wo.number, v.note || 'Returned from the work order');
     await tx.update(prodMaterials).set({ issuedQty: next }).where(eq(prodMaterials.id, m.id));
     await tx.insert(prodIssues).values({ companyId: ctx.companyId, workOrderId: wo.id, materialId: m.id, qty: l.qty, note: v.note || null, byId: ctx.membershipId });
     done.push(`${m.item} ${l.qty > 0 ? '' : 'returned '}${fmtQty(Math.abs(l.qty))} ${m.unit}`);

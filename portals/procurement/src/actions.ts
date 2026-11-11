@@ -1,7 +1,7 @@
 'use server';
 // Server actions for the Purchase portal: each runs as the signed-in member in one RLS transaction.
 import { runAction } from '@orbit/core/next';
-import { admin, quoteFiles, requests, stock, suppliers } from './server';
+import { admin, quoteFiles, receiptFiles, requests, stock, suppliers } from './server';
 
 type In<F> = F extends (tx: never, ctx: never, input: infer I) => unknown ? I : never;
 
@@ -82,4 +82,11 @@ export async function removeIndustryCheckAction(input: { id: string }) {
 }
 export async function setAdminCoversAction(input: { membershipId: string; roles: string[] }) {
   return runAction((tx, ctx) => admin.setAdminCovers(tx, ctx, input));
+}
+
+export async function startReceiptUploadAction(input: In<typeof receiptFiles.startReceiptUpload>) {
+  return runAction((tx, ctx) => receiptFiles.startReceiptUpload(tx, ctx, input));
+}
+export async function confirmReceiptUploadAction(input: { fileId: string }) {
+  return runAction((tx, ctx) => receiptFiles.confirmReceiptUpload(tx, ctx, input));
 }

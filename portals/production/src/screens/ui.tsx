@@ -7,6 +7,7 @@ import type { WoRow } from '../server';
 /** Shared display helpers for the Production screens (no client state). */
 
 export const woHref = (id: string) => `/production/order?id=${id}`;
+export const mrHref = (id: string) => `/production/mr?id=${id}`;
 
 export function StatusChip({ status }: { status: WoStatus }) {
   const s = WO_STATUS[status] ?? WO_STATUS.draft;

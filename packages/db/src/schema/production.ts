@@ -209,3 +209,120 @@ export const prodDocs = pgTable(
   },
   (t) => [index('prod_docs_wo').on(t.companyId, t.workOrderId)],
 );
+
+/** Production store stock, per item name and unit (migration 0027). */
+export const prodStock = pgTable('prod_stock', {
+  id: id(),
+  companyId: companyId(),
+  name: text('name').notNull(),
+  unit: text('unit').notNull(),
+  onHand: qty('on_hand').notNull().default(0),
+  location: text('location'),
+  createdAt: at(),
+});
+
+/** Production store ledger: IN (received), OUT (issued to a work order), ADJ. qty is signed. */
+export const prodStockMoves = pgTable(
+  'prod_stock_moves',
+  {
+    id: id(),
+    companyId: companyId(),
+    stockId: uuid('stock_id')
+      .notNull()
+      .references(() => prodStock.id),
+    type: text('type').$type<'IN' | 'OUT' | 'ADJ'>().notNull(),
+    qty: qty('qty').notNull(),
+    balanceAfter: qty('balance_after').notNull(),
+    reference: text('reference'),
+    note: text('note'),
+    byId: member('by_id'),
+    createdAt: at(),
+  },
+  (t) => [index('prod_stock_moves_item').on(t.companyId, t.stockId, t.createdAt)],
+);
+
+export type MrStatus = 'store' | 'engineer' | 'manager' | 'purchase' | 'ready' | 'issued' | 'rejected' | 'cancelled';
+export interface MrLine {
+  materialId: string | null;
+  item: string;
+  unit: string;
+  qty: number;
+  /** Issued from the production store so far. */
+  issued: number;
+  /** Asked from Purchase. */
+  toBuy: number;
+  /** Arrived from Purchase into the production store (main store issue plus goods bought). */
+  received: number;
+  /** Part of `received` issued from the main store (the rest was bought). */
+  fromMain?: number;
+}
+
+/** Material request from the shop floor for a work order. */
+export const prodMatRequests = pgTable(
+  'prod_mat_requests',
+  {
+    id: id(),
+    companyId: companyId(),
+    number: text('number').notNull(),
+    workOrderId: uuid('work_order_id')
+      .notNull()
+      .references(() => prodWorkOrders.id),
+    status: text('status').$type<MrStatus>().notNull().default('store'),
+    lines: jsonb('lines').$type<MrLine[]>().notNull().default([]),
+    note: text('note'),
+    returnNote: text('return_note'),
+    requestedBy: uuid('requested_by')
+      .notNull()
+      .references(() => memberships.id),
+    engineerId: member('engineer_id'),
+    engineerAt: timestamp('engineer_at', { withTimezone: true }),
+    managerId: member('manager_id'),
+    managerAt: timestamp('manager_at', { withTimezone: true }),
+    purchaseId: uuid('purchase_id'),
+    purchaseRef: text('purchase_ref'),
+    createdAt: at(),
+    updatedAt: at('updated_at'),
+  },
+  (t) => [uniqueIndex('prod_mat_requests_number').on(t.companyId, t.number), index('prod_mat_requests_wo').on(t.companyId, t.workOrderId)],
+);
+
+/** Material received straight into the production store. */
+export const prodReceipts = pgTable(
+  'prod_receipts',
+  {
+    id: id(),
+    companyId: companyId(),
+    number: text('number').notNull(),
+    /** Material request this delivery is for, and the purchase that bought it. */
+    mrId: uuid('mr_id').references(() => prodMatRequests.id),
+    purchaseId: uuid('purchase_id'),
+    reference: text('reference').notNull(),
+    supplier: text('supplier'),
+    lines: jsonb('lines').$type<{ item: string; qty: number; unit: string }[]>().notNull().default([]),
+    status: text('status').$type<'qc' | 'accepted' | 'rejected'>().notNull().default('accepted'),
+    note: text('note'),
+    byId: member('by_id'),
+    createdAt: at(),
+  },
+  (t) => [uniqueIndex('prod_receipts_number').on(t.companyId, t.number)],
+);
+
+/** MTC / test certificates and delivery documents on a production store receipt. */
+export const prodReceiptFiles = pgTable(
+  'prod_receipt_files',
+  {
+    id: id(),
+    companyId: companyId(),
+    receiptId: uuid('receipt_id')
+      .notNull()
+      .references(() => prodReceipts.id),
+    s3Key: text('s3_key').notNull(),
+    fileName: text('file_name').notNull(),
+    contentType: text('content_type').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    uploaded: boolean('uploaded').notNull().default(false),
+    byId: member('by_id'),
+    createdAt: at(),
+  },
+  (t) => [index('prod_receipt_files_receipt').on(t.companyId, t.receiptId)],
+);

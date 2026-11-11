@@ -3,6 +3,8 @@ import { Chip, TopBar } from '@orbit/ui';
 import type { RequestDetail, SupplierRow } from '../server';
 import { showValue } from './FieldInput';
 import { QuoteFileLinks } from './QuoteFiles';
+import { ReceiptDocs } from './ReceiptDocs';
+import { RECEIVED_AT } from '../config';
 import { ApprovalStep } from './steps/ApprovalStep';
 import { InspectStep } from './steps/InspectStep';
 import { InvoiceStep } from './steps/InvoiceStep';
@@ -51,6 +53,15 @@ export function RequestView({ d, suppliers }: { d: RequestDetail; suppliers: Sup
 
         <div className="o-cols">
           <div className="o-stack">
+            {d.origin && (
+              <div className="o-panel" style={{ borderLeft: '3px solid var(--steel)' }}>
+                <strong>Raised by Production</strong>
+                <p className="muted" style={{ fontSize: 13, margin: '4px 0 0' }}>
+                  Material request {d.origin.ref} for work order {d.origin.workOrder}, approved by the production engineer and production manager. Match it with the main store
+                  (issue from stock) or buy it; the material goes to the production store.
+                </p>
+              </div>
+            )}
             {d.cfg.form.header.length > 0 && (
               <div className="o-panel">
                 <h2>Details</h2>
@@ -195,7 +206,10 @@ export function RequestView({ d, suppliers }: { d: RequestDetail; suppliers: Sup
                       <tr key={g.id}>
                         <td>
                           <strong>{g.deliveryNote}</strong>
-                          {g.intoStock && <div className="faint" style={{ fontSize: 11 }}>Booked into stock</div>}
+                          <div className="faint" style={{ fontSize: 11 }}>
+                            At the {RECEIVED_AT[g.receivedAt].toLowerCase()}
+                            {g.intoStock ? ', booked into stock' : ''}
+                          </div>
                         </td>
                         <td>{fmtDate(g.at)}</td>
                         <td>
@@ -209,6 +223,8 @@ export function RequestView({ d, suppliers }: { d: RequestDetail; suppliers: Sup
                 </table>
               </div>
             )}
+
+            <ReceiptDocs d={d} />
 
             <div className="o-panel">
               <h2>Timeline</h2>

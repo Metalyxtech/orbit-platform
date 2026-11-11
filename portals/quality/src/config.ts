@@ -30,8 +30,14 @@ export const QC_STATUS: Record<QcStatus, { label: string; tone: Tone }> = {
   approved: { label: 'Final', tone: 'ok' },
   cancelled: { label: 'Cancelled', tone: 'grey' },
 };
-export const SOURCES = { purchase: 'Incoming material (Purchase)', production: 'Finished work (Production)' } as const;
+export const SOURCES = { purchase: 'Incoming material (Purchase)', production: 'Finished work (Production)', store: 'Material at the production store' } as const;
 export type QcSource = keyof typeof SOURCES;
+export const SOURCE_IDS = Object.keys(SOURCES) as QcSource[];
+/** The portal a result goes back to. */
+export const SOURCE_PORTAL: Record<QcSource, string> = { purchase: 'Purchase', production: 'Production', store: 'the production store' };
+/** Short kind of inspection, for lists and charts. */
+export const SOURCE_KIND: Record<QcSource, string> = { purchase: 'Incoming material', production: 'Finished work', store: 'Shop-floor receipt' };
+export const SOURCE_COLOR: Record<QcSource, string> = { purchase: 'var(--steel)', production: 'var(--hivis)', store: 'var(--ok)' };
 
 export interface Finding {
   item: string;

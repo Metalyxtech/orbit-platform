@@ -2,8 +2,9 @@ import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { audit, type ActionContext, type SessionContext } from '@orbit/core';
 import { latestInspection, qualityOn, requestInspection, type QualityDecision } from '@orbit/core/quality';
+import { notifySupply } from '@orbit/core/supply';
 import { procEvents, procItems, procLines, procMoves, procQuotes, procReceipts, procRequests, procSuppliers, type Tx } from '@orbit/db';
-import { OPEN_STAGES, roleLabel, stageLabel, type ProcConfig, type ProcRole, type Stage } from '../config';
+import { OPEN_STAGES, originOf, RECEIVED_AT, roleLabel, stageLabel, type ProcConfig, type ProcRole, type ReceivedAt, type Stage } from '../config';
 import {
   buyOf,
   canAct,
@@ -24,6 +25,7 @@ import {
   withinTolerance,
 } from '../engine';
 import { filesForRequest } from './quote-file-store';
+import { receiptFilesFor } from './receipt-file-store';
 import { holdersOf } from './team';
 import { loadConfig, moneyText, myRole, myRoles, nextNumber, peopleById, requireRole, today } from './shared';
 
@@ -32,11 +34,11 @@ type Line = typeof procLines.$inferSelect;
 
 // ---------- reading ----------
 
-async function linesOf(tx: Tx, requestId: string) {
+export async function linesOf(tx: Tx, requestId: string) {
   return tx.select().from(procLines).where(eq(procLines.requestId, requestId)).orderBy(asc(procLines.sort));
 }
 
-async function lockRequest(tx: Tx, ctx: SessionContext, id: string) {
+export async function lockRequest(tx: Tx, ctx: SessionContext, id: string) {
   const [r] = await tx
     .select()
     .from(procRequests)
@@ -84,6 +86,7 @@ export async function requestDetail(tx: Tx, ctx: SessionContext, id: string) {
   ]);
   // After the parallel reads: its savepoint must not interleave with them on the same transaction.
   const files = quotes.length ? await filesForRequest(tx, ctx.companyId, id) : [];
+  const mtc = await receiptFilesFor(tx, ctx.companyId, id);
   const itemIds = lines.map((l) => l.itemId).filter((x): x is string => !!x);
   const items = itemIds.length ? await tx.select().from(procItems).where(inArray(procItems.id, itemIds)) : [];
   const people = await peopleById(tx, [r.requesterId, ...events.map((e) => e.byId), ...receipts.map((g) => g.byId)]);
@@ -163,9 +166,15 @@ export async function requestDetail(tx: Tx, ctx: SessionContext, id: string) {
       qty: g.qty,
       intoStock: g.intoStock,
       extra: g.extra as Record<string, unknown>,
+      receivedAt: ((g.extra as { receivedAt?: ReceivedAt }).receivedAt ?? 'purchase') as ReceivedAt,
       by: people.get(g.byId ?? '')?.name ?? '',
       at: g.createdAt.toISOString(),
     })),
+    /** MTC / test certificates and delivery documents uploaded at receipt. */
+    receiptFiles: mtc,
+    /** Raised by Production for a material request. */
+    origin: originOf(r.header),
+    canUploadReceiptDocs: ['receiving', 'inspection'].includes(r.stage) && (roles.includes('store') || roles.includes('buyer') || roles.includes('manager')),
     events: events.map((e) => ({ id: e.id, kind: e.kind, text: e.text, note: e.note, by: e.byId ? (people.get(e.byId)?.name ?? '') : 'Orbit', at: e.createdAt.toISOString() })),
     money: {
       estimate: estValue(lines),
@@ -205,7 +214,7 @@ export async function requestDetail(tx: Tx, ctx: SessionContext, id: string) {
       };
     }),
     owner: owner ? { role: owner, label: roleLabel(owner), people: await holdersOf(tx, ctx, owner) } : null,
-    canAct: canAct(roles, owner),
+    canAct: canAct(roles, owner, stage),
     canIssueStock: roles.includes('store') && lines.some((l) => l.reserveState === 'reserved') && stage !== 'rejected',
     fullyReceived: fullyReceived(lines, received),
   };
@@ -248,7 +257,7 @@ export async function listRequests(tx: Tx, ctx: SessionContext, opts: { filter?:
       stageLabel: stageLabel(cfg, stage),
       owner: owner ? roleLabel(owner) : null,
       ownerRole: owner,
-      actionable: canAct(roles, owner),
+      actionable: canAct(roles, owner, stage),
       value,
       supplier: aw?.supplier ?? null,
       poNo: r.poNo,
@@ -283,13 +292,29 @@ export type RequestRow = Awaited<ReturnType<typeof listRequests>>[number];
 
 // ---------- writing ----------
 
-async function log(tx: Tx, ctx: ActionContext, r: Req, text: string, extra: Partial<typeof procEvents.$inferInsert> = {}) {
+export async function log(tx: Tx, ctx: ActionContext, r: Req, text: string, extra: Partial<typeof procEvents.$inferInsert> = {}) {
   await tx.insert(procEvents).values({ companyId: ctx.companyId, requestId: r.id, kind: 'log', stage: r.stage, text, byId: ctx.membershipId, ...extra });
 }
 
+/** Tells the portal that raised the request (production) what happened; no-op for normal requests. */
+async function tellOrigin(tx: Tx, ctx: ActionContext, r: Req, kind: 'issued' | 'received' | 'rejected' | 'po', qty: number[], note?: string | null, receivedAt?: ReceivedAt) {
+  const o = originOf(r.header);
+  if (!o) return;
+  await notifySupply(tx, ctx, { source: o.portal, sourceId: o.id, kind, ref: kind === 'po' || kind === 'received' ? (r.poNo ?? r.number) : r.number, qty, note: note ?? null, receivedAt });
+}
+
+/** Where the last delivery of a request was received. */
+async function lastReceivedAt(tx: Tx, requestId: string): Promise<ReceivedAt> {
+  const rows = await tx.select({ extra: procReceipts.extra }).from(procReceipts).where(eq(procReceipts.requestId, requestId)).orderBy(desc(procReceipts.createdAt)).limit(1);
+  return (rows[0]?.extra as { receivedAt?: ReceivedAt } | undefined)?.receivedAt === 'production' ? 'production' : 'purchase';
+}
+
+const ACCEPTING: Stage[] = ['receiving', 'inspection'];
+
 /** Moves the request on, skipping approval stages that no rule applies to. */
-async function advance(tx: Tx, ctx: ActionContext, cfg: ProcConfig, r: Req) {
+export async function advance(tx: Tx, ctx: ActionContext, cfg: ProcConfig, r: Req) {
   const lines = await linesOf(tx, r.id);
+  const from = r.stage as Stage;
   let stage = nextStage(cfg, r.stage as Stage, lines);
   for (let guard = 0; guard < 12; guard++) {
     if (stage === 'inspection') {
@@ -312,6 +337,12 @@ async function advance(tx: Tx, ctx: ActionContext, cfg: ProcConfig, r: Req) {
   await tx.update(procRequests).set({ stage, stageAt: new Date() }).where(eq(procRequests.id, r.id));
   if (stage === 'closed') await tx.insert(procEvents).values({ companyId: ctx.companyId, requestId: r.id, kind: 'log', stage, text: 'Request closed' });
   if (stage === 'stock_issue') await tx.insert(procEvents).values({ companyId: ctx.companyId, requestId: r.id, kind: 'log', stage, text: 'Fully covered by stock, nothing to buy' });
+  // Goods accepted (received, and passed QC when it is used): material for production goes to the production store.
+  if (ACCEPTING.includes(from) && !ACCEPTING.includes(stage) && originOf(r.header)) {
+    const all = await tx.select({ qty: procReceipts.qty }).from(procReceipts).where(eq(procReceipts.requestId, r.id));
+    await tellOrigin(tx, ctx, { ...r, stage }, 'received', receivedQty(lines.length, all), null, await lastReceivedAt(tx, r.id));
+    await tx.insert(procEvents).values({ companyId: ctx.companyId, requestId: r.id, kind: 'log', stage, text: `Material handed to the production store for ${originOf(r.header)!.ref}` });
+  }
   return stage;
 }
 
@@ -327,7 +358,7 @@ async function begin(tx: Tx, ctx: ActionContext, id: string, stage: Stage) {
       ? pendingLevel(cfg, stage, await stageValue(tx, r, lines, stage), await approvedLevels(tx, id, stage))
       : null;
   const owner = ownerRole(cfg, stage, pending);
-  if (!canAct(roles, owner)) throw new Error(`Only the ${owner ? roleLabel(owner).toLowerCase() : 'owner'} can do this step`);
+  if (!canAct(roles, owner, stage)) throw new Error(`Only the ${owner ? roleLabel(owner).toLowerCase() : 'owner'} can do this step`);
   return { cfg, me, r, lines, pending };
 }
 
@@ -422,7 +453,8 @@ export async function issueStock(tx: Tx, ctx: ActionContext, raw: { id: string }
   const cfg = await loadConfig(tx, ctx.companyId);
   if (!(await myRoles(tx, ctx)).roles.includes('store')) throw new Error('Only the storekeeper (or an admin covering that role) can issue stock');
   const r = await lockRequest(tx, ctx, id);
-  const lines = (await linesOf(tx, id)).filter((l) => l.reserveState === 'reserved' && l.itemId);
+  const all = await linesOf(tx, id);
+  const lines = all.filter((l) => l.reserveState === 'reserved' && l.itemId);
   if (lines.length === 0) throw new Error('Nothing reserved to issue');
   for (const l of lines) {
     const [it] = await tx.select().from(procItems).where(eq(procItems.id, l.itemId!)).for('update');
@@ -431,7 +463,9 @@ export async function issueStock(tx: Tx, ctx: ActionContext, raw: { id: string }
     await tx.insert(procMoves).values({ companyId: ctx.companyId, itemId: it.id, type: 'OUT', qty: -l.reservedQty, balanceAfter: onHand, reference: r.number, note: `Issued to ${r.project}`, byId: ctx.membershipId });
     await tx.update(procLines).set({ reserveState: 'issued' }).where(eq(procLines.id, l.id));
   }
-  await log(tx, ctx, r, `Stock issued to ${r.project}`);
+  const origin = originOf(r.header);
+  await log(tx, ctx, r, origin ? `Issued from the main store to the production store (${origin.ref})` : `Stock issued to ${r.project}`);
+  await tellOrigin(tx, ctx, r, 'issued', all.map((l) => (lines.some((x) => x.id === l.id) ? l.reservedQty : 0)));
   return { stage: r.stage === 'stock_issue' ? await advance(tx, ctx, cfg, r) : r.stage };
 }
 
@@ -459,6 +493,7 @@ export async function reject(tx: Tx, ctx: ActionContext, raw: z.input<typeof not
   await log(tx, ctx, r, `${pending?.name ?? 'Approver'} rejected`, { kind: 'rejection', levelId: pending?.id, note: input.note });
   await releaseReservations(tx, lines);
   await tx.update(procRequests).set({ stage: 'rejected', stageAt: new Date() }).where(eq(procRequests.id, r.id));
+  await tellOrigin(tx, ctx, r, 'rejected', lines.map(() => 0), input.note);
   return { stage: 'rejected' as const };
 }
 
@@ -520,6 +555,7 @@ export async function issuePo(tx: Tx, ctx: ActionContext, raw: { id: string; che
     ? await tx.select({ supplier: procSuppliers.name }).from(procQuotes).innerJoin(procSuppliers, eq(procSuppliers.id, procQuotes.supplierId)).where(eq(procQuotes.id, r.awardQuoteId))
     : [];
   await log(tx, ctx, r, `Purchase order ${poNo} issued to ${q?.supplier ?? 'supplier'}`);
+  await tellOrigin(tx, ctx, { ...r, poNo }, 'po', [], q?.supplier ? `Ordered from ${q.supplier}` : null);
   return { poNo, stage: await advance(tx, ctx, cfg, r) };
 }
 
@@ -530,17 +566,32 @@ const receiveInput = idOnly.extend({
   extra: z.record(z.string(), fieldValue),
   qty: z.array(z.number().min(0)),
   intoStock: z.boolean(),
+  /** Where the goods arrived: the purchase (main) store or the production store. */
+  receivedAt: z.enum(['purchase', 'production']).default('purchase'),
 });
+export type ReceiveInput = z.input<typeof receiveInput>;
 
-export async function receive(tx: Tx, ctx: ActionContext, raw: z.input<typeof receiveInput>) {
+export async function receive(tx: Tx, ctx: ActionContext, raw: ReceiveInput) {
   const input = receiveInput.parse(raw);
   const { cfg, r, lines } = await begin(tx, ctx, input.id, 'receiving');
+  return receiveGoods(tx, ctx, cfg, r, lines, input);
+}
+
+/**
+ * Records a delivery (shared by the purchase store and, for material it asked for, the production
+ * store). Goods for a production request are never booked into the main stock: they go to the
+ * production store once accepted.
+ */
+export async function receiveGoods(tx: Tx, ctx: ActionContext, cfg: ProcConfig, r: Req, lines: Line[], raw: ReceiveInput) {
+  const input = receiveInput.parse(raw);
   if (input.qty.length !== lines.length || input.qty.every((q) => q <= 0)) throw new Error('Enter the quantity received');
   if (cfg.options.some((o) => o.on && o.docsRequired) && !input.docsOk) throw new Error('Confirm the required documents were received');
+  const origin = originOf(r.header);
+  const intoStock = input.intoStock && !origin;
   const rates = await awardedRates(tx, r, lines);
-  await tx.insert(procReceipts).values({ companyId: ctx.companyId, requestId: r.id, deliveryNote: input.deliveryNote, condition: input.condition, docsOk: input.docsOk, extra: input.extra, qty: input.qty, intoStock: input.intoStock, byId: ctx.membershipId });
+  await tx.insert(procReceipts).values({ companyId: ctx.companyId, requestId: r.id, deliveryNote: input.deliveryNote, condition: input.condition, docsOk: input.docsOk, extra: { ...input.extra, receivedAt: input.receivedAt }, qty: input.qty, intoStock, byId: ctx.membershipId });
   let booked = 0;
-  if (input.intoStock) {
+  if (intoStock) {
     for (const [i, l] of lines.entries()) {
       if (!l.itemId || !(input.qty[i] > 0)) continue;
       const [it] = await tx.select().from(procItems).where(eq(procItems.id, l.itemId)).for('update');
@@ -551,7 +602,7 @@ export async function receive(tx: Tx, ctx: ActionContext, raw: z.input<typeof re
       booked++;
     }
   }
-  await log(tx, ctx, r, `Goods received on ${input.deliveryNote} (${input.condition.toLowerCase()})${booked ? `, ${booked} line${booked === 1 ? '' : 's'} booked into stock` : ''}`);
+  await log(tx, ctx, r, `Goods received at the ${RECEIVED_AT[input.receivedAt].toLowerCase()} on ${input.deliveryNote} (${input.condition.toLowerCase()})${booked ? `, ${booked} line${booked === 1 ? '' : 's'} booked into stock` : ''}`);
   const all = await tx.select({ qty: procReceipts.qty }).from(procReceipts).where(eq(procReceipts.requestId, r.id));
   if (fullyReceived(lines, receivedQty(lines.length, all))) return { stage: await advance(tx, ctx, cfg, r) };
   await tx.insert(procEvents).values({ companyId: ctx.companyId, requestId: r.id, kind: 'log', stage: r.stage, text: 'Partial delivery, balance outstanding' });
@@ -566,6 +617,8 @@ async function qcRequestFor(tx: Tx, cfg: ProcConfig, r: Req, lines: Line[]) {
   const receipts = await tx.select().from(procReceipts).where(eq(procReceipts.requestId, r.id)).orderBy(asc(procReceipts.createdAt));
   const received = receivedQty(lines.length, receipts);
   const files = (await filesForRequest(tx, r.companyId, r.id)).filter((f) => !r.awardQuoteId || f.quoteId === r.awardQuoteId);
+  const mtc = await receiptFilesFor(tx, r.companyId, r.id);
+  const origin = originOf(r.header);
   return {
     source: 'purchase' as const,
     sourceId: r.id,
@@ -577,7 +630,11 @@ async function qcRequestFor(tx: Tx, cfg: ProcConfig, r: Req, lines: Line[]) {
       ...(r.poNo ? [{ label: 'Purchase order', value: r.poNo }] : []),
       { label: 'Project', value: r.project },
       ...(award ? [{ label: 'Supplier', value: award.supplier }] : []),
-      ...receipts.map((g, i) => ({ label: `Delivery ${i + 1}`, value: `${g.deliveryNote} (${g.condition.toLowerCase()})${g.docsOk ? ', documents received' : ''}` })),
+      ...(origin ? [{ label: 'For production', value: `${origin.ref} · ${origin.workOrder}` }] : []),
+      ...receipts.map((g, i) => {
+        const at = (g.extra as { receivedAt?: ReceivedAt }).receivedAt ?? 'purchase';
+        return { label: `Delivery ${i + 1}`, value: `${g.deliveryNote} at the ${RECEIVED_AT[at].toLowerCase()} (${g.condition.toLowerCase()})${g.docsOk ? ', documents received' : ''}` };
+      }),
     ],
     items: lines.map((l, i) => ({ item: l.description, qty: received[i] || buyOf(l), unit: l.unit })).filter((x) => x.qty > 0),
     checklist: [
@@ -587,7 +644,7 @@ async function qcRequestFor(tx: Tx, cfg: ProcConfig, r: Req, lines: Line[]) {
       'Test certificates / documents received',
       ...cfg.options.filter((o) => o.on && o.qcCheck).map((o) => o.qcCheck!),
     ],
-    documents: files.map((f) => ({ name: f.fileName, url: `/api/proc-quote-files/${f.id}` })),
+    documents: [...mtc.map((f) => ({ name: `MTC / receipt: ${f.fileName}`, url: `/api/proc-receipt-files/${f.id}` })), ...files.map((f) => ({ name: f.fileName, url: `/api/proc-quote-files/${f.id}` }))],
   };
 }
 

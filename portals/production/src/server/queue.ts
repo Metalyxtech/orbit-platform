@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import type { SessionContext } from '@orbit/core';
-import { prodMaterials, prodOperations, prodWorkOrders, type Tx } from '@orbit/db';
+import { prodMaterials, prodMatRequests, prodOperations, prodWorkOrders, type Tx } from '@orbit/db';
 import { OPEN_STATUSES, type ProdRole } from '../config';
 import { productionTeam } from './admin';
 import { myRole, notReady, today } from './shared';
@@ -23,6 +23,9 @@ async function build(tx: Tx, ctx: SessionContext): Promise<QueueItem[]> {
   const covers: ProdRole[] = me === 'admin' ? ((await productionTeam(tx, ctx)).find((p) => p.membershipId === ctx.membershipId)?.covers ?? []) : [me];
   const acts = (...r: ProdRole[]) => r.some((x) => covers.includes(x));
   const items: QueueItem[] = [];
+  // Material requests: store issues or asks Purchase; engineer then manager approve buying.
+  const mrs = await mrItems(tx, ctx, acts);
+  items.push(...mrs);
   const wos = await tx.select().from(prodWorkOrders).where(and(eq(prodWorkOrders.companyId, ctx.companyId), inArray(prodWorkOrders.status, [...OPEN_STATUSES, 'completed'])));
   if (!wos.length) return items;
   const ids = wos.map((w) => w.id);
@@ -52,6 +55,30 @@ async function build(tx: Tx, ctx: SessionContext): Promise<QueueItem[]> {
     for (const w of wos.filter((x) => x.status === 'completed')) items.push({ id: `ds:${w.id}`, title: `Dispatch ${w.number}`, detail: `${w.title} · QC passed`, href: woHref(w.id) });
   }
   return items;
+}
+
+async function mrItems(tx: Tx, ctx: SessionContext, acts: (...r: ProdRole[]) => boolean): Promise<QueueItem[]> {
+  try {
+    return await tx.transaction(async (sp) => {
+      const rows = await sp
+        .select({ m: prodMatRequests, wo: prodWorkOrders.number })
+        .from(prodMatRequests)
+        .innerJoin(prodWorkOrders, eq(prodWorkOrders.id, prodMatRequests.workOrderId))
+        .where(and(eq(prodMatRequests.companyId, ctx.companyId), inArray(prodMatRequests.status, ['store', 'ready', 'engineer', 'manager'])));
+      const what = (m: typeof prodMatRequests.$inferSelect) => m.lines.map((l) => l.item).slice(0, 3).join(', ');
+      const href = (id: string) => `/production/mr?id=${id}`;
+      const out: QueueItem[] = [];
+      for (const { m, wo } of rows) {
+        if ((m.status === 'store' || m.status === 'ready') && acts('store'))
+          out.push({ id: `mr:${m.id}`, title: m.status === 'ready' ? `Issue ${m.number} to ${wo}: material arrived` : `${m.returnNote ? 'Sent back: ' : ''}Material request ${m.number} for ${wo}`, detail: m.returnNote ?? what(m), href: href(m.id), urgent: !!m.returnNote });
+        if (m.status === 'engineer' && acts('engineer')) out.push({ id: `me:${m.id}`, title: `Approve buying for ${m.number} (${wo})`, detail: what(m), href: href(m.id) });
+        if (m.status === 'manager' && acts('manager')) out.push({ id: `mm:${m.id}`, title: `Approve ${m.number} (${wo}) for Purchase`, detail: what(m), href: href(m.id) });
+      }
+      return out;
+    });
+  } catch {
+    return []; // migration 0027 not run yet
+  }
 }
 
 /** Items waiting for this person; empty before migration 0023. */

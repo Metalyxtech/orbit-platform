@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button } from '@orbit/ui';
 import { receiveAction } from '../../actions';
 import type { RequestDetail } from '../../server';
+import { RECEIVED_AT, type ReceivedAt } from '../../config';
 import { fmtQty } from '../ui';
 import { useStep } from './useStep';
 
@@ -17,6 +18,8 @@ export function ReceiveStep({ d }: { d: RequestDetail }) {
   const [extra, setExtra] = useState<Record<string, string>>({});
   const linked = d.lines.some((l) => l.item);
   const [intoStock, setIntoStock] = useState(false);
+  const fromProduction = !!d.origin;
+  const [receivedAt, setReceivedAt] = useState<ReceivedAt>(fromProduction ? 'production' : 'purchase');
   const docsRequired = d.cfg.options.some((o) => o.docsRequired);
   const headerFields = d.cfg.options.filter((o) => o.receiptField?.where === 'header');
   const lineFields = d.cfg.options.filter((o) => o.receiptField?.where === 'line');
@@ -55,6 +58,21 @@ export function ReceiveStep({ d }: { d: RequestDetail }) {
         </label>
       ))}
       <label className="o-field">
+        Received at
+        <select className="o-select" value={receivedAt} onChange={(e) => setReceivedAt(e.target.value as ReceivedAt)}>
+          {(Object.keys(RECEIVED_AT) as ReceivedAt[]).map((k) => (
+            <option key={k} value={k}>
+              {RECEIVED_AT[k]}
+            </option>
+          ))}
+        </select>
+        {fromProduction && (
+          <span className="faint" style={{ fontSize: 11 }}>
+            For {d.origin!.ref} ({d.origin!.workOrder}): once accepted it goes into the production store stock.
+          </span>
+        )}
+      </label>
+      <label className="o-field">
         Condition
         <select className="o-select" value={condition} onChange={(e) => setCondition(e.target.value as typeof condition)}>
           <option>Good</option>
@@ -66,7 +84,7 @@ export function ReceiveStep({ d }: { d: RequestDetail }) {
         <input type="checkbox" checked={docsOk} onChange={(e) => setDocsOk(e.target.checked)} />
         Documents received{docsRequired ? ' (required)' : ''}
       </label>
-      {linked && (
+      {linked && !fromProduction && (
         <label className="o-row" style={{ gap: 8, fontSize: 13 }}>
           <input type="checkbox" checked={intoStock} onChange={(e) => setIntoStock(e.target.checked)} />
           Book into store stock (instead of straight to site)
@@ -76,10 +94,13 @@ export function ReceiveStep({ d }: { d: RequestDetail }) {
         variant="primary"
         block
         disabled={busy || !dn || (docsRequired && !docsOk)}
-        onClick={() => run(() => receiveAction({ id: d.request.id, deliveryNote: dn, condition, docsOk, extra, qty, intoStock }), 'Goods receipt saved.')}
+        onClick={() => run(() => receiveAction({ id: d.request.id, deliveryNote: dn, condition, docsOk, extra, qty, intoStock: intoStock && !fromProduction, receivedAt }), 'Goods receipt saved.')}
       >
         Save goods receipt
       </Button>
+      <span className="faint" style={{ fontSize: 11 }}>
+        Upload the MTC / test certificates under Receipt documents. QC gets them with the inspection.
+      </span>
     </div>
   );
 }

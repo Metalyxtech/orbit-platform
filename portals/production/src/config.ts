@@ -7,8 +7,8 @@ export type ProdRole = 'engineer' | 'manager' | 'supervisor' | 'qc' | 'store' | 
 export const PROD_ROLES: { id: ProdRole; label: string; detail: string }[] = [
   { id: 'engineer', label: 'Production engineer', detail: 'Plans work orders: trade form, materials and operations' },
   { id: 'manager', label: 'Production manager', detail: 'Releases work orders and watches progress' },
-  { id: 'supervisor', label: 'Supervisor', detail: 'Reports daily output and hours on the shop floor' },
-  { id: 'store', label: 'Store keeper', detail: 'Issues materials to work orders and dispatches finished goods' },
+  { id: 'supervisor', label: 'Supervisor', detail: 'Receives work orders, requests material and reports daily output' },
+  { id: 'store', label: 'Production store keeper', detail: 'Production store: receives material with MTC, issues from stock or asks Purchase, dispatches' },
   { id: 'gm', label: 'General manager', detail: 'Company-wide view of output and delays' },
   { id: 'admin', label: 'Production admin', detail: 'Everything, plus production settings' },
 ];
@@ -31,6 +31,29 @@ export const WO_FLOW: WoStatus[] = ['draft', 'pending_release', 'released', 'in_
 export const OPEN_STATUSES: WoStatus[] = ['draft', 'pending_release', 'released', 'in_progress', 'final_qc'];
 /** On the shop floor: production can be reported. */
 export const ACTIVE: WoStatus[] = ['released', 'in_progress'];
+
+/** Material request (MR) from the shop floor. */
+export const MR_STATUS: Record<'store' | 'engineer' | 'manager' | 'purchase' | 'ready' | 'issued' | 'rejected' | 'cancelled', { label: string; tone: Tone; who: string }> = {
+  store: { label: 'With production store', tone: 'hivis', who: 'Production store keeper' },
+  engineer: { label: 'Production engineer approval', tone: 'warn', who: 'Production engineer' },
+  manager: { label: 'Production manager approval', tone: 'warn', who: 'Production manager' },
+  purchase: { label: 'With Purchase', tone: 'steel', who: 'Purchase' },
+  ready: { label: 'Arrived, to issue', tone: 'hivis', who: 'Production store keeper' },
+  issued: { label: 'Issued', tone: 'ok', who: '' },
+  rejected: { label: 'Rejected', tone: 'bad', who: '' },
+  cancelled: { label: 'Cancelled', tone: 'grey', who: '' },
+};
+/** The path of a material request. */
+export const MR_FLOW = ['store', 'engineer', 'manager', 'purchase', 'ready', 'issued'] as const;
+
+/** Store receipt (material into the production store). */
+export const RECEIPT_STATUS: Record<'qc' | 'accepted' | 'rejected', { label: string; tone: Tone }> = {
+  qc: { label: 'With QC', tone: 'hivis' },
+  accepted: { label: 'In stock', tone: 'ok' },
+  rejected: { label: 'QC rejected', tone: 'bad' },
+};
+/** MTC / test certificates and delivery documents: PDF or photos, up to 25 MB each. */
+export const RECEIPT_DOCS = { maxFiles: 20, maxBytes: 25 * 1024 * 1024, types: ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'], accept: '.pdf,.png,.jpg,.jpeg,.webp' };
 
 export type OpStatus = 'pending' | 'running' | 'awaiting_qc' | 'done' | 'rework';
 export const OP_STATUS: Record<OpStatus, { label: string; tone: Tone }> = {

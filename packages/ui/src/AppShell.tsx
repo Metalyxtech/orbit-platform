@@ -1,7 +1,7 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import { Fragment, type ReactNode } from 'react';
-import { toEntries } from './menu';
+import { adminSections, toEntries } from './menu';
 import { NotificationCenter } from './NotificationCenter';
 import { SideFoot } from './SideFoot';
 import { SideMenu } from './SideMenu';
@@ -68,11 +68,8 @@ export function AppShell(props: AppShellProps) {
         )}
         <SideMenu
           sections={[
-            { entries: toEntries(main) },
-            {
-              title: 'Company admin',
-              entries: toEntries(admin.map((n) => ({ ...n, menu: n.group && n.group !== 'Company' ? `${n.group} settings` : undefined }))),
-            },
+            { title: props.portals.length > 1 ? undefined : props.portalName, entries: toEntries(main) },
+            ...adminSections(admin),
           ]}
         />
         <SideFoot name={props.user.name} title={props.user.title} signOutAction={props.signOutHref}>

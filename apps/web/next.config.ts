@@ -25,7 +25,7 @@ const csp = [
 
 const config: NextConfig = {
   reactStrictMode: true,
-  transpilePackages: ['@orbit/core', '@orbit/db', '@orbit/ui', '@orbit/portal-timesheet', '@orbit/portal-procurement', '@orbit/portal-sales', '@orbit/portal-custom-1'],
+  transpilePackages: ['@orbit/core', '@orbit/db', '@orbit/ui', '@orbit/portal-timesheet', '@orbit/portal-procurement', '@orbit/portal-sales', '@orbit/portal-production', '@orbit/portal-custom-1'],
   poweredByHeader: false,
   async headers() {
     return [

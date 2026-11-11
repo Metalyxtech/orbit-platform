@@ -183,6 +183,13 @@
       "when": 1795700000000,
       "tag": "0025_quality",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1795800000000,
+      "tag": "0026_ts_admin_covers",
+      "breakpoints": true
     }
   ]
 }

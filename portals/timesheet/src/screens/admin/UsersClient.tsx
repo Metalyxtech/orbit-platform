@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { legacyPortal } from '@orbit/core/portals';
 import { Button, DataTable, Select, StatusChip, TopBar, useToast } from '@orbit/ui';
 import { addMemberAction, changeMemberPortalAction, decideCorrectionAction, updateMemberAction } from '../../actions';
+import type { AdminCoverView } from '../../server';
+import { AdminCoverPanel } from './AdminCoverPanel';
 import type { UserRow, CorrectionRow, PortalAccess } from './types';
 
 // Users, portal access and correction requests.
@@ -63,7 +65,7 @@ function PortalCell({ user, access }: { user: UserRow; access: PortalAccess }) {
   );
 }
 
-export function UsersClient({ users, corrections, portals }: { users: UserRow[]; corrections: CorrectionRow[]; portals: PortalAccess }) {
+export function UsersClient({ users, corrections, portals, covers }: { users: UserRow[]; corrections: CorrectionRow[]; portals: PortalAccess; covers?: AdminCoverView }) {
   const toast = useToast();
   const router = useRouter();
   const supervisors = users.filter((u) => u.role !== 'employee' && u.status === 'active');
@@ -94,6 +96,7 @@ export function UsersClient({ users, corrections, portals }: { users: UserRow[];
           </Button>
         </div>
         {adding && <AddPerson supervisors={supervisors} onDone={() => setAdding(false)} />}
+        {covers && <AdminCoverPanel key={JSON.stringify(covers.admins)} view={covers} />}
         {users.some((u) => u.status === 'pending') && (
           <p className="o-panel" style={{ padding: '10px 16px' }}>
             {users.filter((u) => u.status === 'pending').length} people asked to join. Set their role and supervisor, then approve

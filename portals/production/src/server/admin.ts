@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { audit, legacyPortal, portalRoleFor, readMemberPortals, readPortalRoles, setMemberPortal, writePortalRole, type ActionContext, type SessionContext } from '@orbit/core';
 import { companyPortals, memberships, users, type Tx } from '@orbit/db';
-import { PROD_ROLES, roleLabel, type ProdConfig, type ProdRole } from '../config';
+import { adminCoversFor, COVER_ROLES, PROD_ROLES, roleLabel, type ProdConfig, type ProdRole } from '../config';
 import { productionManifest } from '../manifest';
 import { TRADES } from '../trades';
 import { loadConfig, PORTAL, saveConfig } from './shared';
@@ -22,6 +22,8 @@ export interface ProdPerson {
   prodRole: ProdRole;
   /** on = can open the Production portal; requested = asked for it; off = no access. */
   access: 'on' | 'requested' | 'off';
+  /** Company admins only: the roles they also cover (get those roles' tasks). */
+  covers: ProdRole[];
 }
 
 export async function productionTeam(tx: Tx, ctx: SessionContext): Promise<ProdPerson[]> {
@@ -31,8 +33,8 @@ export async function productionTeam(tx: Tx, ctx: SessionContext): Promise<ProdP
     .innerJoin(users, eq(users.id, memberships.userId))
     .where(and(eq(memberships.companyId, ctx.companyId), eq(memberships.status, 'active')));
   const ids = people.map((p) => p.id);
-  const [roles, rows] = await Promise.all([readPortalRoles(tx, PORTAL, ids), readMemberPortals(tx, ids)]);
-  return people
+  const [roles, rows, cfg] = await Promise.all([readPortalRoles(tx, PORTAL, ids), readMemberPortals(tx, ids), loadConfig(tx, ctx.companyId)]);
+  const list = people
     .map((p) => {
       const mine = rows.filter((r) => r.membershipId === p.id);
       const row = mine.find((r) => r.portal === PORTAL);
@@ -41,9 +43,12 @@ export async function productionTeam(tx: Tx, ctx: SessionContext): Promise<ProdP
         : row ? (row.status === 'active' ? 'on' : row.status === 'requested' ? 'requested' : 'off')
         : mine.length === 0 && legacyPortal(PORTAL) ? 'on'
         : 'off';
-      return { membershipId: p.id, name: p.name, email: p.email, companyRole: p.role, prodRole: portalRoleFor(productionManifest, p.role, roles.get(p.id)) as ProdRole, access };
+      return { membershipId: p.id, name: p.name, email: p.email, companyRole: p.role, prodRole: portalRoleFor(productionManifest, p.role, roles.get(p.id)) as ProdRole, access, covers: [] as ProdRole[] };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
+  const holders = list.filter((p) => p.access === 'on' && p.companyRole !== 'company_admin').map((p) => p.prodRole);
+  for (const p of list) if (p.companyRole === 'company_admin') p.covers = adminCoversFor(cfg, p.membershipId, holders);
+  return list;
 }
 
 const roleIds = PROD_ROLES.map((r) => r.id) as [ProdRole, ...ProdRole[]];
@@ -56,7 +61,10 @@ const adminInput = z.object({
       requireFinalQc: z.boolean(),
     })
     .optional(),
-  team: z.array(z.object({ membershipId: z.uuid(), role: z.enum(roleIds).optional(), access: z.enum(['on', 'off']).optional() })).max(1000).default([]),
+  team: z
+    .array(z.object({ membershipId: z.uuid(), role: z.enum(roleIds).optional(), access: z.enum(['on', 'off']).optional(), covers: z.array(z.enum(COVER_ROLES as [ProdRole, ...ProdRole[]])).max(10).optional() }))
+    .max(1000)
+    .default([]),
 });
 
 export async function saveProductionAdmin(tx: Tx, ctx: ActionContext, raw: z.input<typeof adminInput>) {
@@ -80,6 +88,13 @@ export async function saveProductionAdmin(tx: Tx, ctx: ActionContext, raw: z.inp
       if (c.role === 'admin') throw new Error('Make the person a company admin to give them production admin');
       if (!(await writePortalRole(tx, { companyId: ctx.companyId, membershipId: m.membershipId, portal: PORTAL, role: c.role }))) throw new Error('Production roles switch on after the latest database update.');
       await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'production.role', entity: 'memberships', entityId: m.membershipId, data: { summary: [`${m.name}: ${roleLabel(m.prodRole)} → ${roleLabel(c.role)}`] }, requestId: ctx.requestId });
+    }
+    if (c.covers) {
+      if (m.companyRole !== 'company_admin') throw new Error('Only a company admin can cover other production roles');
+      const covers = COVER_ROLES.filter((r) => c.covers!.includes(r));
+      const cfg = await loadConfig(tx, ctx.companyId);
+      await saveConfig(tx, ctx.companyId, { ...cfg, adminCovers: { ...(cfg.adminCovers ?? {}), [m.membershipId]: covers } });
+      await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'production.role', entity: 'memberships', entityId: m.membershipId, data: { summary: [`${m.name}: production admin, also covers ${covers.length ? covers.map(roleLabel).join(', ') : 'no other role'}`] }, requestId: ctx.requestId });
     }
     if (c.access && c.access !== m.access) {
       if (m.companyRole === 'company_admin' || m.companyRole === 'management') throw new Error('Company admins and management always have Production');

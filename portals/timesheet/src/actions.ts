@@ -3,7 +3,7 @@
 // RLS-scoped transaction (runAction), then publishes outbox events and timers after commit.
 import { runAction } from '@orbit/core/next';
 import type { GridRow } from './calc';
-import { admin, approvals, forms, reports, week } from './server';
+import { admin, approvals, covers, forms, reports, week } from './server';
 
 export async function saveEntriesAction(input: Parameters<typeof week.saveEntries>[2]) {
   return runAction((tx, ctx) => week.saveEntries(tx, ctx, input));
@@ -64,4 +64,8 @@ export async function changeMemberPortalAction(input: Parameters<typeof admin.ch
 }
 export async function setFormChoiceAction(input: { role: string; formId: string }) {
   return runAction((tx, ctx) => forms.setFormChoice(tx, ctx, input));
+}
+
+export async function saveAdminCoversAction(input: Parameters<typeof covers.saveAdminCovers>[2]) {
+  return runAction((tx, ctx) => covers.saveAdminCovers(tx, ctx, input));
 }

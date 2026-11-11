@@ -1,7 +1,7 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { Chip, SaveBar } from '@orbit/ui';
-import { PROD_ROLES, roleLabel, type ProdConfig, type ProdRole } from '../config';
+import { Chip, RoleCoverage, RoleCovers, SaveBar, sameRoles } from '@orbit/ui';
+import { COVER_ROLES, PROD_ROLES, roleLabel, type ProdConfig, type ProdRole } from '../config';
 import { TRADES } from '../trades';
 import { saveProductionAdminAction } from '../actions';
 import type { ProdPerson } from '../server';
@@ -9,22 +9,33 @@ import { useRun } from './useRun';
 
 // Production settings for the company admin. Everything stays a draft until Save changes.
 
-type Draft = Record<string, { role: ProdRole; access: ProdPerson['access'] }>;
+type Draft = Record<string, { role: ProdRole; access: ProdPerson['access']; covers: ProdRole[] }>;
+const coverRoles = PROD_ROLES.filter((r) => COVER_ROLES.includes(r.id));
 const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
 
 export function SettingsClient({ cfg, team }: { cfg: ProdConfig; team: ProdPerson[] }) {
   const { busy, run } = useRun();
   const saved = useMemo(() => ({ trades: cfg.trades, overrunPct: cfg.overrunPct, requireRelease: cfg.requireRelease, requireFinalQc: cfg.requireFinalQc }), [cfg]);
-  const savedTeam = useMemo<Draft>(() => Object.fromEntries(team.map((p) => [p.membershipId, { role: p.prodRole, access: p.access }])), [team]);
+  const savedTeam = useMemo<Draft>(() => Object.fromEntries(team.map((p) => [p.membershipId, { role: p.prodRole, access: p.access, covers: p.covers }])), [team]);
   const [f, setF] = useState(saved);
   const [t, setT] = useState<Draft>(savedTeam);
   const settingsDirty = !sameList(f.trades, saved.trades) || f.overrunPct !== saved.overrunPct || f.requireRelease !== saved.requireRelease || f.requireFinalQc !== saved.requireFinalQc;
-  const teamChanges = team.filter((p) => t[p.membershipId].role !== p.prodRole || t[p.membershipId].access !== p.access);
+  const teamChanges = team.filter((p) => t[p.membershipId].role !== p.prodRole || t[p.membershipId].access !== p.access || !sameRoles(t[p.membershipId].covers, p.covers));
+  // Coverage counts the draft: role holders with access, plus admins covering the role.
+  const isAdmin = (p: ProdPerson) => p.companyRole === 'company_admin';
+  const holders = (except?: string) => team.filter((p) => !isAdmin(p) && p.membershipId !== except && t[p.membershipId].access === 'on').map((p) => t[p.membershipId].role as string);
+  const counts = Object.fromEntries(coverRoles.map((r) => [r.id, team.filter((p) => (isAdmin(p) ? t[p.membershipId].covers.includes(r.id) : t[p.membershipId].access === 'on' && t[p.membershipId].role === r.id)).length]));
   const summary = [
     ...(settingsDirty ? ['Production settings'] : []),
     ...teamChanges.map((p) => {
       const d = t[p.membershipId];
-      return `${p.name}: ${[d.role !== p.prodRole ? `${roleLabel(p.prodRole)} → ${roleLabel(d.role)}` : '', d.access !== p.access ? (d.access === 'on' ? 'gets Production access' : 'loses Production access') : ''].filter(Boolean).join(', ')}`;
+      return `${p.name}: ${[
+        d.role !== p.prodRole ? `${roleLabel(p.prodRole)} → ${roleLabel(d.role)}` : '',
+        d.access !== p.access ? (d.access === 'on' ? 'gets Production access' : 'loses Production access') : '',
+        !sameRoles(d.covers, p.covers) ? `also covers ${d.covers.length ? d.covers.map(roleLabel).join(', ') : 'no other role'}` : '',
+      ]
+        .filter(Boolean)
+        .join(', ')}`;
     }),
   ];
   const toggleTrade = (id: string, on: boolean) => setF({ ...f, trades: on ? [...f.trades, id] : f.trades.filter((x) => x !== id) });
@@ -57,6 +68,7 @@ export function SettingsClient({ cfg, team }: { cfg: ProdConfig; team: ProdPerso
           </label>
         </div>
       </div>
+      <RoleCoverage roles={coverRoles} counts={counts} note="Every production role needs at least one person with Production access, or a production admin who covers it." />
       <div className="o-panel flush">
         <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
           <h2>Production team</h2>
@@ -86,15 +98,24 @@ export function SettingsClient({ cfg, team }: { cfg: ProdConfig; team: ProdPerso
                         {p.email}
                       </div>
                     </td>
-                    <td style={{ width: 220 }}>
+                    <td style={{ width: p.companyRole === 'company_admin' ? 380 : 220 }}>
                       {p.companyRole === 'company_admin' ? (
-                        <Chip tone="steel">{roleLabel('admin')}</Chip>
+                        <div className="o-stack" style={{ gap: 6 }}>
+                          <Chip tone="steel">{roleLabel('admin')}</Chip>
+                          <RoleCovers
+                            name={p.name}
+                            roles={coverRoles}
+                            value={d.covers}
+                            vacant={coverRoles.map((r) => r.id).filter((r) => !holders(p.membershipId).includes(r))}
+                            onChange={(covers) => setT({ ...t, [p.membershipId]: { ...d, covers: covers as ProdRole[] } })}
+                          />
+                        </div>
                       ) : (
                         <select
                           className="o-select"
                           value={d.role}
                           aria-label={`Production role for ${p.name}`}
-                          onChange={(e) => setT({ ...t, [p.membershipId]: { role: e.target.value as ProdRole, access: p.access === 'on' ? d.access : (e.target.value as ProdRole) !== p.prodRole ? 'on' : p.access } })}
+                          onChange={(e) => setT({ ...t, [p.membershipId]: { ...d, role: e.target.value as ProdRole, access: p.access === 'on' ? d.access : (e.target.value as ProdRole) !== p.prodRole ? 'on' : p.access } })}
                         >
                           {PROD_ROLES.filter((r) => r.id !== 'admin').map((r) => (
                             <option key={r.id} value={r.id}>
@@ -152,6 +173,7 @@ export function SettingsClient({ cfg, team }: { cfg: ProdConfig; team: ProdPerso
                   membershipId: p.membershipId,
                   role: t[p.membershipId].role !== p.prodRole ? t[p.membershipId].role : undefined,
                   access: t[p.membershipId].access !== p.access ? (t[p.membershipId].access === 'on' ? 'on' : 'off') : undefined,
+                  covers: !sameRoles(t[p.membershipId].covers, p.covers) ? t[p.membershipId].covers : undefined,
                 })),
               }),
             'Production settings saved.',

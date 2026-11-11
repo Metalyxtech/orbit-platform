@@ -1,7 +1,7 @@
 import { eq, inArray } from 'drizzle-orm';
 import { audit, portalRoleFor, readPortalRoles, type ActionContext, type SessionContext } from '@orbit/core';
-import { memberships, qcEvents, qcInspections, users, type Tx } from '@orbit/db';
-import type { QcRole } from '../config';
+import { memberships, qcEvents, qcInspections, qcSettings, users, type Tx } from '@orbit/db';
+import type { QcConfig, QcRole } from '../config';
 import { qualityManifest } from '../manifest';
 
 export const PORTAL = 'quality';
@@ -36,4 +36,15 @@ export async function lockInspection(tx: Tx, ctx: SessionContext, id: string) {
   const [r] = await tx.select().from(qcInspections).where(eq(qcInspections.id, id)).for('update');
   if (!r || r.companyId !== ctx.companyId) throw new Error('Inspection not found');
   return r;
+}
+
+export async function loadConfig(tx: Tx, companyId: string): Promise<QcConfig> {
+  const [row] = await tx.select({ config: qcSettings.config }).from(qcSettings).where(eq(qcSettings.companyId, companyId));
+  return (row?.config as QcConfig | undefined) ?? {};
+}
+export async function saveConfig(tx: Tx, companyId: string, config: QcConfig) {
+  await tx
+    .insert(qcSettings)
+    .values({ companyId, config })
+    .onConflictDoUpdate({ target: qcSettings.companyId, set: { config, updatedAt: new Date() } });
 }

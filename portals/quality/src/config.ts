@@ -10,6 +10,18 @@ export const QC_ROLES: { id: QcRole; label: string; detail: string }[] = [
 ];
 export const roleLabel = (r: string) => QC_ROLES.find((x) => x.id === r)?.label ?? r;
 
+/** Quality settings kept in qc_settings.config. */
+export interface QcConfig {
+  /** Roles each company admin also covers (membershipId -> roles). Not set = roles nobody else holds. */
+  adminCovers?: Record<string, QcRole[]>;
+}
+/** Roles with tasks a quality admin can also cover: they then get those inspections in My tasks. */
+export const COVER_ROLES: QcRole[] = ['inspector', 'manager'];
+/** What the company admin chose, or else every role nobody else holds. */
+export function adminCoversFor(cfg: QcConfig, membershipId: string, holders: string[]): QcRole[] {
+  return cfg.adminCovers?.[membershipId] ?? COVER_ROLES.filter((r) => !holders.includes(r));
+}
+
 export type QcStatus = 'pending' | 'submitted' | 'approved' | 'cancelled';
 type Tone = 'grey' | 'steel' | 'ok' | 'warn' | 'bad' | 'hivis';
 export const QC_STATUS: Record<QcStatus, { label: string; tone: Tone }> = {

@@ -59,8 +59,21 @@ export interface ProdConfig {
   requireRelease: boolean;
   /** Final QC must pass before dispatch. */
   requireFinalQc: boolean;
+  /** Roles each company admin also covers (membershipId -> roles). Not set = roles nobody else holds. */
+  adminCovers?: Record<string, ProdRole[]>;
 }
 export const DEFAULT_CONFIG: ProdConfig = { trades: [], overrunPct: 5, requireRelease: true, requireFinalQc: true };
+
+/** Roles a production admin can also cover: they then get those roles' tasks. */
+export const COVER_ROLES: ProdRole[] = ['engineer', 'manager', 'supervisor', 'store', 'gm'];
+
+/**
+ * Roles this admin covers: what the company admin chose, or else every role nobody else holds
+ * (so no task is left without someone). `holders` are the roles of people with Production access.
+ */
+export function adminCoversFor(cfg: Pick<ProdConfig, 'adminCovers'>, membershipId: string, holders: string[]): ProdRole[] {
+  return cfg.adminCovers?.[membershipId] ?? COVER_ROLES.filter((r) => !holders.includes(r));
+}
 
 export const fmtQty = (v: number) => Number(v || 0).toLocaleString('en-IN', { maximumFractionDigits: 3 });
 export const fmtDate = (d: string | Date | null | undefined) =>

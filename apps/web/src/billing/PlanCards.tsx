@@ -1,6 +1,6 @@
 'use client';
 import type { ReactNode } from 'react';
-import { BUNDLES, CYCLES, TIERS, TRIAL_DAYS, bundleSaving, bundleSavingPct, cycleOf, isCombo, separatelyFor, money, monthly, perMonthFor, priceFor, savingFor, taxNote, type Bundle, type Currency, type Cycle, type TierId } from './plans';
+import { BUNDLES, BUNDLE_GROUPS, CYCLES, TIERS, TRIAL_DAYS, bundleSaving, bundleSavingPct, cycleOf, isCombo, separatelyFor, money, monthly, perMonthFor, priceFor, savingFor, taxNote, type Bundle, type Currency, type Cycle, type TierId } from './plans';
 
 /** Step 1: which portals. One portal, or a combination at a lower price. */
 export function BundlePicker({ bundle, onChange, currency = 'INR' }: { bundle: Bundle; onChange: (b: Bundle) => void; currency?: Currency }) {
@@ -33,8 +33,9 @@ export function BundlePicker({ bundle, onChange, currency = 'INR' }: { bundle: B
   );
   return (
     <div className="o-stack" style={{ gap: 12, flex: 1 }}>
-      {group('One portal', BUNDLES.filter((b) => !isCombo(b.id)))}
-      {group('Combine portals and save', BUNDLES.filter((b) => isCombo(b.id)))}
+      {BUNDLE_GROUPS.map((g) => (
+        <div key={g.id}>{group(g.title, BUNDLES.filter((b) => b.group === g.id))}</div>
+      ))}
     </div>
   );
 }

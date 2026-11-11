@@ -3,7 +3,19 @@
 // Safe to import from client components.
 
 /** Stored in plan ids (e.g. "both_growth"), so existing ids never change: 'both' is Timesheet + Purchase. */
-export type Bundle = 'timesheet' | 'purchase' | 'sales' | 'both' | 'timesheet_sales' | 'purchase_sales' | 'all';
+export type Bundle =
+  | 'timesheet'
+  | 'purchase'
+  | 'sales'
+  | 'production'
+  | 'quality'
+  | 'both'
+  | 'timesheet_sales'
+  | 'purchase_sales'
+  | 'all'
+  | 'production_quality'
+  | 'factory'
+  | 'complete';
 export type TierId = 'starter' | 'growth' | 'business';
 export type Cycle = 'monthly' | 'quarterly' | 'halfyearly' | 'yearly';
 export type PlanId = `${Bundle}_${TierId}`;
@@ -16,17 +28,39 @@ export type Currency = 'INR' | 'USD';
 /** Foreign clients pay in US dollars at this rate (rounded up to whole dollars). */
 export const USD_RATE = 90;
 
-export const BUNDLES: { id: Bundle; name: string; portals: string[]; desc: string; best?: boolean }[] = [
-  { id: 'timesheet', name: 'Timesheet', portals: ['timesheet'], desc: 'Weekly timesheets, approvals, overtime and project hours' },
-  { id: 'purchase', name: 'Purchase', portals: ['procurement'], desc: 'Requisitions, quotes, POs, stock, receipts and invoices' },
-  { id: 'sales', name: 'Sales', portals: ['sales'], desc: 'Enquiries, project documents, costing, quotations, orders and collections' },
-  { id: 'both', name: 'Timesheet + Purchase', portals: ['timesheet', 'procurement'], desc: 'Site hours and buying in one login' },
-  { id: 'timesheet_sales', name: 'Timesheet + Sales', portals: ['timesheet', 'sales'], desc: 'Win the work and track the hours on it' },
-  { id: 'purchase_sales', name: 'Purchase + Sales', portals: ['procurement', 'sales'], desc: 'Quote, win, then buy for the job' },
-  { id: 'all', name: 'All three portals', portals: ['timesheet', 'procurement', 'sales'], desc: 'Timesheet, Purchase and Sales, one login, one GM dashboard', best: true },
+/** Where a bundle is listed on the plan picker. */
+export type BundleGroup = 'single' | 'combo' | 'factory';
+export const BUNDLE_GROUPS: { id: BundleGroup; title: string }[] = [
+  { id: 'single', title: 'One portal' },
+  { id: 'combo', title: 'Combine portals and save' },
+  { id: 'factory', title: 'Manufacturing packages: best price' },
 ];
-/** Combined bundles: each portal's own bundle, for "you save" against buying them separately. */
-const SINGLE: Record<string, Bundle> = { timesheet: 'timesheet', procurement: 'purchase', sales: 'sales' };
+
+export const BUNDLES: { id: Bundle; name: string; portals: string[]; desc: string; group: BundleGroup; best?: boolean }[] = [
+  { id: 'timesheet', name: 'Timesheet', portals: ['timesheet'], group: 'single', desc: 'Weekly timesheets, approvals, overtime and project hours' },
+  { id: 'purchase', name: 'Purchase', portals: ['procurement'], group: 'single', desc: 'Requisitions, quotes, POs, stock, receipts and invoices' },
+  { id: 'sales', name: 'Sales', portals: ['sales'], group: 'single', desc: 'Enquiries, project documents, costing, quotations, orders and collections' },
+  { id: 'production', name: 'Production', portals: ['production'], group: 'single', desc: 'Work orders, trade forms, workshop drawings and daily shop-floor reports' },
+  { id: 'quality', name: 'Quality (QC)', portals: ['quality'], group: 'single', desc: 'Incoming and final inspections, NCRs, QC manager approval and QC dashboard' },
+  { id: 'both', name: 'Timesheet + Purchase', portals: ['timesheet', 'procurement'], group: 'combo', desc: 'Site hours and buying in one login' },
+  { id: 'timesheet_sales', name: 'Timesheet + Sales', portals: ['timesheet', 'sales'], group: 'combo', desc: 'Win the work and track the hours on it' },
+  { id: 'purchase_sales', name: 'Purchase + Sales', portals: ['procurement', 'sales'], group: 'combo', desc: 'Quote, win, then buy for the job' },
+  { id: 'all', name: 'Timesheet + Purchase + Sales', portals: ['timesheet', 'procurement', 'sales'], group: 'combo', desc: 'One login, one GM dashboard' },
+  { id: 'production_quality', name: 'Production + Quality', portals: ['production', 'quality'], group: 'factory', desc: 'Make it and inspect it: work orders go straight to QC' },
+  {
+    id: 'factory',
+    name: 'Manufacturing suite',
+    portals: ['sales', 'procurement', 'production', 'quality'],
+    group: 'factory',
+    desc: 'Sales, Purchase, Production and Quality: from enquiry to inspected, dispatched job',
+    best: true,
+  },
+  { id: 'complete', name: 'Complete suite', portals: ['timesheet', 'sales', 'procurement', 'production', 'quality'], group: 'factory', desc: 'All five portals, with timesheets and project hours' },
+];
+/** Each portal's own bundle, for "you save" against buying them separately. */
+const SINGLE: Record<string, Bundle> = { timesheet: 'timesheet', procurement: 'purchase', sales: 'sales', production: 'production', quality: 'quality' };
+/** Every portal that is sold in a plan. */
+export const PRICED_PORTALS = Object.keys(SINGLE);
 export const isCombo = (b: Bundle) => (bundleOf(b)?.portals.length ?? 0) > 1;
 
 export const TIERS: { id: TierId; name: string; tagline: string; users: number; popular?: boolean; features: string[] }[] = [
@@ -43,15 +77,21 @@ export const TIERS: { id: TierId; name: string; tagline: string; users: number; 
 ];
 
 /** Price per month in rupees when paid monthly (covers hosting and payment costs). */
-// Two portals together cost about 20% less than separately; all three about 30% less.
+// Two portals together cost about 20% less than separately; three about 30% less;
+// the Manufacturing suite about 40% less and the Complete suite about 45% less.
 const MONTHLY_INR: Record<Bundle, Record<TierId, number>> = {
   timesheet: { starter: 1199, growth: 2999, business: 6999 },
   purchase: { starter: 1799, growth: 4199, business: 9599 },
   sales: { starter: 1799, growth: 4199, business: 9599 },
+  production: { starter: 1999, growth: 4699, business: 10499 },
+  quality: { starter: 1299, growth: 2999, business: 6999 },
   both: { starter: 2399, growth: 5999, business: 13999 },
   timesheet_sales: { starter: 2399, growth: 5999, business: 13999 },
   purchase_sales: { starter: 2899, growth: 6799, business: 15499 },
   all: { starter: 3399, growth: 7999, business: 18499 },
+  production_quality: { starter: 2599, growth: 5999, business: 13499 },
+  factory: { starter: 3999, growth: 9499, business: 21999 },
+  complete: { starter: 4499, growth: 10499, business: 24499 },
 };
 
 /** Monthly price in the client's currency: rupees, or dollars at USD_RATE rounded up. */
@@ -72,10 +112,10 @@ export const CYCLES: { id: Cycle; label: string; months: number; discount: numbe
  * Portals not priced in any plan yet: included with every plan and the trial, never paused by a
  * plan change. A new portal goes here until it gets bundles and prices above.
  */
-export const UNPRICED_PORTALS: string[] = ['production', 'quality'];
+export const UNPRICED_PORTALS: string[] = [];
 
 /** Limits while on the free trial: every portal, Growth team size. */
-export const TRIAL_LIMITS = { users: 40, portals: ['timesheet', 'procurement', 'sales', ...UNPRICED_PORTALS] };
+export const TRIAL_LIMITS = { users: 40, portals: [...PRICED_PORTALS, ...UNPRICED_PORTALS] };
 
 export const cycleOf = (c: string) => CYCLES.find((x) => x.id === c) ?? CYCLES[0];
 export const bundleOf = (b: string) => BUNDLES.find((x) => x.id === b);

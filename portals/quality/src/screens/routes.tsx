@@ -2,7 +2,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { query } from '@orbit/core/next';
 import { Chip, ColumnChart, EmptyState, KpiStrip, PieChart, TopBar } from '@orbit/ui';
-import { fmtDate, roleLabel, type QcSource } from '../config';
+import { fmtDate, roleLabel, SOURCE_COLOR, SOURCE_IDS, SOURCE_KIND } from '../config';
 import { admin, dashboard, inspections, myRole, NOT_READY, notReady, queue, type QcFilter } from '../server';
 import { InspectionView } from './InspectionView';
 import { SettingsClient } from './SettingsClient';
@@ -63,7 +63,7 @@ const Dashboard: Screen = async () => {
           <div className="o-panel">
             <h2>Where inspections come from</h2>
             <div className="o-row" style={{ gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-              <PieChart slices={d.bySource.map((s) => ({ label: s.source === 'purchase' ? 'Incoming material' : 'Finished work', value: s.total, detail: `${s.total ? Math.round((s.pass / s.total) * 100) : 0}% pass · ${s.open} open`, color: s.source === 'purchase' ? 'var(--steel)' : 'var(--hivis)' }))} size={150} unit="reports" decimals={0} />
+              <PieChart slices={d.bySource.map((s) => ({ label: SOURCE_KIND[s.source], value: s.total, detail: `${s.total ? Math.round((s.pass / s.total) * 100) : 0}% pass · ${s.open} open`, color: SOURCE_COLOR[s.source] }))} size={150} unit="reports" decimals={0} />
               <table className="o-table" style={{ flex: 1, minWidth: 240 }}>
                 <thead>
                   <tr>
@@ -201,7 +201,7 @@ const FILTERS: { id: QcFilter; label: string }[] = [
 
 const Inspections: Screen = async ({ searchParams }) => {
   const filter = (FILTERS.find((f) => f.id === one(searchParams.f))?.id ?? 'open') as QcFilter;
-  const source = (['purchase', 'production'] as QcSource[]).find((s) => s === one(searchParams.source));
+  const source = SOURCE_IDS.find((s) => s === one(searchParams.source));
   const q = one(searchParams.q) ?? '';
   const rows = await query((tx, ctx) => inspections.listInspections(tx, ctx, { filter, source, q }));
   return (
@@ -240,7 +240,7 @@ const Inspections: Screen = async ({ searchParams }) => {
 
 const Reports: Screen = async ({ searchParams }) => {
   const result = (['pass', 'fail'] as const).find((r) => r === one(searchParams.result));
-  const source = (['purchase', 'production'] as QcSource[]).find((s) => s === one(searchParams.source));
+  const source = SOURCE_IDS.find((s) => s === one(searchParams.source));
   const rows = await query((tx, ctx) => inspections.listInspections(tx, ctx, { filter: 'approved', result, source }));
   const link = (r?: string, s?: string) => `?${[r ? `result=${r}` : '', s ? `source=${s}` : ''].filter(Boolean).join('&')}`;
   return (
@@ -260,14 +260,13 @@ const Reports: Screen = async ({ searchParams }) => {
           </Link>
           <span style={{ flex: 1 }} />
           <Link href={link(result, undefined)} aria-current={!source ? 'page' : undefined}>
-            Both
+            All
           </Link>
-          <Link href={link(result, 'purchase')} aria-current={source === 'purchase' ? 'page' : undefined}>
-            Material
-          </Link>
-          <Link href={link(result, 'production')} aria-current={source === 'production' ? 'page' : undefined}>
-            Finished work
-          </Link>
+          {SOURCE_IDS.map((s) => (
+            <Link key={s} href={link(result, s)} aria-current={source === s ? 'page' : undefined}>
+              {SOURCE_KIND[s]}
+            </Link>
+          ))}
         </nav>
         <div className="o-panel flush">
           <InspTable rows={rows} empty="No final reports yet." final />

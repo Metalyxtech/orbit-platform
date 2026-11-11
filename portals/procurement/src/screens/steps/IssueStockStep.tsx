@@ -9,6 +9,7 @@ import { useStep } from './useStep';
 export function IssueStockStep({ d }: { d: RequestDetail }) {
   const { busy, run } = useStep();
   const lines = d.lines.filter((l) => l.reserveState === 'reserved');
+  const to = d.origin ? `the production store (${d.origin.ref})` : d.request.project;
   return (
     <div className="o-stack" style={{ gap: 8 }}>
       {lines.map((l) => (
@@ -19,8 +20,8 @@ export function IssueStockStep({ d }: { d: RequestDetail }) {
           </span>
         </div>
       ))}
-      <Button variant="primary" block disabled={busy} onClick={() => run(() => issueStockAction({ id: d.request.id }), `Stock issued to ${d.request.project}.`)}>
-        Issue to {d.request.project}
+      <Button variant="primary" block disabled={busy} onClick={() => run(() => issueStockAction({ id: d.request.id }), `Stock issued to ${to}.`)}>
+        Issue to {to}
       </Button>
     </div>
   );

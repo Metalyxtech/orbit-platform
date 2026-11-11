@@ -8,7 +8,7 @@ export type ProcRole = 'requester' | 'buyer' | 'store' | 'qc' | 'manager' | 'gm'
 export const PROC_ROLES: { id: ProcRole; label: string; detail: string }[] = [
   { id: 'requester', label: 'Site engineer', detail: 'Raises material requests and follows them to delivery' },
   { id: 'buyer', label: 'Purchase engineer', detail: 'Checks stock, collects quotes, awards and issues POs' },
-  { id: 'store', label: 'Storekeeper', detail: 'Stock entry, goods receipt and issue to site' },
+  { id: 'store', label: 'Purchase store keeper', detail: 'Main store: stock entry, matches requests with stock, goods receipt with MTC documents, issue' },
   { id: 'manager', label: 'Purchase manager', detail: 'Approves requests and monitors purchasing' },
   { id: 'gm', label: 'General manager', detail: 'High-value approvals and company-wide view' },
   { id: 'accounts', label: 'Accounts', detail: 'Matches supplier invoices to PO and receipt' },
@@ -25,15 +25,34 @@ export const ORDER: Stage[] = ['draft', 'stock_check', 'pr_approval', 'rfq', 'po
 export const WORK: StageKey[] = ['stock_check', 'pr_approval', 'rfq', 'po_approval', 'issue', 'receiving', 'inspection', 'invoice'];
 
 export const STAGES: Record<StageKey, { label: string; role: ProcRole | 'approval'; optional: boolean; what: string }> = {
-  stock_check: { label: 'Stock check', role: 'buyer', optional: true, what: 'Compare each line with store stock, reserve what is available and buy only the shortfall.' },
+  stock_check: { label: 'Stock check', role: 'buyer', optional: true, what: 'The purchase engineer or purchase store keeper compares each line with the main store, reserves what is available and buys only the shortfall.' },
   pr_approval: { label: 'Requisition approval', role: 'approval', optional: true, what: 'Approval levels sign off the estimated value of what will be bought.' },
   rfq: { label: 'Sourcing and quotes', role: 'buyer', optional: false, what: 'Enter supplier quotes, compare them line by line and award one supplier.' },
   po_approval: { label: 'PO approval', role: 'approval', optional: true, what: 'Approval levels sign off the awarded value.' },
   issue: { label: 'Issue PO', role: 'buyer', optional: false, what: 'A PO number is generated and the order goes to the supplier.' },
-  receiving: { label: 'Goods receipt', role: 'store', optional: true, what: 'Record delivery notes; partial deliveries keep the step open. Lines can be booked into stock.' },
+  receiving: { label: 'Goods receipt', role: 'store', optional: true, what: 'Record delivery notes, where the goods arrived (purchase or production store) and the MTC / test certificates; partial deliveries keep the step open.' },
   inspection: { label: 'Quality inspection', role: 'qc', optional: true, what: 'Done in the Quality portal (QC engineer, then QC manager). Without the Quality portal this step is skipped.' },
   invoice: { label: 'Invoice match', role: 'accounts', optional: true, what: 'Three-way match of PO, receipt and invoice within the tolerance.' },
   stock_issue: { label: 'Issue from stock', role: 'store', optional: false, what: 'When stock covers the whole request, the storekeeper issues it and the request closes without a PO.' },
+};
+
+/** Other roles that may also act on a stage (the purchase store keeper matches requests with stock). */
+export const STAGE_HELPERS: Partial<Record<StageKey, ProcRole[]>> = { stock_check: ['store'] };
+
+/** Where goods were received. Material for a production request goes to the production store either way. */
+export type ReceivedAt = 'purchase' | 'production';
+export const RECEIVED_AT: Record<ReceivedAt, string> = { purchase: 'Purchase (main) store', production: 'Production store' };
+
+/** A request raised by another portal (production material request), kept in the request header. */
+export interface RequestOrigin {
+  portal: 'production';
+  id: string;
+  ref: string;
+  workOrder: string;
+}
+export const originOf = (header: unknown): RequestOrigin | null => {
+  const o = (header as { _from?: RequestOrigin } | null)?._from;
+  return o && o.portal === 'production' && typeof o.id === 'string' ? o : null;
 };
 
 export type FieldType = 'text' | 'number' | 'select' | 'date' | 'check';

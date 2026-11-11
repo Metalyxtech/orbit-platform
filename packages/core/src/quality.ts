@@ -8,7 +8,8 @@ import type { ActionContext } from './session';
 // the source portal's registered handler moves its own record on. No portal imports another.
 
 export const QUALITY_PORTAL = 'quality';
-export type QcSource = 'purchase' | 'production';
+/** purchase: goods receipt on a PO; production: finished work order; store: material received into the production store. */
+export type QcSource = 'purchase' | 'production' | 'store';
 
 export interface InspectionRequest {
   source: QcSource;
@@ -83,7 +84,7 @@ export async function requestInspection(tx: Tx, ctx: ActionContext, req: Inspect
       requestedBy: ctx.membershipId,
     })
     .returning({ id: qcInspections.id, number: qcInspections.number });
-  await tx.insert(qcEvents).values({ companyId: ctx.companyId, inspectionId: row.id, text: `${n ? `Re-inspection (round ${n + 1})` : 'Inspection'} requested from ${req.source === 'purchase' ? 'Purchase' : 'Production'}: ${req.sourceRef}`, byId: ctx.membershipId });
+  await tx.insert(qcEvents).values({ companyId: ctx.companyId, inspectionId: row.id, text: `${n ? `Re-inspection (round ${n + 1})` : 'Inspection'} requested from ${req.source === 'purchase' ? 'Purchase' : req.source === 'store' ? 'Production store' : 'Production'}: ${req.sourceRef}`, byId: ctx.membershipId });
   return row;
 }
 
@@ -99,6 +100,31 @@ export async function latestInspection(tx: Tx, companyId: string, source: QcSour
     });
   } catch {
     return null; // migration 0025 not run yet
+  }
+}
+
+/**
+ * Adds documents (MTC / test certificates uploaded by the store after the inspection was raised)
+ * to the open inspection of a record. Nothing happens when no inspection is open.
+ */
+export async function addInspectionDocuments(tx: Tx, companyId: string, source: QcSource, sourceId: string, docs: { name: string; url: string }[]) {
+  if (!docs.length) return false;
+  try {
+    return await tx.transaction(async (sp) => {
+      const [open] = await sp
+        .select({ id: qcInspections.id, documents: qcInspections.documents })
+        .from(qcInspections)
+        .where(and(eq(qcInspections.companyId, companyId), eq(qcInspections.source, source), eq(qcInspections.sourceId, sourceId), inArray(qcInspections.status, OPEN)));
+      if (!open) return false;
+      const have = (open.documents as { name: string; url: string }[]) ?? [];
+      const add = docs.filter((d) => !have.some((h) => h.url === d.url));
+      if (!add.length) return false;
+      await sp.update(qcInspections).set({ documents: [...have, ...add] }).where(eq(qcInspections.id, open.id));
+      await sp.insert(qcEvents).values({ companyId, inspectionId: open.id, text: `Store added ${add.length} document${add.length === 1 ? '' : 's'}: ${add.map((d) => d.name).join(', ')}`.slice(0, 500) });
+      return true;
+    });
+  } catch {
+    return false; // Quality not set up yet
   }
 }
 

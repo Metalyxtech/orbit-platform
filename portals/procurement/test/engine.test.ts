@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { configFromTemplate } from '../src/config';
+import { configFromTemplate, originOf } from '../src/config';
 import { canAct, chainFor, estValue, expectedInvoice, fullyReceived, nextStage, ownerRole, pendingLevel, receivedQty, variancePct, withinTolerance } from '../src/engine';
 
 const cfg = configFromTemplate('fab');
@@ -61,5 +61,19 @@ describe('purchase workflow', () => {
     expect(exp).toBe(1210);
     expect(withinTolerance(cfg, variancePct(1230, exp))).toBe(true);
     expect(withinTolerance(cfg, variancePct(1300, exp))).toBe(false);
+  });
+});
+
+describe('stock check helpers and production requests', () => {
+  it('lets the purchase store keeper act at the stock check, but not on other buyer steps', () => {
+    expect(canAct(['store'], 'buyer', 'stock_check')).toBe(true);
+    expect(canAct(['store'], 'buyer', 'rfq')).toBe(false);
+    expect(canAct(['buyer'], 'buyer', 'rfq')).toBe(true);
+    expect(canAct(['store'], null, 'stock_check')).toBe(false);
+  });
+  it('reads the production origin from the request header', () => {
+    expect(originOf({ _from: { portal: 'production', id: 'x', ref: 'MR-0001', workOrder: 'WO-1' } })?.ref).toBe('MR-0001');
+    expect(originOf({ dept: 'Ops' })).toBeNull();
+    expect(originOf(null)).toBeNull();
   });
 });

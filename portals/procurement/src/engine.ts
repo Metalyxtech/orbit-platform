@@ -1,6 +1,6 @@
 // Purchase workflow engine: pure functions, no database. The server uses these to decide the next
 // stage, who must act and what the money adds up to; the tests cover them.
-import { ORDER, STAGES, type ApprovalLevel, type ProcConfig, type ProcRole, type Stage, type StageKey } from './config';
+import { ORDER, STAGE_HELPERS, STAGES, type ApprovalLevel, type ProcConfig, type ProcRole, type Stage, type StageKey } from './config';
 
 export const r3 = (v: number) => Math.round(v * 1000) / 1000;
 export const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -54,8 +54,12 @@ export function ownerRole(cfg: ProcConfig, stage: Stage, pending: ApprovalLevel 
   return role === 'approval' ? null : role;
 }
 
-/** A person acts on a step when their role owns it, or when they cover that role (admins standing in). */
-export const canAct = (roles: ProcRole[], owner: ProcRole | null) => owner != null && roles.includes(owner);
+/**
+ * A person acts on a step when their role owns it, when they cover that role (admins standing in),
+ * or when their role helps on that stage (the store keeper at the stock check).
+ */
+export const canAct = (roles: ProcRole[], owner: ProcRole | null, stage?: Stage) =>
+  owner != null && (roles.includes(owner) || (stage != null && stage in STAGE_HELPERS && (STAGE_HELPERS[stage as StageKey] ?? []).some((r) => roles.includes(r))));
 
 /** Received quantity per line across all receipts. */
 export const receivedQty = (lineCount: number, receipts: { qty: number[] }[]) =>

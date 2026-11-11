@@ -213,3 +213,23 @@ export const procQuoteFiles = pgTable(
   },
   (t) => [index('proc_quote_files_request').on(t.companyId, t.requestId)],
 );
+
+/** MTC / test certificates and delivery documents the store uploads at goods receipt (migration 0027). */
+export const procReceiptFiles = pgTable(
+  'proc_receipt_files',
+  {
+    id: id(),
+    companyId: companyId(),
+    requestId: uuid('request_id')
+      .notNull()
+      .references(() => procRequests.id),
+    s3Key: text('s3_key').notNull(),
+    fileName: text('file_name').notNull(),
+    contentType: text('content_type').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    uploaded: boolean('uploaded').notNull().default(false),
+    byId: uuid('by_id').references(() => memberships.id),
+    createdAt: at(),
+  },
+  (t) => [index('proc_receipt_files_request').on(t.companyId, t.requestId)],
+);

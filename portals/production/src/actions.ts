@@ -1,7 +1,7 @@
 'use server';
 // Server actions for the Production portal: each runs as the signed-in member in one RLS transaction.
 import { runAction } from '@orbit/core/next';
-import { admin, drawings, floor, store, workorders } from './server';
+import { admin, drawings, floor, mr, receipts, stock, store, workorders } from './server';
 
 type In<F> = F extends (tx: never, ctx: never, input: infer I) => unknown ? I : never;
 
@@ -46,4 +46,36 @@ export async function addDrawingLinkAction(input: In<typeof drawings.addDrawingL
 }
 export async function removeDrawingAction(input: { docId: string }) {
   return runAction((tx, ctx) => drawings.removeDrawing(tx, ctx, input));
+}
+
+// ---------- material requests, production store ----------
+export async function createMrAction(input: In<typeof mr.createMr>) {
+  return runAction((tx, ctx) => mr.createMr(tx, ctx, input));
+}
+export async function issueMrAction(input: In<typeof mr.issueMr>) {
+  return runAction((tx, ctx) => mr.issueMr(tx, ctx, input));
+}
+export async function askPurchaseAction(input: In<typeof mr.askPurchase>) {
+  return runAction((tx, ctx) => mr.askPurchase(tx, ctx, input));
+}
+export async function decideMrAction(input: In<typeof mr.decideMr>) {
+  return runAction((tx, ctx) => mr.decideMr(tx, ctx, input));
+}
+export async function cancelMrAction(input: { id: string; note: string }) {
+  return runAction((tx, ctx) => mr.cancelMr(tx, ctx, input));
+}
+export async function recordDeliveryAction(input: In<typeof mr.recordDelivery>) {
+  return runAction((tx, ctx) => mr.recordDelivery(tx, ctx, input));
+}
+export async function receiveDirectAction(input: In<typeof receipts.receiveDirect>) {
+  return runAction((tx, ctx) => receipts.receiveDirect(tx, ctx, input));
+}
+export async function startStoreDocUploadAction(input: In<typeof receipts.startReceiptUpload>) {
+  return runAction((tx, ctx) => receipts.startReceiptUpload(tx, ctx, input));
+}
+export async function confirmStoreDocUploadAction(input: { fileId: string }) {
+  return runAction((tx, ctx) => receipts.confirmReceiptUpload(tx, ctx, input));
+}
+export async function adjustStockAction(input: In<typeof stock.adjustStock>) {
+  return runAction((tx, ctx) => stock.adjustStock(tx, ctx, input));
 }

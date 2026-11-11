@@ -8,7 +8,7 @@ describe('quality config', () => {
   });
   it('labels every status and source', () => {
     expect(Object.keys(QC_STATUS)).toEqual(['pending', 'submitted', 'approved', 'cancelled']);
-    expect(Object.keys(SOURCES)).toEqual(['purchase', 'production']);
+    expect(Object.keys(SOURCES)).toEqual(['purchase', 'production', 'store']);
   });
   it('defaults company admins to admin, management to GM, others to inspector', () => {
     expect(qualityManifest.defaultPortalRole?.('company_admin')).toBe('admin');

@@ -1,7 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import type { SessionContext } from '@orbit/core';
 import { qcInspections, type Tx } from '@orbit/db';
-import type { QcRole } from '../config';
+import { SOURCE_KIND, type QcRole, type QcSource } from '../config';
 import { qualityTeam } from './admin';
 import { myRole, notReady } from './shared';
 
@@ -24,7 +24,7 @@ async function build(tx: Tx, ctx: SessionContext): Promise<QueueItem[]> {
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
     .map((r) => {
       const hours = Math.round((Date.now() - r.createdAt.getTime()) / 36e5);
-      const what = r.source === 'purchase' ? 'incoming material' : 'finished work';
+      const what = SOURCE_KIND[r.source as QcSource].toLowerCase();
       return r.status === 'pending'
         ? { id: `qi:${r.id}`, title: `${r.returnNote ? 'Re-check' : 'Inspect'} ${r.sourceRef}: ${r.title}`, detail: r.returnNote ? `QC manager: ${r.returnNote}` : `${r.number} · ${what}${r.party ? ` · ${r.party}` : ''}${r.round > 1 ? ` · round ${r.round}` : ''}`, href: `/quality/inspection?id=${r.id}`, urgent: !!r.returnNote || hours > 24 }
         : { id: `qa:${r.id}`, title: `Final approval ${r.number}: ${r.result === 'pass' ? 'PASS' : 'FAIL'}`, detail: `${r.sourceRef} · ${r.title}`, href: `/quality/inspection?id=${r.id}`, urgent: r.result === 'fail' };

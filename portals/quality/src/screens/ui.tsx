@@ -14,7 +14,7 @@ export function ResultChip({ result }: { result: 'pass' | 'fail' | null }) {
   if (!result) return null;
   return result === 'pass' ? <Chip tone="ok">PASS</Chip> : <Chip tone="bad">FAIL</Chip>;
 }
-export const SourceTag = ({ source }: { source: keyof typeof SOURCES }) => <Chip tone={source === 'purchase' ? 'steel' : 'grey'}>{source === 'purchase' ? 'Purchase' : 'Production'}</Chip>;
+export const SourceTag = ({ source }: { source: keyof typeof SOURCES }) => <Chip tone={source === 'purchase' ? 'steel' : source === 'store' ? 'ok' : 'grey'}>{source === 'purchase' ? 'Purchase' : source === 'store' ? 'Production store' : 'Production'}</Chip>;
 
 export function PageHead({ title, lead, children }: { title: string; lead?: ReactNode; children?: ReactNode }) {
   return (

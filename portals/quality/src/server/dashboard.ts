@@ -1,7 +1,7 @@
 import { and, desc, eq, gte } from 'drizzle-orm';
 import type { SessionContext } from '@orbit/core';
 import { qcInspections, type Tx } from '@orbit/db';
-import { hoursBetween, type QcSource } from '../config';
+import { hoursBetween, SOURCE_IDS, type QcSource } from '../config';
 import { myRole, peopleById } from './shared';
 
 // Quality dashboard for the QC manager and GM: work in hand, results, turnaround, trends and
@@ -28,7 +28,7 @@ export async function dashboard(tx: Tx, ctx: SessionContext) {
     const list = final.filter((r) => r.approvedAt?.toISOString().slice(0, 7) === key);
     months.push({ key, label: d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }), pass: passed(list), fail: list.length - passed(list) });
   }
-  const bySource = (['purchase', 'production'] as QcSource[]).map((s) => {
+  const bySource = SOURCE_IDS.map((s) => {
     const list = final.filter((r) => r.source === s);
     return { source: s, total: list.length, pass: passed(list), open: rows.filter((r) => r.source === s && (r.status === 'pending' || r.status === 'submitted')).length };
   });

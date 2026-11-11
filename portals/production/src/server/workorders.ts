@@ -6,6 +6,7 @@ import { prodEvents, prodMaterials, prodOperations, prodReports, prodWorkOrders,
 import { OPEN_STATUSES, WO_STATUS, type OpStatus, type ProdRole, type WoStatus } from '../config';
 import { TRADES, tradeOf } from '../trades';
 import { customerDocuments, listDrawings } from './drawings';
+import { listMrs, type MrRow } from './mr';
 import { hasRole, loadConfig, lockWo, logEvent, myRole, nextNumber, peopleById, requireRole, today } from './shared';
 
 // Work orders: planning (trade form, materials, operations), release by the production manager,
@@ -191,6 +192,8 @@ export async function workOrderDetail(tx: Tx, ctx: SessionContext, id: string) {
     wo: { ...wo, status, createdByName: name(wo.createdBy), releasedByName: name(wo.releasedBy), salesOrder, late: !!wo.due && wo.due < today() && OPEN_STATUSES.includes(status) },
     ops: ops.map((o) => ({ ...o, status: o.status as OpStatus })),
     materials: mats,
+    /** Material requests on this work order (empty before migration 0027). */
+    mrs: await tx.transaction((sp) => listMrs(sp, ctx, { workOrderId: wo.id })).catch((): MrRow[] => []),
     reports: reports.map((r) => ({ ...r, operation: opName.get(r.operationId) ?? '', by: name(r.byId), createdAt: r.createdAt.toISOString() })),
     /** Latest QC inspection in the Quality portal (null when none). */
     qc: qc ? { ...qc, approvedAt: qc.approvedAt?.toISOString() ?? null } : null,
@@ -207,6 +210,7 @@ export async function workOrderDetail(tx: Tx, ctx: SessionContext, id: string) {
       report: floor && hasRole(me, 'supervisor', 'manager'),
       reworkDone: status === 'in_progress' && !!wo.returnedNote && ops.every((o) => o.status === 'done') && hasRole(me, 'supervisor', 'manager'),
       dispatch: status === 'completed' && hasRole(me, 'store', 'manager'),
+      requestMaterial: ['released', 'in_progress'].includes(status) && hasRole(me, 'supervisor', 'engineer', 'manager'),
     },
   };
 }

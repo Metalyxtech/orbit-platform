@@ -10,6 +10,7 @@ import { SettingsClient } from './SettingsClient';
 import { NotReady, PageHead, PriorityChip, Progress, woHref, WoTable } from './ui';
 import { WorkOrderForm } from './WorkOrderForm';
 import { WorkOrderView } from './WorkOrderView';
+import { Materials, MrPage, Receipts, Stock } from './materials';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 type Screen = (props: { searchParams: SearchParams }) => Promise<ReactNode>;
@@ -482,6 +483,10 @@ export const productionRoutes: Record<string, Screen> = Object.fromEntries(
     report: Report,
     output: Output,
     store: Store,
+    materials: Materials,
+    mr: MrPage,
+    stock: Stock,
+    receipts: Receipts,
     trades: Trades,
     'admin/settings': Settings,
   }).map(([k, s]) => [k, guard(s)]),

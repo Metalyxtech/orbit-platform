@@ -12,7 +12,8 @@
     "./hmac": "./src/hmac.ts",
     "./next": "./src/next/index.ts",
     "./outbox": "./src/outbox.ts",
-    "./quality": "./src/quality.ts"
+    "./quality": "./src/quality.ts",
+    "./supply": "./src/supply.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

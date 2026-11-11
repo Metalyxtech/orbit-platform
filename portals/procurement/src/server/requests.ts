@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { audit, type ActionContext, type SessionContext } from '@orbit/core';
+import { latestInspection, qualityOn, requestInspection, type QualityDecision } from '@orbit/core/quality';
 import { procEvents, procItems, procLines, procMoves, procQuotes, procReceipts, procRequests, procSuppliers, type Tx } from '@orbit/db';
 import { OPEN_STAGES, roleLabel, stageLabel, type ProcConfig, type ProcRole, type Stage } from '../config';
 import {
@@ -69,6 +70,7 @@ export async function requestDetail(tx: Tx, ctx: SessionContext, id: string) {
   const { role: me, roles } = await myRoles(tx, ctx);
   const [r] = await tx.select().from(procRequests).where(and(eq(procRequests.id, id), eq(procRequests.companyId, ctx.companyId)));
   if (!r) return null;
+  const [qc, qcOn] = r.stage === 'inspection' || r.stage === 'invoice' || r.stage === 'closed' ? await Promise.all([latestInspection(tx, ctx.companyId, 'purchase', r.id), qualityOn(tx, ctx.companyId)]) : [null, false];
   const [lines, quotes, receipts, events] = await Promise.all([
     linesOf(tx, id),
     tx
@@ -99,6 +101,8 @@ export async function requestDetail(tx: Tx, ctx: SessionContext, id: string) {
   const chainValue = chainKind === 'po' ? value : estValue(lines);
   return {
     me,
+    /** Quality portal: on for the company, and the latest inspection of this request. */
+    qc: { on: qcOn, last: qc ? { ...qc, approvedAt: qc.approvedAt?.toISOString() ?? null } : null },
     isAdmin: ctx.role === 'company_admin',
     cfg: { form: cfg.form, options: cfg.options.filter((o) => o.on), minQuotes: cfg.minQuotes, money: cfg.money, flow: cfg.flow },
     flowStages: flowOf(cfg)
@@ -288,6 +292,17 @@ async function advance(tx: Tx, ctx: ActionContext, cfg: ProcConfig, r: Req) {
   const lines = await linesOf(tx, r.id);
   let stage = nextStage(cfg, r.stage as Stage, lines);
   for (let guard = 0; guard < 12; guard++) {
+    if (stage === 'inspection') {
+      // Inspection is done in the Quality portal. Without it, material is accepted on receipt.
+      if (await qualityOn(tx, ctx.companyId)) {
+        const ir = await requestInspection(tx, ctx, await qcRequestFor(tx, cfg, r, lines));
+        await tx.insert(procEvents).values({ companyId: ctx.companyId, requestId: r.id, kind: 'log', stage, text: `Sent to QC for incoming inspection (${ir.number})` });
+        break;
+      }
+      await tx.insert(procEvents).values({ companyId: ctx.companyId, requestId: r.id, kind: 'log', stage, text: 'No Quality portal: inspection skipped, material accepted' });
+      stage = nextStage(cfg, stage, lines);
+      continue;
+    }
     if (stage !== 'pr_approval' && stage !== 'po_approval') break;
     const v = await stageValue(tx, r, lines, stage);
     if (chainFor(cfg, stage === 'pr_approval' ? 'pr' : 'po', v).length) break;
@@ -543,19 +558,81 @@ export async function receive(tx: Tx, ctx: ActionContext, raw: z.input<typeof re
   return { stage: r.stage };
 }
 
-const inspectInput = idOnly.extend({ result: z.enum(['Pass', 'Conditional', 'Fail']), note: z.string().trim().max(1000), checks: z.array(z.string()) });
+/** What QC needs for an incoming inspection: the order, supplier, items received and the documents. */
+async function qcRequestFor(tx: Tx, cfg: ProcConfig, r: Req, lines: Line[]) {
+  const [award] = r.awardQuoteId
+    ? await tx.select({ supplier: procSuppliers.name }).from(procQuotes).innerJoin(procSuppliers, eq(procSuppliers.id, procQuotes.supplierId)).where(eq(procQuotes.id, r.awardQuoteId))
+    : [];
+  const receipts = await tx.select().from(procReceipts).where(eq(procReceipts.requestId, r.id)).orderBy(asc(procReceipts.createdAt));
+  const received = receivedQty(lines.length, receipts);
+  const files = (await filesForRequest(tx, r.companyId, r.id)).filter((f) => !r.awardQuoteId || f.quoteId === r.awardQuoteId);
+  return {
+    source: 'purchase' as const,
+    sourceId: r.id,
+    sourceRef: r.poNo ?? r.number,
+    title: r.title,
+    party: award?.supplier ?? null,
+    details: [
+      { label: 'Request', value: r.number },
+      ...(r.poNo ? [{ label: 'Purchase order', value: r.poNo }] : []),
+      { label: 'Project', value: r.project },
+      ...(award ? [{ label: 'Supplier', value: award.supplier }] : []),
+      ...receipts.map((g, i) => ({ label: `Delivery ${i + 1}`, value: `${g.deliveryNote} (${g.condition.toLowerCase()})${g.docsOk ? ', documents received' : ''}` })),
+    ],
+    items: lines.map((l, i) => ({ item: l.description, qty: received[i] || buyOf(l), unit: l.unit })).filter((x) => x.qty > 0),
+    checklist: [
+      'Quantity matches the delivery note',
+      'Material as per PO specification / grade',
+      'No visible damage, rust or defects',
+      'Test certificates / documents received',
+      ...cfg.options.filter((o) => o.on && o.qcCheck).map((o) => o.qcCheck!),
+    ],
+    documents: files.map((f) => ({ name: f.fileName, url: `/api/proc-quote-files/${f.id}` })),
+  };
+}
 
-export async function inspect(tx: Tx, ctx: ActionContext, raw: z.input<typeof inspectInput>) {
-  const input = inspectInput.parse(raw);
-  const { cfg, r } = await begin(tx, ctx, input.id, 'inspection');
-  if (input.result !== 'Fail') for (const o of cfg.options.filter((x) => x.on && x.qcCheck)) if (!input.checks.includes(o.id)) throw new Error(`Confirm: ${o.qcCheck}`);
-  if (input.result !== 'Pass' && !input.note) throw new Error('Add a note for a conditional or failed inspection');
-  await log(tx, ctx, r, `Inspection ${input.result.toLowerCase()}`, { kind: 'inspection', result: input.result, note: input.note || null });
-  if (input.result === 'Fail') {
-    await tx.insert(procEvents).values({ companyId: ctx.companyId, requestId: r.id, kind: 'log', stage: r.stage, text: 'Non-conformance raised; supplier to rectify' });
-    return { stage: r.stage };
+/**
+ * QC's final result for a request at inspection (called through @orbit/core/quality when the QC
+ * manager approves the report). Pass moves it on; fail holds it for the supplier to rectify.
+ */
+export async function onQualityResult(tx: Tx, ctx: ActionContext, d: QualityDecision) {
+  const r = await lockRequest(tx, ctx, d.sourceId);
+  if (r.stage !== 'inspection') {
+    await log(tx, ctx, r, `QC result ${d.number}: ${d.result.toUpperCase()} (request already moved on)`);
+    return;
   }
-  return { stage: await advance(tx, ctx, cfg, r) };
+  if (d.result === 'fail') {
+    await log(tx, ctx, r, `QC failed (${d.number}): ${d.ncr ?? 'non-conformance'}. Supplier to rectify, then ask QC to inspect again.`, { kind: 'inspection', result: 'Fail', note: d.ncr });
+    return;
+  }
+  await log(tx, ctx, r, `QC passed (${d.number})${d.remarks ? `: ${d.remarks}` : ''}`, { kind: 'inspection', result: 'Pass', note: d.remarks });
+  await advance(tx, ctx, await loadConfig(tx, ctx.companyId), r);
+}
+
+/** After a QC fail, the supplier rectified: the buyer or store asks QC to inspect again. */
+export async function requestReinspection(tx: Tx, ctx: ActionContext, raw: { id: string; note: string }) {
+  const v = z.object({ id: z.uuid(), note: z.string().trim().max(1000) }).parse(raw);
+  requireRole(await myRole(tx, ctx), 'buyer', 'store', 'manager');
+  const r = await lockRequest(tx, ctx, v.id);
+  if (r.stage !== 'inspection') throw new Error('This request is not at inspection');
+  if (!(await qualityOn(tx, ctx.companyId))) throw new Error('The Quality portal is not on for your company');
+  const last = await latestInspection(tx, ctx.companyId, 'purchase', r.id);
+  if (last && last.status !== 'approved') throw new Error('QC is already inspecting this request');
+  if (last && v.note.length < 3) throw new Error('Say what the supplier rectified');
+  const cfg = await loadConfig(tx, ctx.companyId);
+  const ir = await requestInspection(tx, ctx, await qcRequestFor(tx, cfg, r, await linesOf(tx, r.id)));
+  await log(tx, ctx, r, last ? `Supplier rectified (${v.note}). Sent to QC again (${ir.number}).` : `Sent to QC for incoming inspection (${ir.number})`);
+  return { ok: true as const };
+}
+
+/** A request left at inspection without a Quality portal (e.g. from before): the manager accepts the material. */
+export async function acceptWithoutQc(tx: Tx, ctx: ActionContext, raw: { id: string }) {
+  requireRole(await myRole(tx, ctx), 'manager');
+  const r = await lockRequest(tx, ctx, z.uuid().parse(raw.id));
+  if (r.stage !== 'inspection') throw new Error('This request is not at inspection');
+  if (await qualityOn(tx, ctx.companyId)) throw new Error('Your company uses the Quality portal: QC decides');
+  await log(tx, ctx, r, 'Material accepted without inspection (no Quality portal)');
+  return { stage: await advance(tx, ctx, await loadConfig(tx, ctx.companyId), r) };
 }
 
 const invoiceInput = idOnly.extend({ no: z.string().trim().min(1, 'Enter the invoice number').max(60), amount: z.number().positive('Enter the invoice amount'), override: z.boolean() });

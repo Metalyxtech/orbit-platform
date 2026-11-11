@@ -1,15 +1,15 @@
 // Production portal: roles, statuses, settings and small helpers. Pure data and functions,
 // safe to import from client components. Trade forms live in ./trades.
 
+/** 'qc' is kept only for old saved roles: inspection is done in the Quality portal. */
 export type ProdRole = 'engineer' | 'manager' | 'supervisor' | 'qc' | 'store' | 'gm' | 'admin';
 
 export const PROD_ROLES: { id: ProdRole; label: string; detail: string }[] = [
   { id: 'engineer', label: 'Production engineer', detail: 'Plans work orders: trade form, materials and operations' },
-  { id: 'manager', label: 'Production manager', detail: 'Releases work orders, watches progress, closes NCRs' },
+  { id: 'manager', label: 'Production manager', detail: 'Releases work orders and watches progress' },
   { id: 'supervisor', label: 'Supervisor', detail: 'Reports daily output and hours on the shop floor' },
-  { id: 'qc', label: 'QC inspector', detail: 'Inspects operations and the final product; raises NCRs' },
   { id: 'store', label: 'Store keeper', detail: 'Issues materials to work orders and dispatches finished goods' },
-  { id: 'gm', label: 'General manager', detail: 'Company-wide view of output, delays and quality' },
+  { id: 'gm', label: 'General manager', detail: 'Company-wide view of output and delays' },
   { id: 'admin', label: 'Production admin', detail: 'Everything, plus production settings' },
 ];
 export const roleLabel = (r: string) => PROD_ROLES.find((x) => x.id === r)?.label ?? r;
@@ -21,7 +21,7 @@ export const WO_STATUS: Record<WoStatus, { label: string; tone: Tone }> = {
   pending_release: { label: 'Waiting release', tone: 'hivis' },
   released: { label: 'Released', tone: 'steel' },
   in_progress: { label: 'In production', tone: 'warn' },
-  final_qc: { label: 'Final QC', tone: 'hivis' },
+  final_qc: { label: 'With QC', tone: 'hivis' },
   completed: { label: 'Ready to dispatch', tone: 'ok' },
   dispatched: { label: 'Dispatched', tone: 'ok' },
   cancelled: { label: 'Cancelled', tone: 'bad' },

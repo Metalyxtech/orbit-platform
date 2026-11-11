@@ -237,7 +237,7 @@ export function RequestView({ d, suppliers }: { d: RequestDetail; suppliers: Sup
                   {d.owner.people.length ? `: ${d.owner.people.join(', ')}` : ' (nobody has this role yet)'}
                 </p>
               )}
-              {d.canAct ? (
+              {d.canAct || r.stage === 'inspection' ? (
                 <StepFor d={d} suppliers={suppliers} />
               ) : r.stage === 'closed' || r.stage === 'rejected' ? (
                 <p className="faint" style={{ fontSize: 12 }}>Nothing more to do.</p>

@@ -6,8 +6,8 @@ import { listChanges, type ChangeArea } from '@/history';
 
 export const dynamic = 'force-dynamic';
 
-const AREAS: ChangeArea[] = ['Purchase', 'Timesheet', 'Sales', 'Production', 'People and access', 'Company'];
-const TONE: Record<ChangeArea, 'steel' | 'hivis' | 'ok' | 'grey'> = { Purchase: 'steel', Timesheet: 'hivis', Sales: 'steel', Production: 'hivis', 'People and access': 'ok', Company: 'grey' };
+const AREAS: ChangeArea[] = ['Purchase', 'Timesheet', 'Sales', 'Production', 'Quality', 'People and access', 'Company'];
+const TONE: Record<ChangeArea, 'steel' | 'hivis' | 'ok' | 'grey'> = { Purchase: 'steel', Timesheet: 'hivis', Sales: 'steel', Production: 'hivis', Quality: 'ok', 'People and access': 'ok', Company: 'grey' };
 const when = (iso: string) =>
   new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 

@@ -107,7 +107,7 @@ export function DailyReportClient({ wos }: { wos: FloorWo[] }) {
                           </>
                         ) : (
                           <td colSpan={4} className="faint" style={{ fontSize: 12 }}>
-                            {o.status === 'rework' ? 'QC sent it back: mark rework done on the work order.' : o.status === 'awaiting_qc' ? 'Complete; waiting for QC.' : 'Complete.'}
+                            Complete.
                           </td>
                         )}
                       </tr>

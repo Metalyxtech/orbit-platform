@@ -1,7 +1,8 @@
 import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { ActionContext, SessionContext } from '@orbit/core';
-import { prodEvents, prodInspections, prodMaterials, prodNcrs, prodOperations, prodReports, prodWorkOrders, salesCustomers, salesOrders, type Tx } from '@orbit/db';
+import { latestInspection } from '@orbit/core/quality';
+import { prodEvents, prodMaterials, prodOperations, prodReports, prodWorkOrders, salesCustomers, salesOrders, type Tx } from '@orbit/db';
 import { OPEN_STATUSES, WO_STATUS, type OpStatus, type ProdRole, type WoStatus } from '../config';
 import { TRADES, tradeOf } from '../trades';
 import { customerDocuments, listDrawings } from './drawings';
@@ -22,7 +23,7 @@ const woInput = z.object({
   fields: z.record(z.string(), z.string().max(500)).default({}),
   notes: z.string().trim().max(4000).optional(),
   materials: z.array(z.object({ item: z.string().trim().min(1).max(200), qty: z.number().min(0).max(1e9), unit: z.string().trim().min(1).max(20) })).max(200).default([]),
-  operations: z.array(z.object({ name: z.string().trim().min(1).max(120), qc: z.boolean().default(false) })).min(1, 'Add at least one operation').max(50),
+  operations: z.array(z.object({ name: z.string().trim().min(1).max(120) })).min(1, 'Add at least one operation').max(50),
 });
 export type WoInput = z.input<typeof woInput>;
 
@@ -37,7 +38,7 @@ async function writeLines(tx: Tx, ctx: ActionContext, woId: string, v: z.output<
   await tx.delete(prodOperations).where(eq(prodOperations.workOrderId, woId));
   const mats = v.materials.filter((m) => m.item.trim());
   if (mats.length) await tx.insert(prodMaterials).values(mats.map((m, i) => ({ companyId: ctx.companyId, workOrderId: woId, position: i, item: m.item, qty: m.qty, unit: m.unit })));
-  await tx.insert(prodOperations).values(v.operations.map((o, i) => ({ companyId: ctx.companyId, workOrderId: woId, position: i, name: o.name, qcRequired: o.qc })));
+  await tx.insert(prodOperations).values(v.operations.map((o, i) => ({ companyId: ctx.companyId, workOrderId: woId, position: i, name: o.name })));
 }
 
 /** Plans a work order (draft), or plans and sends it for release in one go. */
@@ -129,7 +130,6 @@ export async function listWorkOrders(tx: Tx, ctx: SessionContext, f: { filter?: 
   const rows = await tx.select().from(prodWorkOrders).where(and(...conds)).orderBy(desc(prodWorkOrders.createdAt)).limit(500);
   const ids = rows.map((r) => r.id);
   const ops = ids.length ? await tx.select({ wo: prodOperations.workOrderId, done: prodOperations.doneQty, status: prodOperations.status }).from(prodOperations).where(inArray(prodOperations.workOrderId, ids)) : [];
-  const ncrs = ids.length ? await tx.select({ wo: prodNcrs.workOrderId }).from(prodNcrs).where(and(inArray(prodNcrs.workOrderId, ids), eq(prodNcrs.status, 'open'))) : [];
   const t0 = today();
   const q = (f.q ?? '').toLowerCase();
   return rows
@@ -154,8 +154,8 @@ export async function listWorkOrders(tx: Tx, ctx: SessionContext, f: { filter?: 
         progress,
         opsDone: mine.filter((o) => o.status === 'done').length,
         opsTotal: mine.length,
-        rework: mine.some((o) => o.status === 'rework'),
-        openNcrs: ncrs.filter((n) => n.wo === r.id).length,
+        /** QC failed it and it is back on the floor for rework. */
+        rework: r.status === 'in_progress' && !!r.returnedNote,
         late,
       };
     })
@@ -169,15 +169,14 @@ export async function workOrderDetail(tx: Tx, ctx: SessionContext, id: string) {
   const cfg = await loadConfig(tx, ctx.companyId);
   const [wo] = await tx.select().from(prodWorkOrders).where(and(eq(prodWorkOrders.id, id), eq(prodWorkOrders.companyId, ctx.companyId)));
   if (!wo) return null;
-  const [ops, mats, reports, inspections, ncrs, events] = await Promise.all([
+  const [ops, mats, reports, events, qc] = await Promise.all([
     tx.select().from(prodOperations).where(eq(prodOperations.workOrderId, wo.id)).orderBy(asc(prodOperations.position)),
     tx.select().from(prodMaterials).where(eq(prodMaterials.workOrderId, wo.id)).orderBy(asc(prodMaterials.position)),
     tx.select().from(prodReports).where(eq(prodReports.workOrderId, wo.id)).orderBy(desc(prodReports.day), desc(prodReports.createdAt)).limit(200),
-    tx.select().from(prodInspections).where(eq(prodInspections.workOrderId, wo.id)).orderBy(desc(prodInspections.createdAt)),
-    tx.select().from(prodNcrs).where(eq(prodNcrs.workOrderId, wo.id)).orderBy(desc(prodNcrs.createdAt)),
     tx.select().from(prodEvents).where(eq(prodEvents.workOrderId, wo.id)).orderBy(desc(prodEvents.createdAt)),
+    latestInspection(tx, ctx.companyId, 'production', wo.id),
   ]);
-  const people = await peopleById(tx, [wo.createdBy, wo.releasedBy, ...events.map((e) => e.byId), ...reports.map((r) => r.byId), ...inspections.map((i) => i.byId)]);
+  const people = await peopleById(tx, [wo.createdBy, wo.releasedBy, ...events.map((e) => e.byId), ...reports.map((r) => r.byId)]);
   const name = (x: string | null) => (x ? (people.get(x) ?? '') : '');
   const [drawings, customerDocs] = await Promise.all([listDrawings(tx, ctx, wo.id), customerDocuments(tx, ctx, wo.salesOrderId)]);
   let salesOrder: string | null = null;
@@ -193,8 +192,8 @@ export async function workOrderDetail(tx: Tx, ctx: SessionContext, id: string) {
     ops: ops.map((o) => ({ ...o, status: o.status as OpStatus })),
     materials: mats,
     reports: reports.map((r) => ({ ...r, operation: opName.get(r.operationId) ?? '', by: name(r.byId), createdAt: r.createdAt.toISOString() })),
-    inspections: inspections.map((i) => ({ ...i, operation: i.operationId ? (opName.get(i.operationId) ?? '') : 'Final inspection', by: name(i.byId), createdAt: i.createdAt.toISOString() })),
-    ncrs: ncrs.map((n) => ({ ...n, operation: n.operationId ? (opName.get(n.operationId) ?? '') : 'Final inspection', createdAt: n.createdAt.toISOString() })),
+    /** Latest QC inspection in the Quality portal (null when none). */
+    qc: qc ? { ...qc, approvedAt: qc.approvedAt?.toISOString() ?? null } : null,
     events: events.map((e) => ({ id: e.id, text: e.text, by: name(e.byId), at: e.createdAt.toISOString() })),
     drawings,
     customerDocs,
@@ -206,10 +205,8 @@ export async function workOrderDetail(tx: Tx, ctx: SessionContext, id: string) {
       cancel: !['dispatched', 'cancelled'].includes(status) && hasRole(me, 'manager'),
       issue: ['released', 'in_progress', 'final_qc'].includes(status) && mats.length > 0 && hasRole(me, 'store', 'manager'),
       report: floor && hasRole(me, 'supervisor', 'manager'),
-      reworkDone: hasRole(me, 'supervisor', 'manager'),
-      inspect: (ops.some((o) => o.status === 'awaiting_qc') || status === 'final_qc') && hasRole(me, 'qc'),
+      reworkDone: status === 'in_progress' && !!wo.returnedNote && ops.every((o) => o.status === 'done') && hasRole(me, 'supervisor', 'manager'),
       dispatch: status === 'completed' && hasRole(me, 'store', 'manager'),
-      closeNcr: hasRole(me, 'manager', 'qc'),
     },
   };
 }

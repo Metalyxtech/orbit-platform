@@ -5,7 +5,7 @@ import { prodOperations, prodReports, prodWorkOrders, type Tx } from '@orbit/db'
 import { fmtQty } from '../config';
 import { tradeOf } from '../trades';
 import { drawingCounts } from './drawings';
-import { afterOpsChange } from './progress';
+import { afterOpsChange, sendToQualityOrComplete } from './progress';
 import { hasRole, loadConfig, lockWo, logEvent, myRole, peopleById, requireRole, today } from './shared';
 
 // Shop floor: the supervisor's daily production report (output, hours, crew per operation)
@@ -46,39 +46,25 @@ export async function reportOutput(tx: Tx, ctx: ActionContext, raw: z.input<type
   if (i > 0 && newDone > ops[i - 1].doneQty + 1e-9) throw new Error(`${op.name} cannot be ahead of ${ops[i - 1].name} (${fmtQty(ops[i - 1].doneQty)} ${wo.unit} done)`);
   await tx.insert(prodReports).values({ companyId: ctx.companyId, workOrderId: wo.id, operationId: op.id, day: v.day, qty: v.qty, hours: v.hours, workers: v.workers, shift: v.shift || null, remarks: v.remarks || null, byId: ctx.membershipId });
   const complete = newDone >= wo.qty - 1e-9;
-  const status = complete ? (op.qcRequired ? 'awaiting_qc' : 'done') : 'running';
+  const status = complete ? 'done' : 'running';
   await tx.update(prodOperations).set({ doneQty: newDone, hours: op.hours + v.hours, status }).where(eq(prodOperations.id, op.id));
   if (wo.status === 'released') {
     await tx.update(prodWorkOrders).set({ status: 'in_progress', updatedAt: new Date() }).where(eq(prodWorkOrders.id, wo.id));
     await logEvent(tx, ctx, wo.id, 'Production started', 'production.wo.start');
   }
-  await logEvent(tx, ctx, wo.id, `${op.name}: ${fmtQty(v.qty)} ${wo.unit} on ${v.day}${v.hours ? `, ${v.hours} h` : ''}${v.workers ? `, ${v.workers} people` : ''}${complete ? (op.qcRequired ? '. Complete, waiting for QC.' : '. Complete.') : ''}`);
+  await logEvent(tx, ctx, wo.id, `${op.name}: ${fmtQty(v.qty)} ${wo.unit} on ${v.day}${v.hours ? `, ${v.hours} h` : ''}${v.workers ? `, ${v.workers} people` : ''}${complete ? '. Complete.' : ''}`);
   if (status === 'done') await afterOpsChange(tx, ctx, wo.id);
   return { status };
 }
 
-/** After QC sent an operation back, the supervisor marks the rework done; QC inspects it again. */
-export async function reworkDone(tx: Tx, ctx: ActionContext, raw: { operationId: string; remarks: string }) {
-  const v = z.object({ operationId: z.uuid(), remarks: z.string().trim().min(3, 'Say what was corrected').max(1000) }).parse(raw);
-  requireRole(await myRole(tx, ctx), 'supervisor', 'manager');
-  const [op] = await tx.select().from(prodOperations).where(and(eq(prodOperations.id, v.operationId), eq(prodOperations.companyId, ctx.companyId)));
-  if (!op) throw new Error('Operation not found');
-  if (op.status !== 'rework') throw new Error('This operation is not in rework');
-  await lockWo(tx, ctx, op.workOrderId);
-  await tx.update(prodOperations).set({ status: 'awaiting_qc' }).where(eq(prodOperations.id, op.id));
-  await logEvent(tx, ctx, op.workOrderId, `${op.name}: rework done (${v.remarks}). Waiting for QC.`);
-  return { ok: true as const };
-}
-
-/** After the final inspection failed, the work goes back to the floor; this sends it to final QC again. */
+/** After QC failed the work, the floor corrects it and sends it to QC again. */
 export async function finalReworkDone(tx: Tx, ctx: ActionContext, raw: { workOrderId: string; remarks: string }) {
   const v = z.object({ workOrderId: z.uuid(), remarks: z.string().trim().min(3, 'Say what was corrected').max(1000) }).parse(raw);
   requireRole(await myRole(tx, ctx), 'supervisor', 'manager');
   const wo = await lockWo(tx, ctx, v.workOrderId);
   const ops = await tx.select({ status: prodOperations.status }).from(prodOperations).where(eq(prodOperations.workOrderId, wo.id));
-  if (wo.status !== 'in_progress' || ops.some((o) => o.status !== 'done')) throw new Error('Nothing is waiting for a final re-inspection');
-  await tx.update(prodWorkOrders).set({ status: 'final_qc', updatedAt: new Date() }).where(eq(prodWorkOrders.id, wo.id));
-  await logEvent(tx, ctx, wo.id, `Final rework done (${v.remarks}). Waiting for the final QC inspection.`);
+  if (wo.status !== 'in_progress' || !wo.returnedNote || ops.some((o) => o.status !== 'done')) throw new Error('Nothing is waiting for rework after QC');
+  await sendToQualityOrComplete(tx, ctx, wo, `Rework done (${v.remarks}).`);
   return { ok: true as const };
 }
 

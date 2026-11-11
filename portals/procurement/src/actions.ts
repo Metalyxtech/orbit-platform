@@ -38,8 +38,11 @@ export async function issuePoAction(input: { id: string; checks: string[] }) {
 export async function receiveAction(input: In<typeof requests.receive>) {
   return runAction((tx, ctx) => requests.receive(tx, ctx, input));
 }
-export async function inspectAction(input: In<typeof requests.inspect>) {
-  return runAction((tx, ctx) => requests.inspect(tx, ctx, input));
+export async function requestReinspectionAction(input: { id: string; note: string }) {
+  return runAction((tx, ctx) => requests.requestReinspection(tx, ctx, input));
+}
+export async function acceptWithoutQcAction(input: { id: string }) {
+  return runAction((tx, ctx) => requests.acceptWithoutQc(tx, ctx, input));
 }
 export async function invoiceAction(input: In<typeof requests.matchInvoice>) {
   return runAction((tx, ctx) => requests.matchInvoice(tx, ctx, input));

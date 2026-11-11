@@ -23,10 +23,10 @@ export interface WoFormValue {
   fields: Record<string, string>;
   notes: string;
   materials: { item: string; qty: string; unit: string }[];
-  operations: { name: string; qc: boolean }[];
+  operations: { name: string }[];
 }
 
-const fromTrade = (t: Trade): Pick<WoFormValue, 'unit' | 'operations' | 'fields'> => ({ unit: t.unit, operations: t.operations.map((o) => ({ name: o.name, qc: !!o.qc })), fields: {} });
+const fromTrade = (t: Trade): Pick<WoFormValue, 'unit' | 'operations' | 'fields'> => ({ unit: t.unit, operations: t.operations.map((o) => ({ name: o.name })), fields: {} });
 
 export function WorkOrderForm({
   trades,
@@ -241,7 +241,7 @@ export function WorkOrderForm({
               <div className="o-panel">
                 <div className="o-panel-head">
                   <h2>5. Operations</h2>
-                  <Button size="small" onClick={() => set({ operations: [...v.operations, { name: '', qc: false }] })}>
+                  <Button size="small" onClick={() => set({ operations: [...v.operations, { name: '' }] })}>
                     Add operation
                   </Button>
                 </div>
@@ -252,10 +252,6 @@ export function WorkOrderForm({
                         {i + 1}
                       </span>
                       <input className="o-input" value={o.name} aria-label={`Operation ${i + 1}`} onChange={(e) => set({ operations: v.operations.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} />
-                      <label className="o-row" style={{ gap: 4, fontSize: 12, whiteSpace: 'nowrap' }}>
-                        <input type="checkbox" checked={o.qc} onChange={(e) => set({ operations: v.operations.map((x, j) => (j === i ? { ...x, qc: e.target.checked } : x)) })} />
-                        QC
-                      </label>
                       <Button size="small" disabled={i === 0} onClick={() => set({ operations: v.operations.map((x, j) => (j === i - 1 ? v.operations[i] : j === i ? v.operations[i - 1] : x)) })} aria-label={`Move operation ${i + 1} up`}>
                         ↑
                       </Button>
@@ -266,7 +262,7 @@ export function WorkOrderForm({
                   ))}
                 </div>
                 <p className="faint" style={{ fontSize: 11, margin: '8px 0 0' }}>
-                  QC = the QC inspector checks this step before it counts as done.
+                  When every operation is done, the work goes to QC in the Quality portal (if your company has it).
                 </p>
               </div>
             </div>

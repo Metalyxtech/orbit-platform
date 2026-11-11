@@ -17,6 +17,7 @@
     "@orbit/portal-custom-1": "workspace:*",
     "@orbit/portal-procurement": "workspace:*",
     "@orbit/portal-production": "workspace:*",
+    "@orbit/portal-quality": "workspace:*",
     "@orbit/portal-sales": "workspace:*",
     "@orbit/portal-timesheet": "workspace:*",
     "@orbit/ui": "workspace:*",

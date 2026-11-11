@@ -10,7 +10,11 @@ import { requests as procRequests } from '@orbit/portal-procurement/server';
 import { productionManifest } from '@orbit/portal-production/manifest';
 import { productionRoutes } from '@orbit/portal-production/routes';
 import { queue as productionQueue } from '@orbit/portal-production/server';
+import { qualityManifest } from '@orbit/portal-quality/manifest';
+import { qualityRoutes } from '@orbit/portal-quality/routes';
+import { queue as qualityQueue } from '@orbit/portal-quality/server';
 import { salesManifest } from '@orbit/portal-sales/manifest';
+import './quality-bridge';
 import { salesRoutes } from '@orbit/portal-sales/routes';
 import { queue as salesQueue } from '@orbit/portal-sales/server';
 import { timesheetManifest } from '@orbit/portal-timesheet/manifest';
@@ -81,6 +85,12 @@ export const portalModules: Record<string, PortalModule> = {
     routes: productionRoutes,
     queueCount: (tx, ctx) => productionQueue.countMyQueue(tx, ctx),
     inboxItems: async (tx, ctx) => (await productionQueue.myQueue(tx, ctx)).map((i) => ({ ...i, id: `pd:${i.id}`, portal: 'Production' })),
+  },
+  quality: {
+    manifest: qualityManifest,
+    routes: qualityRoutes,
+    queueCount: (tx, ctx) => qualityQueue.countMyQueue(tx, ctx),
+    inboxItems: async (tx, ctx) => (await qualityQueue.myQueue(tx, ctx)).map((i) => ({ ...i, id: `qa:${i.id}`, portal: 'Quality' })),
   },
   // Custom portals: one per custom customer, each in its own folder (portals/custom-*).
   'custom-1': { manifest: custom1Manifest, routes: custom1Routes },

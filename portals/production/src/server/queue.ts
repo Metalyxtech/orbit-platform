@@ -1,6 +1,6 @@
-import { and, eq, inArray, lt } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { SessionContext } from '@orbit/core';
-import { prodMaterials, prodNcrs, prodOperations, prodWorkOrders, type Tx } from '@orbit/db';
+import { prodMaterials, prodOperations, prodWorkOrders, type Tx } from '@orbit/db';
 import { OPEN_STATUSES, type ProdRole } from '../config';
 import { myRole, notReady, today } from './shared';
 
@@ -36,18 +36,9 @@ async function build(tx: Tx, ctx: SessionContext): Promise<QueueItem[]> {
   if (acts('supervisor')) {
     for (const w of wos.filter((x) => x.status === 'released' || x.status === 'in_progress')) {
       const mine = ops.filter((o) => o.workOrderId === w.id);
-      const rework = mine.filter((o) => o.status === 'rework');
-      if (rework.length) items.push({ id: `rw:${w.id}`, title: `Rework ${w.number}: ${rework.map((o) => o.name).join(', ')}`, detail: 'QC sent it back. Correct it, then mark rework done.', href: woHref(w.id), urgent: true });
-      else if (w.status === 'in_progress' && mine.every((o) => o.status === 'done')) items.push({ id: `fr:${w.id}`, title: `Final rework ${w.number}`, detail: 'Final inspection failed. Correct it, then send for final QC.', href: woHref(w.id), urgent: true });
+      if (w.status === 'in_progress' && w.returnedNote && mine.every((o) => o.status === 'done')) items.push({ id: `fr:${w.id}`, title: `Rework ${w.number}: QC failed it`, detail: w.returnedNote.slice(0, 140), href: woHref(w.id), urgent: true });
       else if (mine.some((o) => o.status === 'pending' || o.status === 'running')) items.push({ id: `fl:${w.id}`, title: `Report output: ${w.number}`, detail: `${w.title}${w.due ? ` · due ${w.due}` : ''}`, href: '/production/report', urgent: urgent(w) });
     }
-  }
-  if (acts('qc')) {
-    for (const o of ops.filter((x) => x.status === 'awaiting_qc')) {
-      const w = wos.find((x) => x.id === o.workOrderId)!;
-      items.push({ id: `qc:${o.id}`, title: `Inspect ${w.number}: ${o.name}`, detail: w.title, href: woHref(w.id), urgent: urgent(w) });
-    }
-    for (const w of wos.filter((x) => x.status === 'final_qc')) items.push({ id: `fq:${w.id}`, title: `Final inspection ${w.number}`, detail: w.title, href: woHref(w.id), urgent: urgent(w) });
   }
   if (acts('store')) {
     const mats = await tx.select().from(prodMaterials).where(inArray(prodMaterials.workOrderId, ids));
@@ -56,10 +47,6 @@ async function build(tx: Tx, ctx: SessionContext): Promise<QueueItem[]> {
       if (short.length) items.push({ id: `is:${w.id}`, title: `Issue material: ${w.number}`, detail: short.map((m) => m.item).slice(0, 3).join(', '), href: woHref(w.id), urgent: urgent(w) });
     }
     for (const w of wos.filter((x) => x.status === 'completed')) items.push({ id: `ds:${w.id}`, title: `Dispatch ${w.number}`, detail: `${w.title} · QC passed`, href: woHref(w.id) });
-  }
-  if (acts('manager', 'gm')) {
-    const old = await tx.select().from(prodNcrs).where(and(eq(prodNcrs.companyId, ctx.companyId), eq(prodNcrs.status, 'open'), lt(prodNcrs.createdAt, new Date(Date.now() - 2 * 86_400_000))));
-    for (const n of old) items.push({ id: `nc:${n.id}`, title: `${n.number} open for over 2 days`, detail: n.description.slice(0, 120), href: woHref(n.workOrderId), urgent: true });
   }
   return items;
 }

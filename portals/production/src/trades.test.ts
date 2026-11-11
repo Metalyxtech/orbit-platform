@@ -22,7 +22,7 @@ describe('trade forms', () => {
 
 describe('config', () => {
   it('has the shop-floor roles', () => {
-    expect(PROD_ROLES.map((r) => r.id)).toEqual(['engineer', 'manager', 'supervisor', 'qc', 'store', 'gm', 'admin']);
+    expect(PROD_ROLES.map((r) => r.id)).toEqual(['engineer', 'manager', 'supervisor', 'store', 'gm', 'admin']);
   });
   it('tracks a work order from draft to dispatch', () => {
     expect(WO_FLOW[0]).toBe('draft');

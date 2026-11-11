@@ -73,7 +73,7 @@ export function WoTable({ rows, empty }: { rows: WoRow[]; empty?: string }) {
               </Link>
             ),
           },
-          { key: 's', header: 'Status', render: (r) => <span className="o-row" style={{ gap: 4, flexWrap: 'wrap' }}><StatusChip status={r.status} /><PriorityChip priority={r.priority} />{r.rework && <Chip tone="bad">Rework</Chip>}{r.openNcrs > 0 && <Chip tone="bad">{r.openNcrs} NCR</Chip>}</span> },
+          { key: 's', header: 'Status', render: (r) => <span className="o-row" style={{ gap: 4, flexWrap: 'wrap' }}><StatusChip status={r.status} /><PriorityChip priority={r.priority} />{r.rework && <Chip tone="bad">QC failed: rework</Chip>}</span> },
           { key: 'q', header: 'Quantity', num: true, render: (r) => `${fmtQty(r.qty)} ${r.unit}` },
           { key: 'p', header: 'Progress', render: (r) => <Progress value={r.progress} tone={r.rework ? 'bad' : undefined} /> },
           { key: 'o', header: 'Operations', num: true, render: (r) => `${r.opsDone} / ${r.opsTotal}` },

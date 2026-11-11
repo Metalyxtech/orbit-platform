@@ -3,18 +3,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { Button, Chip, TopBar } from '@orbit/ui';
 import { fmtDate, fmtQty, OP_STATUS, pct, SHIFTS, WO_FLOW, WO_STATUS } from '../config';
-import {
-  cancelWorkOrderAction,
-  closeNcrAction,
-  decideReleaseAction,
-  dispatchAction,
-  finalReworkDoneAction,
-  inspectAction,
-  issueMaterialsAction,
-  reportOutputAction,
-  reworkDoneAction,
-  submitForReleaseAction,
-} from '../actions';
+import { cancelWorkOrderAction, decideReleaseAction, dispatchAction, finalReworkDoneAction, issueMaterialsAction, reportOutputAction, submitForReleaseAction } from '../actions';
 import type { WoDetail } from '../server';
 import { DrawingsPanel } from './Drawings';
 import { PriorityChip, Progress, StatusChip } from './ui';
@@ -24,7 +13,6 @@ import { useRun } from './useRun';
 export function WorkOrderView({ d }: { d: WoDetail }) {
   const w = d.wo;
   const at = WO_FLOW.indexOf(w.status);
-  const openNcrs = d.ncrs.filter((n) => n.status === 'open');
   return (
     <>
       <TopBar crumbs={['Production', 'Work orders', w.number]} />
@@ -38,7 +26,7 @@ export function WorkOrderView({ d }: { d: WoDetail }) {
               <StatusChip status={w.status} />
               <PriorityChip priority={w.priority} />
               {w.late && <Chip tone="bad">Late</Chip>}
-              {openNcrs.length > 0 && <Chip tone="bad">{openNcrs.length} open NCR</Chip>}
+              {w.status === 'in_progress' && w.returnedNote && <Chip tone="bad">QC failed: rework</Chip>}
             </div>
             <p>
               {d.trade.name} · {fmtQty(w.qty)} {w.unit}
@@ -76,9 +64,7 @@ export function WorkOrderView({ d }: { d: WoDetail }) {
             <DrawingsPanel workOrderId={w.id} docs={d.drawings} customerDocs={d.customerDocs} canEdit={d.can.drawings} />
             <OperationsPanel d={d} />
             {d.can.report && <ReportPanel d={d} />}
-            {d.can.inspect && d.me !== 'supervisor' && <InspectPanel d={d} />}
             <MaterialsPanel d={d} />
-            {d.ncrs.length > 0 && <NcrPanel d={d} />}
             {d.reports.length > 0 && (
               <div className="o-panel flush">
                 <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
@@ -116,32 +102,6 @@ export function WorkOrderView({ d }: { d: WoDetail }) {
                 </div>
               </div>
             )}
-            {d.inspections.length > 0 && (
-              <div className="o-panel flush">
-                <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
-                  <h2>Inspections</h2>
-                </div>
-                <table className="o-table">
-                  <tbody>
-                    {d.inspections.map((i) => (
-                      <tr key={i.id}>
-                        <td>
-                          <strong>{i.number}</strong> {i.operation}
-                          <div className="faint" style={{ fontSize: 11 }}>
-                            {(i.checklist as { item: string; ok: boolean }[]).filter((c) => !c.ok).map((c) => `✕ ${c.item}`).join(' · ') || 'All checks OK'}
-                            {i.remarks ? ` · ${i.remarks}` : ''}
-                          </div>
-                        </td>
-                        <td>{i.result === 'pass' ? <Chip tone="ok">Passed</Chip> : <Chip tone="bad">Failed</Chip>}</td>
-                        <td className="muted">
-                          {i.by} · {new Date(i.createdAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
             <div className="o-panel">
               <h2>History</h2>
               <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -158,6 +118,7 @@ export function WorkOrderView({ d }: { d: WoDetail }) {
           </div>
           <div className="o-stack">
             <NextStep d={d} />
+            <QcPanel d={d} />
             <div className="o-panel">
               <h2>{d.trade.name} form</h2>
               <div className="p-dl" style={{ fontSize: 13 }}>
@@ -181,8 +142,6 @@ export function WorkOrderView({ d }: { d: WoDetail }) {
 }
 
 function OperationsPanel({ d }: { d: WoDetail }) {
-  const { busy, run } = useRun();
-  const [rework, setRework] = useState<{ id: string; text: string } | null>(null);
   const w = d.wo;
   return (
     <div className="o-panel flush">
@@ -201,7 +160,6 @@ function OperationsPanel({ d }: { d: WoDetail }) {
             <th>Progress</th>
             <th className="num">Done</th>
             <th className="num">Hours</th>
-            <th />
           </tr>
         </thead>
         <tbody>
@@ -209,7 +167,7 @@ function OperationsPanel({ d }: { d: WoDetail }) {
             <tr key={o.id}>
               <td className="faint">{i + 1}</td>
               <td>
-                {o.name} {o.qcRequired && <Chip tone="grey">QC</Chip>}
+                {o.name}
               </td>
               <td>
                 <Chip tone={OP_STATUS[o.status].tone}>{OP_STATUS[o.status].label}</Chip>
@@ -221,29 +179,10 @@ function OperationsPanel({ d }: { d: WoDetail }) {
                 {fmtQty(o.doneQty)} / {fmtQty(w.qty)} {w.unit}
               </td>
               <td className="num">{o.hours || '-'}</td>
-              <td>
-                {o.status === 'rework' && d.can.reworkDone && (
-                  <Button size="small" variant="primary" disabled={busy} onClick={() => setRework({ id: o.id, text: '' })}>
-                    Rework done
-                  </Button>
-                )}
-              </td>
             </tr>
           ))}
         </tbody>
       </table>
-      {rework && (
-        <div className="o-row" style={{ padding: 12, borderTop: '1px solid var(--line)', alignItems: 'flex-end' }}>
-          <label className="o-field" style={{ flex: 1 }}>
-            What was corrected?
-            <input className="o-input" value={rework.text} maxLength={1000} onChange={(e) => setRework({ ...rework, text: e.target.value })} />
-          </label>
-          <Button variant="primary" disabled={busy} onClick={async () => (await run(() => reworkDoneAction({ operationId: rework.id, remarks: rework.text }), 'Sent back to QC.')) && setRework(null)}>
-            Send to QC
-          </Button>
-          <Button onClick={() => setRework(null)}>Cancel</Button>
-        </div>
-      )}
     </div>
   );
 }
@@ -314,85 +253,6 @@ function ReportPanel({ d }: { d: WoDetail }) {
   );
 }
 
-function InspectPanel({ d }: { d: WoDetail }) {
-  const { busy, run } = useRun();
-  const waiting = [
-    ...d.ops.filter((o) => o.status === 'awaiting_qc').map((o) => ({ key: o.id, label: o.name, operationId: o.id as string | undefined, list: d.trade.checklist })),
-    ...(d.wo.status === 'final_qc' ? [{ key: 'final', label: 'Final inspection', operationId: undefined, list: d.trade.finalChecklist }] : []),
-  ];
-  const [pick, setPick] = useState(waiting[0]?.key ?? '');
-  const cur = waiting.find((x) => x.key === pick) ?? waiting[0];
-  const [checks, setChecks] = useState<Record<string, boolean>>({});
-  const [remarks, setRemarks] = useState('');
-  const [ncr, setNcr] = useState({ description: '', action: '' });
-  if (!cur) return null;
-  const items = cur.list.map((item) => ({ item, ok: checks[`${cur.key}:${item}`] ?? true }));
-  const fail = items.some((c) => !c.ok);
-  return (
-    <div className="o-panel" style={{ borderColor: 'var(--steel)' }}>
-      <div className="o-panel-head">
-        <h2>QC inspection</h2>
-        {waiting.length > 1 && (
-          <select className="o-select" style={{ maxWidth: 240 }} value={cur.key} onChange={(e) => setPick(e.target.value)} aria-label="What to inspect">
-            {waiting.map((x) => (
-              <option key={x.key} value={x.key}>
-                {x.label}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
-      <p className="muted" style={{ fontSize: 12, margin: '-6px 0 10px' }}>
-        {cur.label}: untick anything that does not meet the requirement.
-      </p>
-      <div className="o-stack" style={{ gap: 6 }}>
-        {items.map((c) => (
-          <label key={c.item} className="o-row" style={{ gap: 8, fontSize: 13, cursor: 'pointer' }}>
-            <input type="checkbox" checked={c.ok} onChange={(e) => setChecks({ ...checks, [`${cur.key}:${c.item}`]: e.target.checked })} />
-            <span className={c.ok ? '' : 'bad'}>{c.item}</span>
-          </label>
-        ))}
-      </div>
-      <label className="o-field" style={{ marginTop: 10 }}>
-        Remarks / readings
-        <input className="o-input" value={remarks} maxLength={2000} onChange={(e) => setRemarks(e.target.value)} />
-      </label>
-      {fail && (
-        <div className="o-stack" style={{ gap: 8, marginTop: 10, padding: 10, border: '1px solid var(--bad)', borderRadius: 6 }}>
-          <strong className="bad" style={{ fontSize: 13 }}>Non-conformance report (NCR)</strong>
-          <label className="o-field">
-            What is wrong
-            <textarea className="o-textarea" value={ncr.description} maxLength={2000} onChange={(e) => setNcr({ ...ncr, description: e.target.value })} />
-          </label>
-          <label className="o-field">
-            Action required
-            <input className="o-input" value={ncr.action} maxLength={1000} placeholder="e.g. Grind and re-weld joint J4, re-check DFT" onChange={(e) => setNcr({ ...ncr, action: e.target.value })} />
-          </label>
-        </div>
-      )}
-      <div className="o-row" style={{ marginTop: 10 }}>
-        <Button
-          variant={fail ? 'danger' : 'ok'}
-          disabled={busy || (fail && ncr.description.trim().length < 5)}
-          onClick={async () => {
-            const ok = await run(
-              () => inspectAction({ workOrderId: d.wo.id, operationId: cur.operationId, checklist: items, remarks, ncr: fail ? ncr : undefined }),
-              fail ? 'Failed: NCR raised and sent back for rework.' : 'Passed.',
-            );
-            if (ok) {
-              setChecks({});
-              setRemarks('');
-              setNcr({ description: '', action: '' });
-            }
-          }}
-        >
-          {fail ? 'Fail and raise NCR' : 'Pass'}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 function MaterialsPanel({ d }: { d: WoDetail }) {
   const { busy, run } = useRun();
   const [qty, setQty] = useState<Record<string, string>>({});
@@ -456,51 +316,6 @@ function MaterialsPanel({ d }: { d: WoDetail }) {
   );
 }
 
-function NcrPanel({ d }: { d: WoDetail }) {
-  const { busy, run } = useRun();
-  const [close, setClose] = useState<{ id: string; text: string } | null>(null);
-  return (
-    <div className="o-panel flush">
-      <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
-        <h2>Non-conformance reports</h2>
-      </div>
-      <table className="o-table">
-        <tbody>
-          {d.ncrs.map((n) => (
-            <tr key={n.id}>
-              <td>
-                <strong>{n.number}</strong> {n.operation}
-                <div style={{ fontSize: 12 }}>{n.description}</div>
-                {n.action && <div className="faint" style={{ fontSize: 11 }}>Action: {n.action}</div>}
-              </td>
-              <td>{n.status === 'open' ? <Chip tone="bad">Open</Chip> : <Chip tone="ok">Closed</Chip>}</td>
-              <td>
-                {n.status === 'open' && d.can.closeNcr && (
-                  <Button size="small" onClick={() => setClose({ id: n.id, text: '' })}>
-                    Close
-                  </Button>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {close && (
-        <div className="o-row" style={{ padding: 12, borderTop: '1px solid var(--line)', alignItems: 'flex-end' }}>
-          <label className="o-field" style={{ flex: 1 }}>
-            How was it resolved?
-            <input className="o-input" value={close.text} maxLength={1000} placeholder="e.g. Accepted by customer as is (concession)" onChange={(e) => setClose({ ...close, text: e.target.value })} />
-          </label>
-          <Button variant="primary" disabled={busy} onClick={async () => (await run(() => closeNcrAction({ id: close.id, action: close.text }), 'NCR closed.')) && setClose(null)}>
-            Close NCR
-          </Button>
-          <Button onClick={() => setClose(null)}>Cancel</Button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function NextStep({ d }: { d: WoDetail }) {
   const { busy, run } = useRun();
   const w = d.wo;
@@ -508,13 +323,13 @@ function NextStep({ d }: { d: WoDetail }) {
   const [note, setNote] = useState('');
   const [ref, setRef] = useState('');
   const [reason, setReason] = useState('');
-  const finalRework = w.status === 'in_progress' && d.ops.length > 0 && d.ops.every((o) => o.status === 'done');
+  const finalRework = c.reworkDone;
   const waitingFor: Record<string, string> = {
     draft: 'The production engineer is planning it.',
     pending_release: 'Waiting for the production manager to release it.',
     released: 'Released. The store issues materials; the supervisor reports output.',
-    in_progress: finalRework ? 'Final inspection failed. The floor is correcting it.' : 'In production on the shop floor.',
-    final_qc: 'All operations done. Waiting for the final QC inspection.',
+    in_progress: w.returnedNote ? 'QC failed it. The floor is correcting it.' : 'In production on the shop floor.',
+    final_qc: 'All operations done. With QC in the Quality portal.',
     completed: 'QC passed. Waiting for the store to dispatch.',
     dispatched: `Dispatched${w.dispatchedAt ? ` on ${fmtDate(new Date(w.dispatchedAt).toISOString())}` : ''}.`,
     cancelled: 'Cancelled.',
@@ -547,14 +362,14 @@ function NextStep({ d }: { d: WoDetail }) {
             </div>
           </>
         )}
-        {finalRework && c.reworkDone && (
+        {finalRework && (
           <>
             <label className="o-field">
               What was corrected?
               <input className="o-input" value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)} />
             </label>
-            <Button variant="primary" disabled={busy || note.trim().length < 3} onClick={() => run(() => finalReworkDoneAction({ workOrderId: w.id, remarks: note }), 'Sent for final QC.')}>
-              Send for final QC again
+            <Button variant="primary" disabled={busy || note.trim().length < 3} onClick={() => run(() => finalReworkDoneAction({ workOrderId: w.id, remarks: note }), 'Sent to QC again.')}>
+              Rework done: send to QC
             </Button>
           </>
         )}
@@ -583,6 +398,38 @@ function NextStep({ d }: { d: WoDetail }) {
           </details>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Where the work order is with QC (Quality portal): report number, status and the result. */
+function QcPanel({ d }: { d: WoDetail }) {
+  const q = d.qc;
+  const w = d.wo;
+  if (!q && w.status !== 'final_qc') return null;
+  return (
+    <div className="o-panel">
+      <h2>Quality inspection</h2>
+      {q ? (
+        <div className="o-stack" style={{ gap: 6, fontSize: 13 }}>
+          <div className="o-row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <strong>
+              {q.number}
+              {q.round > 1 ? ` (round ${q.round})` : ''}
+            </strong>
+            {q.status === 'pending' ? <Chip tone="hivis">With QC engineer</Chip> : q.status === 'submitted' ? <Chip tone="warn">With QC manager</Chip> : q.result === 'pass' ? <Chip tone="ok">QC passed</Chip> : <Chip tone="bad">QC failed</Chip>}
+          </div>
+          {q.status === 'approved' && q.result === 'fail' && q.ncr && (
+            <p style={{ margin: 0 }}>
+              <strong>Non-conformance:</strong> {q.ncr}
+            </p>
+          )}
+          {q.status === 'approved' && q.remarks && <p className="muted" style={{ margin: 0 }}>{q.remarks}</p>}
+          {q.approvedAt && <span className="faint" style={{ fontSize: 11 }}>Final approval {fmtDate(q.approvedAt)}</span>}
+        </div>
+      ) : (
+        <p className="muted" style={{ fontSize: 13, margin: 0 }}>Waiting for QC.</p>
+      )}
     </div>
   );
 }

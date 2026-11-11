@@ -1,13 +1,13 @@
 export * as workorders from './workorders';
 export * as floor from './floor';
 export * as store from './store';
-export * as quality from './quality';
 export * as dashboard from './dashboard';
 export * as queue from './queue';
 export * as admin from './admin';
 export * as drawings from './drawings';
 export { NOT_READY, notReady, myRole, loadConfig } from './shared';
 export { drawingFile } from './drawings';
+export { onQualityResult } from './progress';
 export type { WoRow, WoDetail, WoInput, WoFilter } from './workorders';
 export type { FloorWo } from './floor';
 export type { QueueItem } from './queue';

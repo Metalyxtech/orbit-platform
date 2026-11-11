@@ -2,13 +2,13 @@
 // Pure data, safe to import from client components.
 import { MORE_TEMPLATES } from './industries';
 
+/** 'qc' is kept only for old saved roles: inspection now happens in the Quality portal. */
 export type ProcRole = 'requester' | 'buyer' | 'store' | 'qc' | 'manager' | 'gm' | 'accounts' | 'admin';
 
 export const PROC_ROLES: { id: ProcRole; label: string; detail: string }[] = [
   { id: 'requester', label: 'Site engineer', detail: 'Raises material requests and follows them to delivery' },
   { id: 'buyer', label: 'Purchase engineer', detail: 'Checks stock, collects quotes, awards and issues POs' },
   { id: 'store', label: 'Storekeeper', detail: 'Stock entry, goods receipt and issue to site' },
-  { id: 'qc', label: 'QC inspector', detail: 'Inspects received material before it is paid' },
   { id: 'manager', label: 'Purchase manager', detail: 'Approves requests and monitors purchasing' },
   { id: 'gm', label: 'General manager', detail: 'High-value approvals and company-wide view' },
   { id: 'accounts', label: 'Accounts', detail: 'Matches supplier invoices to PO and receipt' },
@@ -31,7 +31,7 @@ export const STAGES: Record<StageKey, { label: string; role: ProcRole | 'approva
   po_approval: { label: 'PO approval', role: 'approval', optional: true, what: 'Approval levels sign off the awarded value.' },
   issue: { label: 'Issue PO', role: 'buyer', optional: false, what: 'A PO number is generated and the order goes to the supplier.' },
   receiving: { label: 'Goods receipt', role: 'store', optional: true, what: 'Record delivery notes; partial deliveries keep the step open. Lines can be booked into stock.' },
-  inspection: { label: 'Quality inspection', role: 'qc', optional: true, what: 'Pass, conditional or fail. A fail holds the request for the supplier to rectify.' },
+  inspection: { label: 'Quality inspection', role: 'qc', optional: true, what: 'Done in the Quality portal (QC engineer, then QC manager). Without the Quality portal this step is skipped.' },
   invoice: { label: 'Invoice match', role: 'accounts', optional: true, what: 'Three-way match of PO, receipt and invoice within the tolerance.' },
   stock_issue: { label: 'Issue from stock', role: 'store', optional: false, what: 'When stock covers the whole request, the storekeeper issues it and the request closes without a PO.' },
 };

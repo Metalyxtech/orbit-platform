@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { audit, type ActionContext, type SessionContext } from '@orbit/core';
 import { latestInspection, qualityOn, requestInspection, type QualityDecision } from '@orbit/core/quality';
 import { notifySupply } from '@orbit/core/supply';
+import { assertNotHeld, processThread } from '@orbit/core/holds';
 import { procEvents, procItems, procLines, procMoves, procQuotes, procReceipts, procRequests, procSuppliers, type Tx } from '@orbit/db';
 import { OPEN_STAGES, originOf, RECEIVED_AT, roleLabel, stageLabel, type ProcConfig, type ProcRole, type ReceivedAt, type Stage } from '../config';
 import {
@@ -174,6 +175,8 @@ export async function requestDetail(tx: Tx, ctx: SessionContext, id: string) {
     receiptFiles: mtc,
     /** Raised by Production for a material request. */
     origin: originOf(r.header),
+    /** GM hold and comments. */
+    control: await processThread(tx, ctx, 'proc_request', r.id),
     canUploadReceiptDocs: ['receiving', 'inspection'].includes(r.stage) && (roles.includes('store') || roles.includes('buyer') || roles.includes('manager')),
     events: events.map((e) => ({ id: e.id, kind: e.kind, text: e.text, note: e.note, by: e.byId ? (people.get(e.byId)?.name ?? '') : 'Orbit', at: e.createdAt.toISOString() })),
     money: {
@@ -351,6 +354,7 @@ async function begin(tx: Tx, ctx: ActionContext, id: string, stage: Stage) {
   const cfg = await loadConfig(tx, ctx.companyId);
   const { role: me, roles } = await myRoles(tx, ctx);
   const r = await lockRequest(tx, ctx, id);
+  await assertNotHeld(tx, ctx.companyId, 'proc_request', r.id, r.number);
   if (r.stage !== stage) throw new Error(`This request is at ${stageLabel(cfg, r.stage as Stage)} now. Refresh the page.`);
   const lines = await linesOf(tx, id);
   const pending =
@@ -453,6 +457,7 @@ export async function issueStock(tx: Tx, ctx: ActionContext, raw: { id: string }
   const cfg = await loadConfig(tx, ctx.companyId);
   if (!(await myRoles(tx, ctx)).roles.includes('store')) throw new Error('Only the storekeeper (or an admin covering that role) can issue stock');
   const r = await lockRequest(tx, ctx, id);
+  await assertNotHeld(tx, ctx.companyId, 'proc_request', r.id, r.number);
   const all = await linesOf(tx, id);
   const lines = all.filter((l) => l.reserveState === 'reserved' && l.itemId);
   if (lines.length === 0) throw new Error('Nothing reserved to issue');
@@ -654,6 +659,7 @@ async function qcRequestFor(tx: Tx, cfg: ProcConfig, r: Req, lines: Line[]) {
  */
 export async function onQualityResult(tx: Tx, ctx: ActionContext, d: QualityDecision) {
   const r = await lockRequest(tx, ctx, d.sourceId);
+  await assertNotHeld(tx, ctx.companyId, 'proc_request', r.id, r.number);
   if (r.stage !== 'inspection') {
     await log(tx, ctx, r, `QC result ${d.number}: ${d.result.toUpperCase()} (request already moved on)`);
     return;
@@ -721,3 +727,16 @@ export async function countMyQueue(tx: Tx, ctx: SessionContext) {
 }
 
 export const ROLE_TEXT = (r: ProcRole) => roleLabel(r);
+
+/** Names a request for GM process control (registered with @orbit/core/holds). */
+export async function describeRequest(tx: Tx, companyId: string, id: string) {
+  const [r] = await tx.select({ number: procRequests.number, title: procRequests.title }).from(procRequests).where(and(eq(procRequests.id, id), eq(procRequests.companyId, companyId)));
+  return r ? { ref: r.number, title: r.title, href: `/procurement/request?id=${id}` } : null;
+}
+
+/** A request raised by Production comes from its material request (a GM stop there stops the purchase too). */
+export async function requestParents(tx: Tx, companyId: string, id: string) {
+  const [r] = await tx.select({ header: procRequests.header }).from(procRequests).where(and(eq(procRequests.id, id), eq(procRequests.companyId, companyId)));
+  const o = r ? originOf(r.header) : null;
+  return o ? [{ entity: 'mat_request' as const, id: o.id }] : [];
+}

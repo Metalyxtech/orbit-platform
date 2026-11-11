@@ -1,4 +1,5 @@
 import { eq, inArray, sql } from 'drizzle-orm';
+import { assertNotHeld } from '@orbit/core/holds';
 import { audit, portalRoleFor, readPortalRoles, type ActionContext, type SessionContext } from '@orbit/core';
 import { memberships, salesEnquiries, salesEvents, salesSettings, users, type Tx } from '@orbit/db';
 import { DEFAULT_CONFIG, type SalesConfig, type SalesRole } from '../config';
@@ -70,6 +71,7 @@ export async function logEvent(tx: Tx, ctx: ActionContext, enquiryId: string, te
 export async function lockEnquiry(tx: Tx, ctx: SessionContext, id: string) {
   const [r] = await tx.select().from(salesEnquiries).where(eq(salesEnquiries.id, id)).for('update');
   if (!r || r.companyId !== ctx.companyId) throw new Error('Enquiry not found');
+  await assertNotHeld(tx, ctx.companyId, 'sales_enquiry', r.id, r.number);
   return r;
 }
 

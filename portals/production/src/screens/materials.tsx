@@ -2,7 +2,8 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { query } from '@orbit/core/next';
 import { qualityOn } from '@orbit/core/quality';
-import { Chip, DataTable, EmptyState, TopBar } from '@orbit/ui';
+import { addProcessCommentAction, setHoldAction } from '@orbit/core/holds-actions';
+import { Chip, DataTable, EmptyState, HoldBanner, ProcessControl, TopBar } from '@orbit/ui';
 import { fmtDate, fmtQty, MR_FLOW, MR_STATUS, RECEIPT_STATUS } from '../config';
 import { mr, myRole, receipts, stock, type MrFilter } from '../server';
 import { MrActions, MrChip, ReceiveDirectForm, StockAdjustForm, StoreDocsUpload } from './MaterialsClient';
@@ -91,6 +92,7 @@ export const MrPage: Screen = async ({ searchParams }) => {
             </li>
           ))}
         </ol>
+        <HoldBanner thread={d.control} />
         {d.mr.returnNote && !closed && (
           <div className="o-panel" style={{ borderLeft: '4px solid var(--hivis, #d97706)' }}>
             <strong>Sent back</strong>
@@ -156,6 +158,7 @@ export const MrPage: Screen = async ({ searchParams }) => {
               <h2>{closed ? MR_STATUS[d.mr.status].label : `Now: ${MR_STATUS[d.mr.status].label}`}</h2>
               <MrActions d={d} />
             </div>
+            <ProcessControl thread={d.control} setHold={setHoldAction} comment={addProcessCommentAction} />
             <div className="o-panel">
               <h2>Approvals</h2>
               <div className="p-dl">

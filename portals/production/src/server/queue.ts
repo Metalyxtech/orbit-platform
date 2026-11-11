@@ -36,7 +36,7 @@ async function build(tx: Tx, ctx: SessionContext): Promise<QueueItem[]> {
     for (const w of wos.filter((x) => x.status === 'draft' && (x.returnedNote || x.createdBy === ctx.membershipId)))
       items.push({ id: `pd:${w.id}`, title: w.returnedNote ? `${w.number} sent back: change the plan` : `Finish planning ${w.number}`, detail: w.returnedNote ?? w.title, href: woHref(w.id), urgent: !!w.returnedNote });
   }
-  if (acts('manager', 'gm')) {
+  if (acts('manager')) {
     for (const w of wos.filter((x) => x.status === 'pending_release')) items.push({ id: `pr:${w.id}`, title: `Release ${w.number}`, detail: `${w.title} · ${w.qty} ${w.unit}${w.due ? ` · due ${w.due}` : ''}`, href: woHref(w.id), urgent: urgent(w) });
   }
   if (acts('supervisor')) {

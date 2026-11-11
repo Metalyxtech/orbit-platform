@@ -1,5 +1,6 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { assertNotHeld } from '@orbit/core/holds';
 import { audit, type ActionContext, type SessionContext } from '@orbit/core';
 import { salesCustomers, salesInvoices, salesOrders, salesPayments, type Tx } from '@orbit/db';
 import { fmtMoney, orderLabel, type OrderStatus } from '../config';
@@ -10,6 +11,8 @@ import { addDays, hasRole, loadConfig, myRole, nextNumber, peopleById, requireRo
 async function lockOrder(tx: Tx, ctx: SessionContext, id: string) {
   const [o] = await tx.select().from(salesOrders).where(eq(salesOrders.id, z.uuid().parse(id))).for('update');
   if (!o || o.companyId !== ctx.companyId) throw new Error('Order not found');
+  // An order belongs to its enquiry: stopping the enquiry stops its order and invoicing too.
+  if (o.enquiryId) await assertNotHeld(tx, ctx.companyId, 'sales_enquiry', o.enquiryId, o.number);
   return o;
 }
 const note = (tx: Tx, ctx: ActionContext, id: string, action: string, line: string) =>
@@ -23,14 +26,14 @@ export async function listOrders(tx: Tx, ctx: SessionContext) {
   const people = await peopleById(tx, rows.map((r) => r.o.ownerId));
   return {
     me,
-    can: { confirm: hasRole(me, 'manager', 'gm'), advance: hasRole(me, 'manager'), invoice: hasRole(me, 'accounts') },
+    can: { confirm: hasRole(me, 'manager'), advance: hasRole(me, 'manager'), invoice: hasRole(me, 'accounts') },
     rows: rows.map(({ o, customer }) => ({ ...o, customer, owner: o.ownerId ? (people.get(o.ownerId) ?? '') : '', statusLabel: orderLabel(o.status), createdAt: o.createdAt.toISOString() })),
   };
 }
 export type OrderRow = Awaited<ReturnType<typeof listOrders>>['rows'][number];
 
 export async function confirmOrder(tx: Tx, ctx: ActionContext, raw: { id: string }) {
-  requireRole(await myRole(tx, ctx), 'manager', 'gm');
+  requireRole(await myRole(tx, ctx), 'manager');
   const o = await lockOrder(tx, ctx, raw.id);
   if (o.status !== 'awaiting') throw new Error('This order is already confirmed');
   await tx.update(salesOrders).set({ status: 'confirmed' }).where(eq(salesOrders.id, o.id));
@@ -70,7 +73,7 @@ export async function raiseInvoice(tx: Tx, ctx: ActionContext, raw: { id: string
 
 export async function listInvoices(tx: Tx, ctx: SessionContext) {
   const me = await myRole(tx, ctx);
-  requireRole(me, 'accounts', 'manager', 'gm');
+  requireRole(me, 'accounts', 'manager');
   const rows = await tx
     .select({ i: salesInvoices, customer: salesCustomers.name, order: salesOrders.number })
     .from(salesInvoices)

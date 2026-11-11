@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { ActionContext, SessionContext } from '@orbit/core';
 import { latestInspection } from '@orbit/core/quality';
+import { processThread } from '@orbit/core/holds';
 import { prodEvents, prodMaterials, prodOperations, prodReports, prodWorkOrders, salesCustomers, salesOrders, type Tx } from '@orbit/db';
 import { OPEN_STATUSES, WO_STATUS, type OpStatus, type ProdRole, type WoStatus } from '../config';
 import { TRADES, tradeOf } from '../trades';
@@ -95,7 +96,7 @@ export async function submitForRelease(tx: Tx, ctx: ActionContext, raw: { id: st
 /** The production manager releases the work order to the floor, or sends the plan back with a reason. */
 export async function decideRelease(tx: Tx, ctx: ActionContext, raw: { id: string; release: boolean; note?: string }) {
   const v = z.object({ id: z.uuid(), release: z.boolean(), note: z.string().trim().max(1000).optional() }).parse(raw);
-  requireRole(await myRole(tx, ctx), 'manager', 'gm');
+  requireRole(await myRole(tx, ctx), 'manager');
   const r = await lockWo(tx, ctx, v.id);
   if (r.status !== 'pending_release') throw new Error('This work order is not waiting for release');
   if (!v.release && !v.note) throw new Error('Say what the engineer should change');
@@ -192,6 +193,8 @@ export async function workOrderDetail(tx: Tx, ctx: SessionContext, id: string) {
     wo: { ...wo, status, createdByName: name(wo.createdBy), releasedByName: name(wo.releasedBy), salesOrder, late: !!wo.due && wo.due < today() && OPEN_STATUSES.includes(status) },
     ops: ops.map((o) => ({ ...o, status: o.status as OpStatus })),
     materials: mats,
+    /** GM hold and comments. */
+    control: await processThread(tx, ctx, 'work_order', wo.id),
     /** Material requests on this work order (empty before migration 0027). */
     mrs: await tx.transaction((sp) => listMrs(sp, ctx, { workOrderId: wo.id })).catch((): MrRow[] => []),
     reports: reports.map((r) => ({ ...r, operation: opName.get(r.operationId) ?? '', by: name(r.byId), createdAt: r.createdAt.toISOString() })),
@@ -204,7 +207,7 @@ export async function workOrderDetail(tx: Tx, ctx: SessionContext, id: string) {
       drawings: !['dispatched', 'cancelled'].includes(status) && hasRole(me, 'engineer', 'manager'),
       edit: status === 'draft' && hasRole(me, 'engineer', 'manager'),
       submit: status === 'draft' && hasRole(me, 'engineer', 'manager'),
-      release: status === 'pending_release' && hasRole(me, 'manager', 'gm'),
+      release: status === 'pending_release' && hasRole(me, 'manager'),
       cancel: !['dispatched', 'cancelled'].includes(status) && hasRole(me, 'manager'),
       issue: ['released', 'in_progress', 'final_qc'].includes(status) && mats.length > 0 && hasRole(me, 'store', 'manager'),
       report: floor && hasRole(me, 'supervisor', 'manager'),
@@ -257,3 +260,19 @@ export async function countByStatus(tx: Tx, ctx: SessionContext) {
 }
 
 export const rolesThatPlan: ProdRole[] = ['engineer', 'manager', 'admin'];
+
+/** Names a work order for GM process control. */
+export async function describeWo(tx: Tx, companyId: string, id: string) {
+  const [w] = await tx.select({ number: prodWorkOrders.number, title: prodWorkOrders.title }).from(prodWorkOrders).where(and(eq(prodWorkOrders.id, id), eq(prodWorkOrders.companyId, companyId)));
+  return w ? { ref: w.number, title: w.title, href: `/production/order?id=${id}` } : null;
+}
+
+/** A work order made for a sales order comes from that order's enquiry (a GM stop there stops the work order too). */
+export async function woParents(tx: Tx, companyId: string, id: string) {
+  const [w] = await tx
+    .select({ enquiryId: salesOrders.enquiryId })
+    .from(prodWorkOrders)
+    .innerJoin(salesOrders, eq(salesOrders.id, prodWorkOrders.salesOrderId))
+    .where(and(eq(prodWorkOrders.id, id), eq(prodWorkOrders.companyId, companyId)));
+  return w?.enquiryId ? [{ entity: 'sales_enquiry' as const, id: w.enquiryId }] : [];
+}

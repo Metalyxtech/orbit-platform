@@ -1,7 +1,8 @@
 'use client';
 import Link from 'next/link';
 import { useState } from 'react';
-import { Button, Chip, TopBar } from '@orbit/ui';
+import { addProcessCommentAction, setHoldAction } from '@orbit/core/holds-actions';
+import { Button, Chip, HoldBanner, ProcessControl, TopBar } from '@orbit/ui';
 import { fmtDate, fmtQty, OP_STATUS, pct, SHIFTS, WO_FLOW, WO_STATUS } from '../config';
 import { cancelWorkOrderAction, decideReleaseAction, dispatchAction, finalReworkDoneAction, issueMaterialsAction, reportOutputAction, submitForReleaseAction } from '../actions';
 import type { WoDetail } from '../server';
@@ -60,6 +61,7 @@ export function WorkOrderView({ d }: { d: WoDetail }) {
           </div>
         )}
 
+        <HoldBanner thread={d.control} />
         <div className="o-cols-wide">
           <div className="o-stack">
             <DrawingsPanel workOrderId={w.id} docs={d.drawings} customerDocs={d.customerDocs} canEdit={d.can.drawings} />
@@ -120,6 +122,7 @@ export function WorkOrderView({ d }: { d: WoDetail }) {
           </div>
           <div className="o-stack">
             <NextStep d={d} />
+            <ProcessControl thread={d.control} setHold={setHoldAction} comment={addProcessCommentAction} />
             <QcPanel d={d} />
             <div className="o-panel">
               <h2>{d.trade.name} form</h2>

@@ -1,5 +1,6 @@
 'use client';
-import { Chip, TopBar } from '@orbit/ui';
+import { addProcessCommentAction, setHoldAction } from '@orbit/core/holds-actions';
+import { Chip, HoldBanner, ProcessControl, TopBar } from '@orbit/ui';
 import type { RequestDetail, SupplierRow } from '../server';
 import { showValue } from './FieldInput';
 import { QuoteFileLinks } from './QuoteFiles';
@@ -51,6 +52,7 @@ export function RequestView({ d, suppliers }: { d: RequestDetail; suppliers: Sup
           <li className={finished ? 'done' : r.stage === 'rejected' ? 'bad' : ''}>{r.stage === 'rejected' ? 'Rejected' : 'Closed'}</li>
         </ol>
 
+        <HoldBanner thread={d.control} />
         <div className="o-cols">
           <div className="o-stack">
             {d.origin && (
@@ -267,6 +269,8 @@ export function RequestView({ d, suppliers }: { d: RequestDetail; suppliers: Sup
                 </div>
               )}
             </div>
+
+            <ProcessControl thread={d.control} setHold={setHoldAction} comment={addProcessCommentAction} />
 
             <div className="o-panel">
               <h2>Value</h2>

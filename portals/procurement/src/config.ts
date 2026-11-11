@@ -10,7 +10,7 @@ export const PROC_ROLES: { id: ProcRole; label: string; detail: string }[] = [
   { id: 'buyer', label: 'Purchase engineer', detail: 'Checks stock, collects quotes, awards and issues POs' },
   { id: 'store', label: 'Purchase store keeper', detail: 'Main store: stock entry, matches requests with stock, goods receipt with MTC documents, issue' },
   { id: 'manager', label: 'Purchase manager', detail: 'Approves requests and monitors purchasing' },
-  { id: 'gm', label: 'General manager', detail: 'High-value approvals and company-wide view' },
+  { id: 'gm', label: 'General manager', detail: 'Company-wide view; can stop any request and comment (no approvals)' },
   { id: 'accounts', label: 'Accounts', detail: 'Matches supplier invoices to PO and receipt' },
   { id: 'admin', label: 'Purchase admin', detail: 'Workflow, forms, approval rules and roles' },
 ];
@@ -204,10 +204,18 @@ export const TEMPLATES: Record<string, IndustryTemplate> = {
 // Extra industries live in industries.ts; merged here so every caller sees one list.
 Object.assign(TEMPLATES, MORE_TEMPLATES);
 
-const DEFAULT_LEVELS: ApprovalLevel[] = [
-  { id: 'l1', name: 'Purchase manager', role: 'manager', min: 0, pr: true, po: true },
-  { id: 'l2', name: 'General manager', role: 'gm', min: 50000, pr: false, po: true },
-];
+const DEFAULT_LEVELS: ApprovalLevel[] = [{ id: 'l1', name: 'Purchase manager', role: 'manager', min: 0, pr: true, po: true }];
+
+/** Roles that never approve or own a step: the GM views everything and can stop a request and comment. */
+export const VIEW_ONLY_ROLES: ProcRole[] = ['gm'];
+/** Roles an approval level or a stage can be given to. */
+export const ACTING_ROLES = PROC_ROLES.filter((r) => r.id !== 'admin' && !VIEW_ONLY_ROLES.includes(r.id));
+
+/** A saved configuration with view-only roles taken out of approvals and stages (older companies had a GM level). */
+export function withoutViewOnly(cfg: ProcConfig): ProcConfig {
+  const stageCfg = Object.fromEntries(Object.entries(cfg.stageCfg ?? {}).map(([k, v]) => [k, v && v.role && VIEW_ONLY_ROLES.includes(v.role) ? { ...v, role: undefined } : v]));
+  return { ...cfg, levels: (cfg.levels ?? []).filter((l) => !VIEW_ONLY_ROLES.includes(l.role)), stageCfg };
+}
 
 /** A fresh company configuration from a template. */
 export function configFromTemplate(key: string, keep?: Pick<ProcConfig, 'levels' | 'money' | 'numbering'>): ProcConfig {

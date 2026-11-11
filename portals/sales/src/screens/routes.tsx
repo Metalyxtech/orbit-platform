@@ -162,7 +162,7 @@ const Pipeline: Screen = async () => {
                         <span>{r.net ? fmtShort(cur, r.net) : '-'}</span>
                         <span className="muted">{r.owner}</span>
                       </div>
-                      {(r.late || inApproval(r.quoteStatus)) && <div style={{ marginTop: 4 }}>{r.late ? <Chip tone="bad">Follow-up late</Chip> : <Chip tone="hivis">{r.quoteStatus === 'pending_gm' ? 'With GM' : 'With sales manager'}</Chip>}</div>}
+                      {(r.late || inApproval(r.quoteStatus)) && <div style={{ marginTop: 4 }}>{r.late ? <Chip tone="bad">Follow-up late</Chip> : <Chip tone="hivis">With sales manager</Chip>}</div>}
                     </Link>
                   ))}
                 </div>

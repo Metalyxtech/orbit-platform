@@ -7,7 +7,7 @@ export const SALES_ROLES: { id: SalesRole; label: string; detail: string }[] = [
   { id: 'exec', label: 'Sales executive', detail: 'Enquiries, project documents, quotations, follow-ups, won and lost' },
   { id: 'estimator', label: 'Estimator', detail: 'Costs each enquiry from the project documents' },
   { id: 'manager', label: 'Sales manager', detail: 'Approves discounts, confirms orders, sets targets' },
-  { id: 'gm', label: 'General manager', detail: 'Big discounts and low margins; company-wide view' },
+  { id: 'gm', label: 'General manager', detail: 'Company-wide view; can stop any enquiry and comment (no approvals)' },
   { id: 'accounts', label: 'Accounts', detail: 'GST invoices, payments received and overdue amounts' },
   { id: 'admin', label: 'Sales admin', detail: 'Everything, plus sales settings' },
 ];
@@ -32,7 +32,8 @@ export type QuoteStatus = 'draft' | 'pending' | 'pending_gm' | 'approved' | 'rej
 export const QUOTE_STATUS: Record<QuoteStatus, { label: string; tone: 'grey' | 'hivis' | 'ok' | 'bad' | 'steel' }> = {
   draft: { label: 'Draft', tone: 'grey' },
   pending: { label: 'With sales manager', tone: 'hivis' },
-  pending_gm: { label: 'With GM (final)', tone: 'hivis' },
+  // Older quotations that were waiting for the GM: now the sales manager approves them.
+  pending_gm: { label: 'With sales manager', tone: 'hivis' },
   approved: { label: 'Approved', tone: 'ok' },
   rejected: { label: 'Sent back', tone: 'bad' },
   sent: { label: 'Sent to customer', tone: 'steel' },
@@ -106,7 +107,7 @@ export const DEFAULT_CONFIG: SalesConfig = {
   adminCovers: {},
 };
 /** What a sales admin's task list covers when the company admin has not chosen. */
-export const DEFAULT_ADMIN_COVERS: SalesRole[] = ['manager', 'gm', 'accounts'];
+export const DEFAULT_ADMIN_COVERS: SalesRole[] = ['manager', 'accounts'];
 
 /** Unit cost of a line from its breakdown. */
 export const unitCost = (l: { material: number; labour: number; other: number }) => (l.material || 0) + (l.labour || 0) + (l.other || 0);
@@ -130,11 +131,12 @@ export function quoteTotals(lines: QuoteLine[], discount: number, gst: number) {
 }
 
 /**
- * Every quotation is approved by the sales manager first (who can comment and adjust the
- * discount). True when the GM must then give final approval.
+ * The sales manager's approval is final: the GM does not approve quotations (the GM views every
+ * enquiry and can stop it and comment). Kept as a function so older callers and saved settings
+ * (gmApproval) still compile; it always answers no.
  */
-export function needsGm(discount: number, margin: number, hasCost: boolean, cfg: Pick<SalesConfig, 'managerDiscount' | 'minMargin' | 'gmApproval'>): boolean {
-  return cfg.gmApproval !== 'over_limit' || discount > cfg.managerDiscount || (hasCost && margin < cfg.minMargin);
+export function needsGm(_discount: number, _margin: number, _hasCost: boolean, _cfg: Pick<SalesConfig, 'managerDiscount' | 'minMargin' | 'gmApproval'>): boolean {
+  return false;
 }
 
 /** Indian money: ₹12,34,567 and short forms ₹12.3 L / ₹1.25 Cr. */

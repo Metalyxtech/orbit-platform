@@ -1,7 +1,7 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { portalRoleFor, readPortalRoles, type SessionContext } from '@orbit/core';
 import { memberships, procSettings, projects, users, type Tx } from '@orbit/db';
-import { configFromTemplate, type ProcConfig, type ProcRole } from '../config';
+import { configFromTemplate, withoutViewOnly, type ProcConfig, type ProcRole } from '../config';
 import { procurementManifest } from '../manifest';
 
 export const PORTAL = 'procurement';
@@ -36,7 +36,7 @@ export function requireAdmin(ctx: SessionContext) {
 /** The company's purchase configuration (a General purchasing copy until the admin picks a template). */
 export async function loadConfig(tx: Tx, companyId: string): Promise<ProcConfig> {
   const [row] = await tx.select({ config: procSettings.config }).from(procSettings).where(eq(procSettings.companyId, companyId));
-  return row ? (row.config as ProcConfig) : configFromTemplate('general');
+  return row ? withoutViewOnly(row.config as ProcConfig) : configFromTemplate('general');
 }
 
 export async function saveConfig(tx: Tx, companyId: string, config: ProcConfig) {

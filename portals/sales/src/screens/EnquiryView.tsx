@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { Button, Chip, TopBar } from '@orbit/ui';
+import { addProcessCommentAction, setHoldAction } from '@orbit/core/holds-actions';
+import { Button, Chip, HoldBanner, ProcessControl, TopBar } from '@orbit/ui';
 import { fmtDate, fmtMoney, quoteTotals, LOST_REASONS, OPEN_STAGES, SOURCES, STAGES, stageLabel, type Stage } from '../config';
 import {
   askApprovalAction,
@@ -85,6 +86,7 @@ export function EnquiryView({ d }: { d: EnquiryDetail }) {
 
         {e.returnedTo && <SentBack d={d} />}
 
+        <HoldBanner thread={d.control} />
         <div className="o-cols-wide">
           <div className="o-stack">
             <ProjectPanel d={d} />
@@ -143,6 +145,7 @@ export function EnquiryView({ d }: { d: EnquiryDetail }) {
           <div className="o-stack">
             {!d.can.editCost && <TotalsPanel key={e.discount} d={d} draft={draft} setDraftDisc={setDraftDisc} />}
             <ActionsPanel d={d} draft={draft} />
+            <ProcessControl thread={d.control} setHold={setHoldAction} comment={addProcessCommentAction} />
             {d.can.followUp && <FollowUpPanel d={d} />}
             <div className="o-panel">
               <h2>Customer</h2>
@@ -366,7 +369,7 @@ function ActionsPanel({ d, draft }: { d: EnquiryDetail; draft: Draft }) {
       <div className="o-panel">
         <h2>Next step</h2>
         <p className="muted" style={{ fontSize: 13, margin: 0 }}>
-          {c.pricingDone ? 'Fill in the costing sheet, save it, then press Pricing done.' : e.stage === 'costing' ? 'With the estimator for costing.' : e.quoteStatus === 'pending' ? 'Waiting for the sales manager to approve.' : e.quoteStatus === 'pending_gm' ? 'Sales manager approved. Waiting for the GM’s final approval.' : OPEN_STAGES.includes(e.stage as Stage) ? 'Nothing for you here right now.' : `This enquiry is ${stageLabel(e.stage).toLowerCase()}.`}
+          {c.pricingDone ? 'Fill in the costing sheet, save it, then press Pricing done.' : e.stage === 'costing' ? 'With the estimator for costing.' : e.quoteStatus === 'pending' || e.quoteStatus === 'pending_gm' ? 'Waiting for the sales manager to approve.' : OPEN_STAGES.includes(e.stage as Stage) ? 'Nothing for you here right now.' : `This enquiry is ${stageLabel(e.stage).toLowerCase()}.`}
         </p>
       </div>
     );

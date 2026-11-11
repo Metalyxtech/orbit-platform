@@ -17,14 +17,14 @@ describe('quoteTotals', () => {
   });
 });
 
-describe('needsGm', () => {
-  const always = DEFAULT_CONFIG; // GM gives final approval on every quotation
-  const limit = { ...DEFAULT_CONFIG, gmApproval: 'over_limit' as const }; // manager up to 10%, GM under 12% margin
-  it('always goes to the GM by default', () => expect(needsGm(0, 30, true, always)).toBe(true));
-  it('stops at the sales manager within limits', () => expect(needsGm(8, 30, true, limit)).toBe(false));
-  it('sends big discounts to the GM', () => expect(needsGm(12, 30, true, limit)).toBe(true));
-  it('sends low margins to the GM', () => expect(needsGm(0, 5, true, limit)).toBe(true));
-  it('ignores margin before costs are in', () => expect(needsGm(0, 0, false, limit)).toBe(false));
+describe('approval', () => {
+  // The sales manager's approval is final; the GM views, stops and comments but never approves.
+  const limit = { ...DEFAULT_CONFIG, gmApproval: 'over_limit' as const };
+  it('never sends a quotation to the GM, whatever the setting', () => {
+    expect(needsGm(0, 30, true, DEFAULT_CONFIG)).toBe(false);
+    expect(needsGm(25, 30, true, limit)).toBe(false);
+    expect(needsGm(0, 2, true, limit)).toBe(false);
+  });
 });
 
 describe('project documents', () => {

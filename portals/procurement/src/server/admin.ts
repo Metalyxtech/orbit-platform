@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { audit, writePortalRole, type ActionContext, type SessionContext } from '@orbit/core';
 import type { Tx } from '@orbit/db';
 import { checkLibrary, FIELD_LIBRARY, INDUSTRY_INFO } from '../industries';
-import { PROC_ROLES, STAGES, TEMPLATES, configFromTemplate, roleLabel, type ProcConfig, type ProcRole, type StageKey } from '../config';
+import { VIEW_ONLY_ROLES, PROC_ROLES, STAGES, TEMPLATES, configFromTemplate, roleLabel, type ProcConfig, type ProcRole, type StageKey } from '../config';
 import { purchaseTeam } from './team';
 import { PORTAL, loadConfig, requireAdmin, saveConfig } from './shared';
 
@@ -85,7 +85,16 @@ export async function saveForm(tx: Tx, ctx: ActionContext, raw: z.input<typeof f
 }
 
 const levelsInput = z
-  .array(z.object({ id: z.string().min(1).max(20), name: z.string().trim().min(1, 'Name every level').max(60), role: z.enum(roleIds), min: z.number().min(0), pr: z.boolean(), po: z.boolean() }))
+  .array(
+    z.object({
+      id: z.string().min(1).max(20),
+      name: z.string().trim().min(1, 'Name every level').max(60),
+      role: z.enum(roleIds).refine((r) => !VIEW_ONLY_ROLES.includes(r), 'The GM does not approve: give the level to the purchase manager (the GM can stop a request and comment)'),
+      min: z.number().min(0),
+      pr: z.boolean(),
+      po: z.boolean(),
+    }),
+  )
   .max(8);
 
 export async function saveLevels(tx: Tx, ctx: ActionContext, raw: z.input<typeof levelsInput>) {

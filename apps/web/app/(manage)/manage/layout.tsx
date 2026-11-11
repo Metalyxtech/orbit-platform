@@ -13,6 +13,7 @@ import { manageNavSections } from './nav-groups';
 import { CompanySwitcher } from '@/CompanySwitcher';
 import { requireAgreement } from '@/legal/gate';
 import { projectDocsOn } from '@/project-docs';
+import { canControl, heldCount } from '@orbit/core/holds';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,6 +33,7 @@ export default async function ManageLayout({ children }: { children: ReactNode }
       badges: await queueCounts(tx, ctx, portals),
       roles: await portalRolesFor(tx, ctx, portals),
       projectDocs: await projectDocsOn(tx, ctx),
+      held: canControl(ctx) ? await heldCount(tx, ctx.companyId) : 0,
     };
   });
   const ctx = s.ctx;

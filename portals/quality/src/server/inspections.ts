@@ -2,7 +2,8 @@ import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import type { ActionContext, SessionContext } from '@orbit/core';
 import { applyQualityDecision, type QcSource as CoreSource } from '@orbit/core/quality';
-import { qcEvents, qcInspections, type Tx } from '@orbit/db';
+import { prodReceipts, qcEvents, qcInspections, type Tx } from '@orbit/db';
+import { processThread } from '@orbit/core/holds';
 import { QC_STATUS, type Finding, type QcSource, type QcStatus } from '../config';
 import { hasRole, lockInspection, logEvent, myRole, peopleById, requireRole } from './shared';
 
@@ -105,7 +106,9 @@ export async function inspectionDetail(tx: Tx, ctx: SessionContext, id: string) 
   const people = await peopleById(tx, [r.inspectorId, r.approverId, r.requestedBy, ...events.map((e) => e.byId)]);
   const name = (x: string | null) => (x ? (people.get(x) ?? '') : '');
   const status = r.status as QcStatus;
+  const control = await processThread(tx, ctx, 'qc_inspection', r.id);
   return {
+    control,
     me,
     insp: {
       ...r,
@@ -132,3 +135,22 @@ export async function inspectionDetail(tx: Tx, ctx: SessionContext, id: string) 
   };
 }
 export type QcDetail = NonNullable<Awaited<ReturnType<typeof inspectionDetail>>>;
+
+/** Names an inspection for GM process control. */
+export async function describeInspection(tx: Tx, companyId: string, id: string) {
+  const [r] = await tx.select({ number: qcInspections.number, title: qcInspections.title }).from(qcInspections).where(and(eq(qcInspections.id, id), eq(qcInspections.companyId, companyId)));
+  return r ? { ref: r.number, title: r.title, href: `/quality/inspection?id=${id}` } : null;
+}
+
+/** An inspection belongs to what is inspected: the purchase, the work order, or the material request a store receipt was for. */
+export async function inspectionParents(tx: Tx, companyId: string, id: string) {
+  const [r] = await tx.select({ source: qcInspections.source, sourceId: qcInspections.sourceId }).from(qcInspections).where(and(eq(qcInspections.id, id), eq(qcInspections.companyId, companyId)));
+  if (!r) return [];
+  if (r.source === 'purchase') return [{ entity: 'proc_request' as const, id: r.sourceId }];
+  if (r.source === 'production') return [{ entity: 'work_order' as const, id: r.sourceId }];
+  const [rc] = await tx.select({ mrId: prodReceipts.mrId, purchaseId: prodReceipts.purchaseId }).from(prodReceipts).where(eq(prodReceipts.id, r.sourceId));
+  return [
+    ...(rc?.mrId ? [{ entity: 'mat_request' as const, id: rc.mrId }] : []),
+    ...(rc?.purchaseId ? [{ entity: 'proc_request' as const, id: rc.purchaseId }] : []),
+  ];
+}

@@ -4,6 +4,7 @@ import type { ActionContext, SessionContext } from '@orbit/core';
 import { prodEvents, prodInspections, prodMaterials, prodNcrs, prodOperations, prodReports, prodWorkOrders, salesCustomers, salesOrders, type Tx } from '@orbit/db';
 import { OPEN_STATUSES, WO_STATUS, type OpStatus, type ProdRole, type WoStatus } from '../config';
 import { TRADES, tradeOf } from '../trades';
+import { customerDocuments, listDrawings } from './drawings';
 import { hasRole, loadConfig, lockWo, logEvent, myRole, nextNumber, peopleById, requireRole, today } from './shared';
 
 // Work orders: planning (trade form, materials, operations), release by the production manager,
@@ -178,6 +179,7 @@ export async function workOrderDetail(tx: Tx, ctx: SessionContext, id: string) {
   ]);
   const people = await peopleById(tx, [wo.createdBy, wo.releasedBy, ...events.map((e) => e.byId), ...reports.map((r) => r.byId), ...inspections.map((i) => i.byId)]);
   const name = (x: string | null) => (x ? (people.get(x) ?? '') : '');
+  const [drawings, customerDocs] = await Promise.all([listDrawings(tx, ctx, wo.id), customerDocuments(tx, ctx, wo.salesOrderId)]);
   let salesOrder: string | null = null;
   if (wo.salesOrderId) salesOrder = (await salesOrderNumber(tx, ctx.companyId, wo.salesOrderId)) ?? null;
   const status = wo.status as WoStatus;
@@ -194,7 +196,10 @@ export async function workOrderDetail(tx: Tx, ctx: SessionContext, id: string) {
     inspections: inspections.map((i) => ({ ...i, operation: i.operationId ? (opName.get(i.operationId) ?? '') : 'Final inspection', by: name(i.byId), createdAt: i.createdAt.toISOString() })),
     ncrs: ncrs.map((n) => ({ ...n, operation: n.operationId ? (opName.get(n.operationId) ?? '') : 'Final inspection', createdAt: n.createdAt.toISOString() })),
     events: events.map((e) => ({ id: e.id, text: e.text, by: name(e.byId), at: e.createdAt.toISOString() })),
+    drawings,
+    customerDocs,
     can: {
+      drawings: !['dispatched', 'cancelled'].includes(status) && hasRole(me, 'engineer', 'manager'),
       edit: status === 'draft' && hasRole(me, 'engineer', 'manager'),
       submit: status === 'draft' && hasRole(me, 'engineer', 'manager'),
       release: status === 'pending_release' && hasRole(me, 'manager', 'gm'),

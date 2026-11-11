@@ -169,6 +169,13 @@
       "when": 1795500000000,
       "tag": "0023_production",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1795600000000,
+      "tag": "0024_production_drawings",
+      "breakpoints": true
     }
   ]
 }

@@ -16,6 +16,7 @@ import {
   submitForReleaseAction,
 } from '../actions';
 import type { WoDetail } from '../server';
+import { DrawingsPanel } from './Drawings';
 import { PriorityChip, Progress, StatusChip } from './ui';
 import { useRun } from './useRun';
 
@@ -72,6 +73,7 @@ export function WorkOrderView({ d }: { d: WoDetail }) {
 
         <div className="o-cols-wide">
           <div className="o-stack">
+            <DrawingsPanel workOrderId={w.id} docs={d.drawings} customerDocs={d.customerDocs} canEdit={d.can.drawings} />
             <OperationsPanel d={d} />
             {d.can.report && <ReportPanel d={d} />}
             {d.can.inspect && d.me !== 'supervisor' && <InspectPanel d={d} />}

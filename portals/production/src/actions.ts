@@ -1,7 +1,7 @@
 'use server';
 // Server actions for the Production portal: each runs as the signed-in member in one RLS transaction.
 import { runAction } from '@orbit/core/next';
-import { admin, floor, quality, store, workorders } from './server';
+import { admin, drawings, floor, quality, store, workorders } from './server';
 
 type In<F> = F extends (tx: never, ctx: never, input: infer I) => unknown ? I : never;
 
@@ -43,4 +43,16 @@ export async function closeNcrAction(input: { id: string; action: string }) {
 }
 export async function saveProductionAdminAction(input: In<typeof admin.saveProductionAdmin>) {
   return runAction((tx, ctx) => admin.saveProductionAdmin(tx, ctx, input));
+}
+export async function startDrawingUploadAction(input: In<typeof drawings.startDrawingUpload>) {
+  return runAction((tx, ctx) => drawings.startDrawingUpload(tx, ctx, input));
+}
+export async function confirmDrawingUploadAction(input: { docId: string }) {
+  return runAction((tx, ctx) => drawings.confirmDrawingUpload(tx, ctx, input));
+}
+export async function addDrawingLinkAction(input: In<typeof drawings.addDrawingLink>) {
+  return runAction((tx, ctx) => drawings.addDrawingLink(tx, ctx, input));
+}
+export async function removeDrawingAction(input: { docId: string }) {
+  return runAction((tx, ctx) => drawings.removeDrawing(tx, ctx, input));
 }

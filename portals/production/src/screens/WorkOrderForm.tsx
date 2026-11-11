@@ -1,9 +1,10 @@
 'use client';
 import { useMemo, useState } from 'react';
 import { Button, TopBar } from '@orbit/ui';
-import { PRIORITIES, type Priority } from '../config';
+import { DRAWINGS, fmtBytes, PRIORITIES, type Priority } from '../config';
 import { TRADES, tradeOf, type Trade } from '../trades';
 import { createWorkOrderAction, submitForReleaseAction, updateWorkOrderAction } from '../actions';
+import { drawingProblem, uploadDrawings } from './Drawings';
 import { PageHead } from './ui';
 import { useRun } from './useRun';
 
@@ -42,12 +43,21 @@ export function WorkOrderForm({
   number?: string;
   returnedNote?: string | null;
 }) {
-  const { busy, run, router } = useRun();
+  const { busy, run, router, toast } = useRun();
   const list = useMemo(() => (trades.length ? TRADES.filter((t) => trades.includes(t.id)) : TRADES), [trades]);
   const [v, setV] = useState<WoFormValue>(
     initial ?? { trade: '', title: '', customer: '', qty: '1', unit: 'nos', due: '', priority: 'normal', fields: {}, notes: '', materials: [], operations: [] },
   );
   const trade = v.trade ? tradeOf(v.trade) : null;
+  // Drawings chosen here are uploaded right after the work order is saved.
+  const [files, setFiles] = useState<File[]>([]);
+  const [progress, setProgress] = useState<string | null>(null);
+  const attach = async (id: string) => {
+    if (!files.length) return true;
+    const failed = await uploadDrawings(id, files, setProgress);
+    if (failed.length) toast(`Saved, but not attached: ${failed.join(', ')}. Attach them on the work order.`, 'bad');
+    return true;
+  };
   const set = (patch: Partial<WoFormValue>) => setV((x) => ({ ...x, ...patch }));
   const pickTrade = (t: Trade) => set({ trade: t.id, ...fromTrade(t), materials: v.materials });
 
@@ -68,12 +78,16 @@ export function WorkOrderForm({
   const save = async (submit: boolean) => {
     if (editId) {
       const ok = await run(() => updateWorkOrderAction({ id: editId, ...payload() }), 'Plan saved.');
+      if (ok) await attach(editId);
       if (ok && submit) await run(() => submitForReleaseAction({ id: editId }), 'Sent for release.');
       if (ok) router.push(`/production/order?id=${editId}`);
       return;
     }
     const res = await run(() => createWorkOrderAction({ ...payload(), submit }), submit ? 'Work order sent for release.' : 'Draft saved.');
-    if (res) router.push(`/production/order?id=${res.id}`);
+    if (res) {
+      await attach(res.id);
+      router.push(`/production/order?id=${res.id}`);
+    }
   };
 
   return (
@@ -258,6 +272,48 @@ export function WorkOrderForm({
             </div>
 
             <div className="o-panel">
+              <div className="o-panel-head">
+                <h2>6. Workshop drawings</h2>
+                <label className="o-btn small" style={{ cursor: 'pointer' }}>
+                  Choose files
+                  <input
+                    type="file"
+                    multiple
+                    accept={DRAWINGS.accept}
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const picked = Array.from(e.target.files ?? []);
+                      e.target.value = '';
+                      const bad = picked.filter((f) => drawingProblem(f));
+                      if (bad.length) toast(`Not added: ${bad.map((f) => `${f.name} (${drawingProblem(f)})`).join(', ')}`, 'bad');
+                      setFiles([...files, ...picked.filter((f) => !drawingProblem(f))].slice(0, DRAWINGS.maxFiles));
+                    }}
+                  />
+                </label>
+              </div>
+              {files.length === 0 ? (
+                <p className="faint" style={{ fontSize: 12, margin: 0 }}>
+                  PDF, DWG, DXF or images. The supervisor, QC and store see them on the work order. You can add more later.
+                </p>
+              ) : (
+                <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {files.map((f, i) => (
+                    <li key={`${f.name}-${i}`} className="o-row" style={{ fontSize: 13 }}>
+                      <span style={{ flex: 1 }}>{f.name}</span>
+                      <span className="faint" style={{ fontSize: 11 }}>
+                        {fmtBytes(f.size)}
+                      </span>
+                      <Button size="small" onClick={() => setFiles(files.filter((_, j) => j !== i))} aria-label={`Remove ${f.name}`}>
+                        ×
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {progress && <p className="hivis" style={{ fontSize: 12, margin: '8px 0 0' }}>Uploading {progress}</p>}
+            </div>
+
+            <div className="o-panel">
               <label className="o-field">
                 Notes for the shop floor
                 <textarea className="o-textarea" rows={3} value={v.notes} maxLength={4000} onChange={(e) => set({ notes: e.target.value })} />
@@ -265,10 +321,10 @@ export function WorkOrderForm({
             </div>
 
             <div className="o-row">
-              <Button disabled={busy} onClick={() => save(false)}>
+              <Button disabled={busy || !!progress} onClick={() => save(false)}>
                 Save draft
               </Button>
-              <Button variant="primary" disabled={busy} onClick={() => save(true)}>
+              <Button variant="primary" disabled={busy || !!progress} onClick={() => save(true)}>
                 Save and send for release
               </Button>
             </div>

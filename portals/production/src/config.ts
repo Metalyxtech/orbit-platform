@@ -67,3 +67,26 @@ export const fmtDate = (d: string | Date | null | undefined) =>
   d ? new Date(typeof d === 'string' && d.length === 10 ? `${d}T00:00:00Z` : d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '-';
 /** Percent complete, capped at 100. */
 export const pct = (done: number, total: number) => (total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0);
+
+/**
+ * Workshop drawings on a work order: PDFs and CAD files (DWG / DXF) up to 100 MB, photos and scans
+ * up to 20 MB, or links for anything bigger. Up to 30 per work order.
+ */
+export const DRAWINGS = {
+  maxFiles: 30,
+  maxBytes: 100 * 1024 * 1024,
+  maxImageBytes: 20 * 1024 * 1024,
+  types: ['application/pdf', 'application/acad', 'image/vnd.dxf', 'image/png', 'image/jpeg', 'image/webp'],
+  accept: '.pdf,.dwg,.dxf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp',
+};
+/** Browsers rarely know CAD files: decide the type from the extension when needed. */
+export function drawingType(fileName: string, browserType: string): string {
+  const ext = fileName.toLowerCase().split('.').pop() ?? '';
+  if (ext === 'dwg') return 'application/acad';
+  if (ext === 'dxf') return 'image/vnd.dxf';
+  if (ext === 'pdf') return 'application/pdf';
+  return browserType;
+}
+/** Size limit for one drawing of this type (0 = not allowed). */
+export const drawingLimit = (type: string) => (!DRAWINGS.types.includes(type) ? 0 : type.startsWith('image/') && type !== 'image/vnd.dxf' ? DRAWINGS.maxImageBytes : DRAWINGS.maxBytes);
+export const fmtBytes = (n: number | null | undefined) => (!n ? '' : n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1).replace(/\.0$/, '')} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);

@@ -4,6 +4,7 @@ import type { ActionContext, SessionContext } from '@orbit/core';
 import { prodOperations, prodReports, prodWorkOrders, type Tx } from '@orbit/db';
 import { fmtQty } from '../config';
 import { tradeOf } from '../trades';
+import { drawingCounts } from './drawings';
 import { afterOpsChange } from './progress';
 import { hasRole, loadConfig, lockWo, logEvent, myRole, peopleById, requireRole, today } from './shared';
 
@@ -86,7 +87,9 @@ export async function floorOperations(tx: Tx, ctx: SessionContext) {
   const wos = await tx.select().from(prodWorkOrders).where(and(eq(prodWorkOrders.companyId, ctx.companyId), inArray(prodWorkOrders.status, ['released', 'in_progress']))).orderBy(asc(prodWorkOrders.due));
   if (!wos.length) return [];
   const ops = await tx.select().from(prodOperations).where(inArray(prodOperations.workOrderId, wos.map((w) => w.id))).orderBy(asc(prodOperations.position));
+  const drawings = await drawingCounts(tx, ctx);
   return wos.map((w) => ({
+    drawings: drawings.get(w.id) ?? 0,
     id: w.id,
     number: w.number,
     title: w.title,

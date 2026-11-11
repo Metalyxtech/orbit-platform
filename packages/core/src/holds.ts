@@ -32,6 +32,18 @@ export function describeProcess(entity: Controlled, d: Describer) {
   describers.set(entity, d);
 }
 
+/**
+ * The records a record came from, possibly in another portal: a purchase request raised for a
+ * material request, which belongs to a work order, which came from a sales order's enquiry. A hold
+ * on any of them stops everything that follows.
+ */
+type Parents = (tx: Tx, companyId: string, id: string) => Promise<{ entity: Controlled; id: string }[]>;
+const PKEY = Symbol.for('orbit.control.parents');
+const parents = ((globalThis as Record<symbol, unknown>)[PKEY] ??= new Map<Controlled, Parents>()) as Map<Controlled, Parents>;
+export function linkProcess(entity: Controlled, p: Parents) {
+  parents.set(entity, p);
+}
+
 const missing = (err: unknown) => {
   const code = (err as { code?: string; cause?: { code?: string } })?.code ?? (err as { cause?: { code?: string } })?.cause?.code;
   return code === '42P01' || /relation "process_(holds|comments)" does not exist/.test(String(err));
@@ -41,20 +53,22 @@ export interface HoldInfo {
   reason: string;
   by: string;
   at: string;
+  /** Set when the stop was put on an earlier record in the chain (resume it there). */
+  from?: { entity: Controlled; label: string; ref: string; href: string } | null;
 }
 
-/** The open hold on a record, or null (also null before migration 0028). */
-export async function holdOf(tx: Tx, companyId: string, entity: Controlled, entityId: string): Promise<HoldInfo | null> {
+/** The hold put on this record itself, or null (also null before migration 0028). */
+async function ownHold(tx: Tx, companyId: string, entity: Controlled, entityId: string) {
   try {
     return await tx.transaction(async (sp) => {
       const [h] = await sp
-        .select({ reason: processHolds.reason, at: processHolds.heldAt, by: users.name })
+        .select({ reason: processHolds.reason, at: processHolds.heldAt, by: users.name, ref: processHolds.ref, href: processHolds.href })
         .from(processHolds)
         .innerJoin(memberships, eq(memberships.id, processHolds.heldBy))
         .innerJoin(users, eq(users.id, memberships.userId))
         .where(and(eq(processHolds.companyId, companyId), eq(processHolds.entity, entity), eq(processHolds.entityId, entityId), eq(processHolds.status, 'held')))
         .limit(1);
-      return h ? { reason: h.reason, by: h.by, at: h.at.toISOString() } : null;
+      return h ?? null;
     });
   } catch (err) {
     if (missing(err)) return null;
@@ -62,10 +76,39 @@ export async function holdOf(tx: Tx, companyId: string, entity: Controlled, enti
   }
 }
 
-/** Throws when the GM has stopped this record. Portals call it wherever the record changes. */
+/**
+ * The hold that stops this record: its own, or one on a record it came from (in any portal),
+ * nearest first. Null when nothing in the chain is stopped.
+ */
+export async function holdOf(tx: Tx, companyId: string, entity: Controlled, entityId: string): Promise<HoldInfo | null> {
+  const seen = new Set<string>();
+  let level: { entity: Controlled; id: string }[] = [{ entity, id: entityId }];
+  for (let depth = 0; depth < 6 && level.length; depth++) {
+    const next: { entity: Controlled; id: string }[] = [];
+    for (const r of level) {
+      const k = `${r.entity}:${r.id}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      const h = await ownHold(tx, companyId, r.entity, r.id);
+      if (h) {
+        const self = depth === 0;
+        return { reason: h.reason, by: h.by, at: h.at.toISOString(), from: self ? null : { entity: r.entity, label: CONTROLLED[r.entity].label, ref: h.ref, href: h.href } };
+      }
+      const p = parents.get(r.entity);
+      if (p) next.push(...(await p(tx, companyId, r.id).catch(() => [])));
+    }
+    level = next;
+  }
+  return null;
+}
+
+/** Throws when the GM has stopped this record, or a record it came from. Portals call it wherever the record changes. */
 export async function assertNotHeld(tx: Tx, companyId: string, entity: Controlled, entityId: string, ref?: string) {
   const h = await holdOf(tx, companyId, entity, entityId);
-  if (h) throw new Error(`${ref ?? CONTROLLED[entity].label} is on hold by ${h.by}: "${h.reason}". It can move on once it is resumed.`);
+  if (!h) return;
+  const what = ref ?? CONTROLLED[entity].label;
+  if (h.from) throw new Error(`${what} is stopped: ${h.from.label.toLowerCase()} ${h.from.ref} is on hold by ${h.by}: "${h.reason}". It can move on once ${h.from.ref} is resumed.`);
+  throw new Error(`${what} is on hold by ${h.by}: "${h.reason}". It can move on once it is resumed.`);
 }
 
 export interface ProcessThread {
@@ -115,9 +158,12 @@ export async function setHold(tx: Tx, ctx: ActionContext, input: { entity: strin
   const note = input.note.trim().slice(0, 1000);
   if (note.length < 3) throw new Error(input.hold ? 'Say why you are stopping it' : 'Add a note for the team');
   const t = await target(tx, ctx.companyId, input.entity, input.entityId);
-  const open = await holdOf(tx, ctx.companyId, t.entity, input.entityId);
+  const open = await ownHold(tx, ctx.companyId, t.entity, input.entityId);
   if (input.hold && open) throw new Error('It is already on hold');
-  if (!input.hold && !open) throw new Error('It is not on hold');
+  if (!input.hold && !open) {
+    const up = await holdOf(tx, ctx.companyId, t.entity, input.entityId);
+    throw new Error(up?.from ? `This was stopped at ${up.from.ref}. Resume it there.` : 'It is not on hold');
+  }
   if (input.hold) {
     await tx.insert(processHolds).values({ companyId: ctx.companyId, portal: t.portal, entity: t.entity, entityId: input.entityId, ref: t.ref, title: t.title, href: t.href, reason: note, heldBy: ctx.membershipId });
   } else {

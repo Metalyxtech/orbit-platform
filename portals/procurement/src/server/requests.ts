@@ -733,3 +733,10 @@ export async function describeRequest(tx: Tx, companyId: string, id: string) {
   const [r] = await tx.select({ number: procRequests.number, title: procRequests.title }).from(procRequests).where(and(eq(procRequests.id, id), eq(procRequests.companyId, companyId)));
   return r ? { ref: r.number, title: r.title, href: `/procurement/request?id=${id}` } : null;
 }
+
+/** A request raised by Production comes from its material request (a GM stop there stops the purchase too). */
+export async function requestParents(tx: Tx, companyId: string, id: string) {
+  const [r] = await tx.select({ header: procRequests.header }).from(procRequests).where(and(eq(procRequests.id, id), eq(procRequests.companyId, companyId)));
+  const o = r ? originOf(r.header) : null;
+  return o ? [{ entity: 'mat_request' as const, id: o.id }] : [];
+}

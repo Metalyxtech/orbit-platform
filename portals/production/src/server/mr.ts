@@ -349,3 +349,9 @@ export async function describeMr(tx: Tx, companyId: string, id: string) {
     .where(and(eq(prodMatRequests.id, id), eq(prodMatRequests.companyId, companyId)));
   return r ? { ref: r.number, title: `Material for ${r.wo}`, href: `/production/mr?id=${id}` } : null;
 }
+
+/** A material request belongs to its work order (a GM stop there stops the request too). */
+export async function mrParents(tx: Tx, companyId: string, id: string) {
+  const [r] = await tx.select({ wo: prodMatRequests.workOrderId }).from(prodMatRequests).where(and(eq(prodMatRequests.id, id), eq(prodMatRequests.companyId, companyId)));
+  return r ? [{ entity: 'work_order' as const, id: r.wo }] : [];
+}

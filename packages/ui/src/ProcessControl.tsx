@@ -14,7 +14,7 @@ type Result = { ok: true; data?: unknown } | { ok: false; error: string };
 export interface ControlThread {
   entity: string;
   entityId: string;
-  hold: { reason: string; by: string; at: string } | null;
+  hold: { reason: string; by: string; at: string; from?: { label: string; ref: string; href: string } | null } | null;
   comments: { id: string; kind: 'comment' | 'hold' | 'release'; text: string; by: string; role: string; at: string }[];
   canControl: boolean;
 }
@@ -32,12 +32,23 @@ export function HoldBanner({ thread }: { thread: ControlThread }) {
   if (!thread.hold) return null;
   return (
     <div className="o-panel" role="alert" style={{ borderLeft: '4px solid var(--bad)', background: 'var(--bad-tint, #fdecec)' }}>
-      <strong>On hold by {thread.hold.by}</strong> <span className="muted" style={{ fontSize: 12 }}>
+      <strong>
+        {thread.hold.from ? (
+          <>
+            Stopped: {thread.hold.from.label.toLowerCase()} <a href={thread.hold.from.href}>{thread.hold.from.ref}</a> is on hold by {thread.hold.by}
+          </>
+        ) : (
+          <>On hold by {thread.hold.by}</>
+        )}
+      </strong>{' '}
+      <span className="muted" style={{ fontSize: 12 }}>
         since <At iso={thread.hold.at} />
       </span>
       <p style={{ margin: '6px 0 0' }}>“{thread.hold.reason}”</p>
       <p className="muted" style={{ margin: '4px 0 0', fontSize: 12 }}>
-        Nothing on it can move on until it is resumed. Reply in Comments below.
+        {thread.hold.from
+          ? `This comes from ${thread.hold.from.ref}, so it cannot move on either until ${thread.hold.from.ref} is resumed.`
+          : 'Nothing on it, or on what follows from it in other portals, can move on until it is resumed. Reply in Comments below.'}
       </p>
     </div>
   );
@@ -104,7 +115,12 @@ export function ProcessControl({
           <Button size="small" variant="primary" disabled={busy || text.trim().length < 2} onClick={() => go(() => comment({ ...key, text }), 'Comment added.')}>
             Comment
           </Button>
-          {thread.canControl && !mode && (
+          {thread.canControl && !mode && thread.hold?.from && (
+            <a className="o-btn small" href={thread.hold.from.href}>
+              Resume at {thread.hold.from.ref}
+            </a>
+          )}
+          {thread.canControl && !mode && !thread.hold?.from && (
             <Button size="small" variant={thread.hold ? 'ok' : 'danger'} onClick={() => setMode(thread.hold ? 'release' : 'hold')}>
               {thread.hold ? 'Resume process' : 'Stop (hold) process'}
             </Button>
@@ -114,7 +130,7 @@ export function ProcessControl({
           <div className="o-stack" style={{ gap: 6, borderTop: '1px solid var(--line)', paddingTop: 8 }}>
             <strong style={{ fontSize: 13 }}>{mode === 'hold' ? 'Stop this process' : 'Resume this process'}</strong>
             <span className="muted" style={{ fontSize: 12 }}>
-              {mode === 'hold' ? 'Nobody can move it to the next step until you resume it. Everyone on it sees your reason.' : 'It continues from where it stopped. Everyone on it sees your note.'}
+              {mode === 'hold' ? 'Nobody can move it, or what follows from it in other portals (material requests, purchase, QC), to the next step until you resume it. Everyone on it sees your reason.' : 'It continues from where it stopped. Everyone on it sees your note.'}
             </span>
             <textarea className="o-input" rows={2} placeholder={mode === 'hold' ? 'Reason (required)' : 'Note for the team (required)'} value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)} aria-label={mode === 'hold' ? 'Reason for stopping' : 'Note for resuming'} />
             <div className="o-row" style={{ gap: 6 }}>

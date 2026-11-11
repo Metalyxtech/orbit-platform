@@ -1,8 +1,8 @@
-import { describeProcess } from '@orbit/core/holds';
+import { describeProcess, linkProcess } from '@orbit/core/holds';
 import { onQualityDecision } from '@orbit/core/quality';
 import { onSupplyUpdate, servePurchase } from '@orbit/core/supply';
 import { requests as purchaseRequests, supply as purchaseSupply } from '@orbit/portal-procurement/server';
-import { describeMr, describeWo } from '@orbit/portal-production/server';
+import { describeMr, describeWo, mrParents, woParents } from '@orbit/portal-production/server';
 import { inspections as qcInspections } from '@orbit/portal-quality/server';
 import { enquiries as salesEnquiries } from '@orbit/portal-sales/server';
 import { onQualityResult as productionQualityResult, onStoreQualityResult, onSupplyUpdate as productionSupplyUpdate } from '@orbit/portal-production/server';
@@ -28,5 +28,11 @@ export function registerQualityHandlers() {
   describeProcess('mat_request', describeMr);
   describeProcess('qc_inspection', qcInspections.describeInspection);
   describeProcess('sales_enquiry', salesEnquiries.describeEnquiry);
+  // A stop follows the work into the next portals: enquiry → work order → material request →
+  // purchase → QC inspection.
+  linkProcess('work_order', woParents);
+  linkProcess('mat_request', mrParents);
+  linkProcess('proc_request', purchaseRequests.requestParents);
+  linkProcess('qc_inspection', qcInspections.inspectionParents);
 }
 registerQualityHandlers();

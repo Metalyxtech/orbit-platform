@@ -266,3 +266,13 @@ export async function describeWo(tx: Tx, companyId: string, id: string) {
   const [w] = await tx.select({ number: prodWorkOrders.number, title: prodWorkOrders.title }).from(prodWorkOrders).where(and(eq(prodWorkOrders.id, id), eq(prodWorkOrders.companyId, companyId)));
   return w ? { ref: w.number, title: w.title, href: `/production/order?id=${id}` } : null;
 }
+
+/** A work order made for a sales order comes from that order's enquiry (a GM stop there stops the work order too). */
+export async function woParents(tx: Tx, companyId: string, id: string) {
+  const [w] = await tx
+    .select({ enquiryId: salesOrders.enquiryId })
+    .from(prodWorkOrders)
+    .innerJoin(salesOrders, eq(salesOrders.id, prodWorkOrders.salesOrderId))
+    .where(and(eq(prodWorkOrders.id, id), eq(prodWorkOrders.companyId, companyId)));
+  return w?.enquiryId ? [{ entity: 'sales_enquiry' as const, id: w.enquiryId }] : [];
+}

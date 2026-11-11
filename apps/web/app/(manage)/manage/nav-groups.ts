@@ -4,7 +4,7 @@ import { companyAdminItems } from '@/company-admin-nav';
 import { portalNavItems } from '@/portal-nav';
 import { portalModules } from '@/portals';
 import { PROJECT_DOCS_HREF } from '@/project-docs';
-import { toEntries, type MenuSection } from '@orbit/ui';
+import { adminSections, type MenuSection } from '@orbit/ui';
 
 type Counts = { waiting: number; unread: number; badges: Record<string, number>; roles: Record<string, string | null>; projectDocs?: boolean };
 
@@ -49,6 +49,6 @@ export function manageNavSections(ctx: SessionContext, ws: Workspace, portals: s
     },
   ];
   const admin = companyAdminItems(ctx, open, c.roles);
-  if (admin.length) sections.push({ title: 'Company admin', entries: toEntries(admin.map((n) => ({ ...n, menu: n.group === 'Company' ? undefined : `${n.group} settings` }))) });
+  sections.push(...adminSections(admin));
   return sections;
 }

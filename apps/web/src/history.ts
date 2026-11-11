@@ -50,6 +50,8 @@ const ACTIONS: Record<string, { area: ChangeArea; label: string }> = {
   'production.store.issue': { area: 'Production', label: 'Material issued' },
   'production.qc.pass': { area: 'Production', label: 'QC passed' },
   'production.qc.fail': { area: 'Production', label: 'QC failed, NCR raised' },
+  'production.drawing.add': { area: 'Production', label: 'Drawing attached' },
+  'production.drawing.remove': { area: 'Production', label: 'Drawing removed' },
   'production.ncr.close': { area: 'Production', label: 'NCR closed' },
   'workflow.bind': { area: 'Timesheet', label: 'Timesheet approval workflow changed' },
   'ts_settings.update': { area: 'Timesheet', label: 'Timesheet settings changed' },

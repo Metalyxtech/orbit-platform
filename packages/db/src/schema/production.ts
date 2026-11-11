@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, date, index, integer, jsonb, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { bigint, boolean, date, index, integer, jsonb, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { companies, memberships } from './platform';
 
 // Production portal. Every table carries company_id and is under RLS (migration 0023).
@@ -185,4 +185,27 @@ export const prodEvents = pgTable(
     createdAt: at(),
   },
   (t) => [index('prod_events_wo').on(t.companyId, t.workOrderId, t.createdAt)],
+);
+
+/** Workshop drawings and documents on a work order: uploaded files (S3) or links to bigger files. */
+export const prodDocs = pgTable(
+  'prod_docs',
+  {
+    id: id(),
+    companyId: companyId(),
+    workOrderId: uuid('work_order_id')
+      .notNull()
+      .references(() => prodWorkOrders.id),
+    /** file | link */
+    kind: text('kind').notNull(),
+    name: text('name').notNull(),
+    url: text('url'),
+    s3Key: text('s3_key'),
+    contentType: text('content_type'),
+    sizeBytes: bigint('size_bytes', { mode: 'number' }),
+    uploaded: boolean('uploaded').notNull().default(false),
+    byId: member('by_id'),
+    createdAt: at(),
+  },
+  (t) => [index('prod_docs_wo').on(t.companyId, t.workOrderId)],
 );

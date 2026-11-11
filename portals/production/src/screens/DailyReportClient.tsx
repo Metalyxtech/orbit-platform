@@ -62,7 +62,8 @@ export function DailyReportClient({ wos }: { wos: FloorWo[] }) {
                 <Link href={woHref(w.id)}>{w.number}</Link> {w.title} <PriorityChip priority={w.priority} />
               </h2>
               <span className="muted" style={{ fontSize: 12 }}>
-                {w.trade} · {fmtQty(w.qty)} {w.unit} · due {fmtDate(w.due)}
+                {w.trade} · {fmtQty(w.qty)} {w.unit} · due {fmtDate(w.due)} ·{' '}
+                <Link href={woHref(w.id)}>{w.drawings ? `${w.drawings} drawing${w.drawings === 1 ? '' : 's'}` : 'no drawings'}</Link>
               </span>
             </div>
             <div className="o-scroll">

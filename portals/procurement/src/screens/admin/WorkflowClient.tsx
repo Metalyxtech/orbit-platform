@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Button, SaveBar, TopBar, useConfirm } from '@orbit/ui';
 import { addIndustryCheckAction, removeIndustryCheckAction, saveWorkflowAction } from '../../actions';
-import { PROC_ROLES, STAGES, WORK, type ProcConfig, type StageKey } from '../../config';
+import { ACTING_ROLES, PROC_ROLES, STAGES, WORK, type ProcConfig, type StageKey } from '../../config';
 import { TemplatePicker, type TemplateInfo } from './TemplatePicker';
 import { useSave } from './useSave';
 
@@ -78,7 +78,7 @@ export function WorkflowClient({ config, templates, checks }: { config: ProcConf
                           <span className="faint">Approval rules</span>
                         ) : (
                           <select className="o-select" value={stageCfg[k]?.role ?? st.role} onChange={(e) => setStageCfg((c) => ({ ...c, [k]: { ...c[k], role: e.target.value as (typeof PROC_ROLES)[number]['id'] } }))} aria-label="Handled by">
-                            {PROC_ROLES.filter((r) => r.id !== 'admin').map((r) => (
+                            {ACTING_ROLES.map((r) => (
                               <option key={r.id} value={r.id}>
                                 {r.label}
                               </option>

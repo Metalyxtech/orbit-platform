@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { configFromTemplate, originOf } from '../src/config';
+import { configFromTemplate, originOf, withoutViewOnly } from '../src/config';
 import { canAct, chainFor, estValue, expectedInvoice, fullyReceived, nextStage, ownerRole, pendingLevel, receivedQty, variancePct, withinTolerance } from '../src/engine';
 
 const cfg = configFromTemplate('fab');
@@ -33,18 +33,29 @@ describe('purchase workflow', () => {
     expect(estValue([{ qty: 10, buyQty: 4, estRate: 100 }])).toBe(400);
   });
 
+  // A company can add a second level (another manager) for big POs; the GM never approves.
+  const two = { ...cfg, levels: [...cfg.levels, { id: 'l2', name: 'Senior purchase manager', role: 'manager' as const, min: 50000, pr: false, po: true }] };
+
   it('builds the approval chain from value thresholds', () => {
-    expect(chainFor(cfg, 'po', 1000).map((l) => l.id)).toEqual(['l1']);
-    expect(chainFor(cfg, 'po', 60000).map((l) => l.id)).toEqual(['l1', 'l2']);
-    expect(chainFor(cfg, 'pr', 60000).map((l) => l.id)).toEqual(['l1']);
-    expect(pendingLevel(cfg, 'po_approval', 60000, ['l1'])?.id).toBe('l2');
-    expect(pendingLevel(cfg, 'po_approval', 60000, ['l1', 'l2'])).toBeNull();
+    expect(cfg.levels.map((l) => l.role)).toEqual(['manager']);
+    expect(chainFor(two, 'po', 1000).map((l) => l.id)).toEqual(['l1']);
+    expect(chainFor(two, 'po', 60000).map((l) => l.id)).toEqual(['l1', 'l2']);
+    expect(chainFor(two, 'pr', 60000).map((l) => l.id)).toEqual(['l1']);
+    expect(pendingLevel(two, 'po_approval', 60000, ['l1'])?.id).toBe('l2');
+    expect(pendingLevel(two, 'po_approval', 60000, ['l1', 'l2'])).toBeNull();
+  });
+
+  it('drops GM approval levels saved before the GM became view-only', () => {
+    const old = { ...cfg, levels: [...cfg.levels, { id: 'g', name: 'General manager', role: 'gm' as const, min: 50000, pr: false, po: true }], stageCfg: { rfq: { role: 'gm' as const } } };
+    const fixed = withoutViewOnly(old);
+    expect(fixed.levels.map((l) => l.role)).toEqual(['manager']);
+    expect(ownerRole(fixed, 'rfq', null)).toBe('buyer');
   });
 
   it('knows who acts', () => {
     expect(ownerRole(cfg, 'rfq', null)).toBe('buyer');
     expect(ownerRole(cfg, 'receiving', null)).toBe('store');
-    expect(ownerRole(cfg, 'po_approval', cfg.levels[1])).toBe('gm');
+    expect(ownerRole(two, 'po_approval', two.levels[1])).toBe('manager');
     expect(canAct(['buyer'], 'buyer')).toBe(true);
     expect(canAct(['store'], 'buyer')).toBe(false);
     // An admin acts only on the roles they cover, not on every step.

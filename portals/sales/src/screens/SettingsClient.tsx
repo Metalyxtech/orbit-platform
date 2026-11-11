@@ -12,7 +12,7 @@ import { useRun } from './useRun';
 type Settings = Pick<SalesConfig, 'managerDiscount' | 'minMargin' | 'gst' | 'currency' | 'validityDays' | 'paymentTermsDays' | 'defaultAdvance' | 'terms' | 'gmApproval'>;
 type Draft = Record<string, { role: SalesRole; access: SalesPerson['access']; covers: SalesRole[] }>;
 /** Jobs a company admin can also do in Sales (their task list follows these). */
-const COVERABLE: SalesRole[] = ['manager', 'gm', 'accounts', 'estimator'];
+const COVERABLE: SalesRole[] = ['manager', 'accounts', 'estimator'];
 const sameSet = (a: SalesRole[], b: SalesRole[]) => a.length === b.length && a.every((x) => b.includes(x));
 
 const pickSettings = (c: SalesConfig): Settings => ({
@@ -81,8 +81,8 @@ export function SettingsClient({ cfg, team }: { cfg: SalesConfig; team: SalesPer
       <div className="o-panel">
         <h2>Approvals and quotation</h2>
         <div className="o-form-row">
-          {numField('managerDiscount', 'Sales manager approves discounts up to %', 'Bigger discounts go to the GM')}
-          {numField('minMargin', 'Margin under this % goes to the GM')}
+          {numField('managerDiscount', 'Flag discounts above %', 'Shown to the sales manager when approving')}
+          {numField('minMargin', 'Warn when margin is under %')}
           {numField('gst', 'GST %')}
           <label className="o-field">
             Currency symbol
@@ -91,14 +91,9 @@ export function SettingsClient({ cfg, team }: { cfg: SalesConfig; team: SalesPer
           {numField('validityDays', 'Quotation valid for days')}
           {numField('paymentTermsDays', 'Invoice due after days')}
           {numField('defaultAdvance', 'Default advance %')}
-          <label className="o-field">
-            GM final approval
-            <select className="o-select" value={f.gmApproval} onChange={(e) => setF({ ...f, gmApproval: e.target.value as Settings['gmApproval'] })}>
-              <option value="always">Every quotation (after the sales manager)</option>
-              <option value="over_limit">Only above the manager&apos;s discount limit or under the minimum margin</option>
-            </select>
-            <span className="help">The sales manager always approves first, with a comment and can change the discount.</span>
-          </label>
+          <p className="help" style={{ gridColumn: '1 / -1', margin: 0 }}>
+            The sales manager approves every quotation (with a comment, and can change the discount); their approval is final. The GM views every enquiry and can stop it and comment.
+          </p>
         </div>
         <label className="o-field" style={{ marginTop: 10 }}>
           Terms printed on quotations

@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { SaveBar, TopBar } from '@orbit/ui';
 import { saveLevelsAction } from '../../actions';
-import { PROC_ROLES, roleLabel, type ApprovalLevel, type ProcRole } from '../../config';
+import { ACTING_ROLES, PROC_ROLES, roleLabel, type ApprovalLevel, type ProcRole } from '../../config';
 import { fmtMoney } from '../ui';
 import { useSave } from './useSave';
 
@@ -46,7 +46,7 @@ export function ApprovalsClient({ levels: initial, currency }: { levels: Approva
                     </td>
                     <td style={{ minWidth: 170 }}>
                       <select className="o-select" value={l.role} onChange={(e) => set(i, { role: e.target.value as ProcRole })} aria-label="Approver">
-                        {PROC_ROLES.filter((r) => r.id !== 'admin').map((r) => (
+                        {ACTING_ROLES.map((r) => (
                           <option key={r.id} value={r.id}>
                             {r.label}
                           </option>

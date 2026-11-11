@@ -9,7 +9,7 @@ export const PROD_ROLES: { id: ProdRole; label: string; detail: string }[] = [
   { id: 'manager', label: 'Production manager', detail: 'Releases work orders and watches progress' },
   { id: 'supervisor', label: 'Supervisor', detail: 'Receives work orders, requests material and reports daily output' },
   { id: 'store', label: 'Production store keeper', detail: 'Production store: receives material with MTC, issues from stock or asks Purchase, dispatches' },
-  { id: 'gm', label: 'General manager', detail: 'Company-wide view of output and delays' },
+  { id: 'gm', label: 'General manager', detail: 'Company-wide view; can stop any work order and comment (no approvals)' },
   { id: 'admin', label: 'Production admin', detail: 'Everything, plus production settings' },
 ];
 export const roleLabel = (r: string) => PROD_ROLES.find((x) => x.id === r)?.label ?? r;
@@ -88,7 +88,7 @@ export interface ProdConfig {
 export const DEFAULT_CONFIG: ProdConfig = { trades: [], overrunPct: 5, requireRelease: true, requireFinalQc: true };
 
 /** Roles a production admin can also cover: they then get those roles' tasks. */
-export const COVER_ROLES: ProdRole[] = ['engineer', 'manager', 'supervisor', 'store', 'gm'];
+export const COVER_ROLES: ProdRole[] = ['engineer', 'manager', 'supervisor', 'store'];
 
 /**
  * Roles this admin covers: what the company admin chose, or else every role nobody else holds

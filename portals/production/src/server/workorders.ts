@@ -96,7 +96,7 @@ export async function submitForRelease(tx: Tx, ctx: ActionContext, raw: { id: st
 /** The production manager releases the work order to the floor, or sends the plan back with a reason. */
 export async function decideRelease(tx: Tx, ctx: ActionContext, raw: { id: string; release: boolean; note?: string }) {
   const v = z.object({ id: z.uuid(), release: z.boolean(), note: z.string().trim().max(1000).optional() }).parse(raw);
-  requireRole(await myRole(tx, ctx), 'manager', 'gm');
+  requireRole(await myRole(tx, ctx), 'manager');
   const r = await lockWo(tx, ctx, v.id);
   if (r.status !== 'pending_release') throw new Error('This work order is not waiting for release');
   if (!v.release && !v.note) throw new Error('Say what the engineer should change');
@@ -207,7 +207,7 @@ export async function workOrderDetail(tx: Tx, ctx: SessionContext, id: string) {
       drawings: !['dispatched', 'cancelled'].includes(status) && hasRole(me, 'engineer', 'manager'),
       edit: status === 'draft' && hasRole(me, 'engineer', 'manager'),
       submit: status === 'draft' && hasRole(me, 'engineer', 'manager'),
-      release: status === 'pending_release' && hasRole(me, 'manager', 'gm'),
+      release: status === 'pending_release' && hasRole(me, 'manager'),
       cancel: !['dispatched', 'cancelled'].includes(status) && hasRole(me, 'manager'),
       issue: ['released', 'in_progress', 'final_qc'].includes(status) && mats.length > 0 && hasRole(me, 'store', 'manager'),
       report: floor && hasRole(me, 'supervisor', 'manager'),

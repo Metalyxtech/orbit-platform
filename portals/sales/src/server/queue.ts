@@ -53,17 +53,17 @@ async function build(tx: Tx, ctx: SessionContext): Promise<QueueItem[]> {
       else items.push({ id: `sc:${e.id}`, title: `Cost ${e.number}`, detail: `${customer} · ${e.title}`, href: enquiryHref(e.id) });
     }
   }
-  // Approval chain: the sales manager approves first, then the GM gives final approval.
-  if (acts('manager', 'gm')) {
-    const steps = [...(acts('manager') ? ['pending'] : []), ...(acts('gm') ? ['pending_gm'] : [])];
+  // Approval: the sales manager (final). Quotations left "with the GM" from before are theirs too.
+  if (acts('manager')) {
+    const steps = ['pending', 'pending_gm'];
     const waiting = await enq(inArray(salesEnquiries.quoteStatus, steps));
     if (waiting.length) {
       const lines = await tx.select().from(salesLines).where(inArray(salesLines.enquiryId, waiting.map((p) => p.e.id)));
       for (const { e, customer } of waiting) {
         const t = quoteTotals(lines.filter((l) => l.enquiryId === e.id), e.discount, cfg.gst);
-        const gmStep = e.quoteStatus === 'pending_gm';
-        if (!gmStep && e.returnedTo === 'manager') {
-          items.push({ id: `sp:${e.id}:back`, title: `Review ${e.quoteNo} again: GM sent it back`, detail: (e.returnedNote ?? '').slice(0, 140), href: enquiryHref(e.id), urgent: true });
+        const gmStep = false;
+        if (e.returnedTo === 'manager') {
+          items.push({ id: `sp:${e.id}:back`, title: `Review ${e.quoteNo} again`, detail: (e.returnedNote ?? '').slice(0, 140), href: enquiryHref(e.id), urgent: true });
           continue;
         }
         items.push({ id: `sp:${e.id}:${e.quoteStatus}`, title: `${gmStep ? 'Final approval' : 'Approve'} ${e.quoteNo}`, detail: `${customer} · ${e.discount}% discount · ${fmtShort(cfg.currency, t.net)}${gmStep ? ' · sales manager approved' : ''}`, href: enquiryHref(e.id), urgent: true });

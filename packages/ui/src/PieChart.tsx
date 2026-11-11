@@ -10,11 +10,14 @@ export function PieChart({
   unit = 'h',
   max = 8,
   size = 200,
+  decimals = 1,
 }: {
   slices: { label: string; value: number; detail?: string; color?: string }[];
   unit?: string;
   max?: number;
   size?: number;
+  /** Decimal places for values (0 for counts). */
+  decimals?: number;
 }) {
   const sorted = slices.filter((s) => s.value > 0).sort((a, b) => b.value - a.value);
   const shown = sorted.slice(0, max);
@@ -50,7 +53,7 @@ export function PieChart({
       <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} role="img" aria-label="Hours by person">
         {arcs.map((a) => (
           <path key={a.label} d={a.d} fill={a.color} fillRule="evenodd" stroke="var(--sheet)" strokeWidth={1}>
-            <title>{`${a.label}: ${a.value.toFixed(1)} ${unit} (${a.pct}%)`}</title>
+            <title>{`${a.label}: ${a.value.toFixed(decimals)} ${unit} (${a.pct}%)`}</title>
           </path>
         ))}
         <text x={r} y={r - 4} textAnchor="middle" fontSize={20} fontWeight={600} fill="var(--ink)">
@@ -69,7 +72,7 @@ export function PieChart({
               {a.detail && <span className="faint"> {a.detail}</span>}
             </span>
             <span className="num">
-              {a.value.toFixed(1)} {unit}
+              {a.value.toFixed(decimals)} {unit}
             </span>
             <span className="num faint">{a.pct}%</span>
           </li>

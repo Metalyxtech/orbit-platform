@@ -4,7 +4,7 @@ import { query } from '@orbit/core/next';
 import { Chip, DataTable, EmptyState, KpiStrip, TopBar } from '@orbit/ui';
 import { fmtDate, fmtQty, roleLabel, type Priority } from '../config';
 import { TRADES } from '../trades';
-import { admin, dashboard, floor, loadConfig, myRole, NOT_READY, notReady, quality, queue, store, workorders, type WoFilter } from '../server';
+import { admin, dashboard, floor, loadConfig, myRole, NOT_READY, notReady, queue, store, workorders, type WoFilter } from '../server';
 import { DailyReportClient } from './DailyReportClient';
 import { SettingsClient } from './SettingsClient';
 import { NotReady, PageHead, PriorityChip, Progress, woHref, WoTable } from './ui';
@@ -59,15 +59,14 @@ const Dashboard: Screen = async () => {
             { value: String(k.open), label: 'Open work orders' },
             { value: String(k.floor), label: 'On the shop floor' },
             { value: String(k.late), label: 'Past due date', tone: k.late ? 'hivis' : undefined },
-            { value: String(k.qc), label: 'Waiting final QC' },
+            { value: String(k.qc), label: 'With QC' },
             { value: String(k.ready), label: 'Ready to dispatch' },
           ]}
         />
         <KpiStrip
           items={[
             { value: `${fmtQty(k.hoursToday)} h`, label: `Hours reported today (${k.reportsToday} lines)` },
-            { value: k.passRate === null ? '-' : `${k.passRate}%`, label: 'QC first-time pass (30 days)' },
-            { value: String(k.ncrs), label: 'Open NCRs', tone: k.ncrs ? 'hivis' : undefined },
+            { value: String(k.rework), label: 'Back from QC for rework', tone: k.rework ? 'hivis' : undefined },
           ]}
         />
         <div className="o-panel">
@@ -252,7 +251,7 @@ const EditWo: Screen = async ({ searchParams }) => {
         fields: (wo.fields ?? {}) as Record<string, string>,
         notes: wo.notes ?? '',
         materials: materials.map((m) => ({ item: m.item, qty: String(m.qty), unit: m.unit })),
-        operations: ops.map((o) => ({ name: o.name, qc: o.qcRequired })),
+        operations: ops.map((o) => ({ name: o.name })),
       }}
     />
   );
@@ -269,7 +268,7 @@ const BOARD = [
   { id: 'pending_release', label: 'Waiting release' },
   { id: 'released', label: 'Released' },
   { id: 'in_progress', label: 'In production' },
-  { id: 'final_qc', label: 'Final QC' },
+  { id: 'final_qc', label: 'With QC' },
   { id: 'completed', label: 'Ready to dispatch' },
 ] as const;
 
@@ -308,8 +307,7 @@ const Board: Screen = async () => {
                       </div>
                       <div className="o-row" style={{ gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
                         <PriorityChip priority={r.priority} />
-                        {r.rework && <Chip tone="bad">Rework</Chip>}
-                        {r.openNcrs > 0 && <Chip tone="bad">NCR</Chip>}
+                        {r.rework && <Chip tone="bad">QC failed: rework</Chip>}
                       </div>
                     </Link>
                   ))}
@@ -353,94 +351,6 @@ const Output: Screen = async () => {
                 { key: 's', header: 'Shift', render: (r) => r.shift ?? '-' },
                 { key: 'r', header: 'Remarks', render: (r) => <span className="muted">{r.remarks ?? ''}</span> },
                 { key: 'b', header: 'By', render: (r) => <span className="muted">{r.by}</span> },
-              ]}
-            />
-          </div>
-        </div>
-      </div>
-    </>
-  );
-};
-
-const Qc: Screen = async () => {
-  const d = await query(async (tx, ctx) => ({ waiting: await quality.qcWork(tx, ctx), log: await quality.qualityLog(tx, ctx) }));
-  return (
-    <>
-      <TopBar crumbs={['Production', 'Inspections']} />
-      <div className="o-page">
-        <PageHead title="Inspections" lead="What QC has to inspect now, and every inspection done." />
-        <div className="o-panel flush">
-          <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
-            <h2>Waiting for inspection</h2>
-          </div>
-          <DataTable
-            rows={d.waiting}
-            rowKey={(r) => `${r.workOrderId}:${r.operationId ?? 'final'}`}
-            empty={<EmptyState title="Nothing waiting for QC." />}
-            columns={[
-              { key: 'w', header: 'Work order', render: (r) => <Link href={woHref(r.workOrderId)}><strong>{r.number}</strong> {r.title}</Link> },
-              { key: 'x', header: 'Inspect', render: (r) => <strong>{r.what}</strong> },
-              { key: 't', header: 'Trade', render: (r) => r.trade },
-              { key: 'p', header: '', render: (r) => <PriorityChip priority={r.priority} /> },
-              { key: 'd', header: 'Due', num: true, render: (r) => fmtDate(r.due) },
-            ]}
-          />
-        </div>
-        <div className="o-panel flush">
-          <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
-            <h2>Inspection register</h2>
-          </div>
-          <div className="o-scroll">
-            <DataTable
-              rows={d.log.inspections}
-              rowKey={(r) => r.id}
-              empty={<EmptyState title="No inspections yet." />}
-              columns={[
-                { key: 'n', header: 'QC no.', render: (r) => <strong>{r.qcNo}</strong> },
-                { key: 'w', header: 'Work order', render: (r) => <Link href={woHref(r.workOrderId)}>{r.number} {r.title}</Link> },
-                { key: 'x', header: 'Inspected', render: (r) => r.what },
-                { key: 'r', header: 'Result', render: (r) => (r.result === 'pass' ? <Chip tone="ok">Passed</Chip> : <Chip tone="bad">Failed</Chip>) },
-                { key: 'b', header: 'By', render: (r) => <span className="muted">{r.by}</span> },
-                { key: 'a', header: 'When', render: (r) => fmtDate(r.at) },
-              ]}
-            />
-          </div>
-        </div>
-      </div>
-    </>
-  );
-};
-
-const Ncr: Screen = async ({ searchParams }) => {
-  const showAll = one(searchParams.all) === '1';
-  const d = await query((tx, ctx) => quality.qualityLog(tx, ctx));
-  const rows = showAll ? d.ncrs : d.ncrs.filter((n) => n.status === 'open');
-  return (
-    <>
-      <TopBar crumbs={['Production', 'NCRs']} />
-      <div className="o-page">
-        <PageHead title="Non-conformance reports" lead="Raised when an inspection fails; closed when the rework passes or the manager accepts it." />
-        <nav className="o-tabs">
-          <Link href="?" aria-current={!showAll ? 'page' : undefined}>
-            Open ({d.ncrs.filter((n) => n.status === 'open').length})
-          </Link>
-          <Link href="?all=1" aria-current={showAll ? 'page' : undefined}>
-            All
-          </Link>
-        </nav>
-        <div className="o-panel flush">
-          <div className="o-scroll">
-            <DataTable
-              rows={rows}
-              rowKey={(r) => r.id}
-              empty={<EmptyState title={showAll ? 'No NCRs yet.' : 'No open NCRs.'} />}
-              columns={[
-                { key: 'n', header: 'NCR', render: (r) => <strong>{r.ncrNo}</strong> },
-                { key: 'w', header: 'Work order', render: (r) => <Link href={woHref(r.workOrderId)}>{r.number} {r.title}</Link> },
-                { key: 'x', header: 'Where', render: (r) => r.what },
-                { key: 'd', header: 'Problem', render: (r) => <>{r.description}{r.action && <div className="faint" style={{ fontSize: 11 }}>Action: {r.action}</div>}</> },
-                { key: 's', header: 'Status', render: (r) => (r.status === 'open' ? <Chip tone="bad">Open</Chip> : <Chip tone="ok">Closed</Chip>) },
-                { key: 'a', header: 'Raised', render: (r) => fmtDate(r.at) },
               ]}
             />
           </div>
@@ -498,7 +408,7 @@ const Trades: Screen = async () => (
   <>
     <TopBar crumbs={['Production', 'Trade forms']} />
     <div className="o-page">
-      <PageHead title="Trade forms" lead="What each trade's work order asks for, its default operations and the QC checklists. Planners can change operations on any job." />
+      <PageHead title="Trade forms" lead="What each trade's work order asks for and its default operations. The checklists go to QC in the Quality portal when the work is finished." />
       {TRADES.map((t) => (
         <details key={t.id} className="o-panel">
           <summary style={{ cursor: 'pointer' }}>
@@ -520,19 +430,19 @@ const Trades: Screen = async () => (
               <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
                 {t.operations.map((o) => (
                   <li key={o.name}>
-                    {o.name} {o.qc && <Chip tone="grey">QC</Chip>}
+                    {o.name}
                   </li>
                 ))}
               </ol>
             </div>
             <div>
-              <h3 style={{ fontSize: 13, margin: '0 0 6px' }}>QC checklist (each inspected operation)</h3>
+              <h3 style={{ fontSize: 13, margin: '0 0 6px' }}>QC checklist (used in the Quality portal)</h3>
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
                 {t.checklist.map((c) => (
                   <li key={c}>{c}</li>
                 ))}
               </ul>
-              <h3 style={{ fontSize: 13, margin: '12px 0 6px' }}>Final inspection</h3>
+              <h3 style={{ fontSize: 13, margin: '12px 0 6px' }}>Final checks</h3>
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
                 {t.finalChecklist.map((c) => (
                   <li key={c}>{c}</li>
@@ -571,8 +481,6 @@ export const productionRoutes: Record<string, Screen> = Object.fromEntries(
     board: Board,
     report: Report,
     output: Output,
-    qc: Qc,
-    ncr: Ncr,
     store: Store,
     trades: Trades,
     'admin/settings': Settings,

@@ -9,3 +9,4 @@ export * from './legal';
 export * from './custom';
 export * from './sales';
 export * from './production';
+export * from './quality';

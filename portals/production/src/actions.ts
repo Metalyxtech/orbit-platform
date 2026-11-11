@@ -1,7 +1,7 @@
 'use server';
 // Server actions for the Production portal: each runs as the signed-in member in one RLS transaction.
 import { runAction } from '@orbit/core/next';
-import { admin, drawings, floor, quality, store, workorders } from './server';
+import { admin, drawings, floor, store, workorders } from './server';
 
 type In<F> = F extends (tx: never, ctx: never, input: infer I) => unknown ? I : never;
 
@@ -23,9 +23,6 @@ export async function cancelWorkOrderAction(input: { id: string; reason: string 
 export async function reportOutputAction(input: In<typeof floor.reportOutput>) {
   return runAction((tx, ctx) => floor.reportOutput(tx, ctx, input));
 }
-export async function reworkDoneAction(input: { operationId: string; remarks: string }) {
-  return runAction((tx, ctx) => floor.reworkDone(tx, ctx, input));
-}
 export async function finalReworkDoneAction(input: { workOrderId: string; remarks: string }) {
   return runAction((tx, ctx) => floor.finalReworkDone(tx, ctx, input));
 }
@@ -34,12 +31,6 @@ export async function issueMaterialsAction(input: In<typeof store.issueMaterials
 }
 export async function dispatchAction(input: { workOrderId: string; reference: string }) {
   return runAction((tx, ctx) => store.dispatch(tx, ctx, input));
-}
-export async function inspectAction(input: In<typeof quality.inspect>) {
-  return runAction((tx, ctx) => quality.inspect(tx, ctx, input));
-}
-export async function closeNcrAction(input: { id: string; action: string }) {
-  return runAction((tx, ctx) => quality.closeNcr(tx, ctx, input));
 }
 export async function saveProductionAdminAction(input: In<typeof admin.saveProductionAdmin>) {
   return runAction((tx, ctx) => admin.saveProductionAdmin(tx, ctx, input));

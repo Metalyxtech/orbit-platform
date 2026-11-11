@@ -48,6 +48,8 @@ export function pendingLevel(cfg: ProcConfig, stage: Stage, value: number, appro
 export function ownerRole(cfg: ProcConfig, stage: Stage, pending: ApprovalLevel | null): ProcRole | null {
   if (stage === 'draft' || stage === 'closed' || stage === 'rejected') return null;
   if (stage === 'pr_approval' || stage === 'po_approval') return pending?.role ?? null;
+  // Inspection is done in the Quality portal, not by a Purchase role.
+  if (stage === 'inspection') return null;
   const role = cfg.stageCfg[stage]?.role ?? STAGES[stage].role;
   return role === 'approval' ? null : role;
 }

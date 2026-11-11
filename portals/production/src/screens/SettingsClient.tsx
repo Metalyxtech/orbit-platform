@@ -51,10 +51,6 @@ export function SettingsClient({ cfg, team }: { cfg: ProdConfig; team: ProdPerso
             <input type="checkbox" checked={f.requireRelease} onChange={(e) => setF({ ...f, requireRelease: e.target.checked })} />
             The production manager releases each work order before the floor starts
           </label>
-          <label className="o-row" style={{ gap: 8, fontSize: 13 }}>
-            <input type="checkbox" checked={f.requireFinalQc} onChange={(e) => setF({ ...f, requireFinalQc: e.target.checked })} />
-            Final QC inspection before dispatch
-          </label>
           <label className="o-field" style={{ maxWidth: 320 }}>
             Allowed overrun (output and material above plan) %
             <input className="o-input" type="number" min={0} max={50} value={f.overrunPct} onChange={(e) => setF({ ...f, overrunPct: Math.max(0, Math.min(50, Number(e.target.value) || 0)) })} />

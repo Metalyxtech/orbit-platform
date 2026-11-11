@@ -2,7 +2,7 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { SessionContext } from '@orbit/core';
 import { auditLog, memberships, users, type Tx } from '@orbit/db';
 
-export type ChangeArea = 'Purchase' | 'Timesheet' | 'Sales' | 'Production' | 'People and access' | 'Company';
+export type ChangeArea = 'Purchase' | 'Timesheet' | 'Sales' | 'Production' | 'Quality' | 'People and access' | 'Company';
 
 /** Plain-language name and area for each recorded action. */
 const ACTIONS: Record<string, { area: ChangeArea; label: string }> = {
@@ -53,6 +53,11 @@ const ACTIONS: Record<string, { area: ChangeArea; label: string }> = {
   'production.drawing.add': { area: 'Production', label: 'Drawing attached' },
   'production.drawing.remove': { area: 'Production', label: 'Drawing removed' },
   'production.ncr.close': { area: 'Production', label: 'NCR closed' },
+  'quality.report.pass': { area: 'Quality', label: 'Inspection passed' },
+  'quality.report.fail': { area: 'Quality', label: 'Inspection failed, NCR raised' },
+  'quality.report.return': { area: 'Quality', label: 'Report sent back to QC engineer' },
+  'quality.report.approve': { area: 'Quality', label: 'Inspection report approved' },
+  'quality.role': { area: 'Quality', label: 'Quality role changed' },
   'workflow.bind': { area: 'Timesheet', label: 'Timesheet approval workflow changed' },
   'ts_settings.update': { area: 'Timesheet', label: 'Timesheet settings changed' },
   'timesheet.form': { area: 'Timesheet', label: 'Timesheet form changed' },

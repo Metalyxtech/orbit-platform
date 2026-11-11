@@ -119,7 +119,6 @@ export async function rolesOverview(tx: Tx, ctx: SessionContext) {
   const [team, config] = await Promise.all([purchaseTeam(tx, ctx), loadConfig(tx, ctx.companyId)]);
   // Roles the workflow needs: stage owners and approval levels.
   const needed = new Set<ProcRole>(['requester', 'buyer', 'store']);
-  if (config.flow.inspection) needed.add('qc');
   if (config.flow.invoice) needed.add('accounts');
   for (const l of config.levels) needed.add(l.role);
   for (const v of Object.values(config.stageCfg)) if (v?.role) needed.add(v.role);

@@ -549,6 +549,36 @@ export async function updateMember(tx: Tx, ctx: ActionContext, raw: z.input<type
   assertRole(ctx, 'company_admin');
   const { membershipId, ...set } = memberUpdate.parse(raw);
   if (set.supervisorId === membershipId) throw new Error('A person cannot be their own supervisor');
+
+  const inCompany = eq(memberships.companyId, ctx.companyId);
+  const [target] = await tx.select().from(memberships).where(and(eq(memberships.id, membershipId), inCompany)).for('update');
+  if (!target || target.status === 'removed') throw new Error('User not found');
+
+  if (membershipId === ctx.membershipId && set.status && set.status !== 'active') {
+    throw new Error('You cannot disable your own account. Ask another company admin.');
+  }
+  // The supervisor must be an active member of this company (never an id from elsewhere).
+  if (set.supervisorId) {
+    const [sup] = await tx
+      .select({ status: memberships.status })
+      .from(memberships)
+      .where(and(eq(memberships.id, set.supervisorId), inCompany));
+    if (!sup || sup.status !== 'active') throw new Error('Choose an active user as supervisor');
+  }
+  // Never leave the company without an active admin (nobody could manage people or settings).
+  const losesAdmin =
+    target.role === 'company_admin' &&
+    target.status === 'active' &&
+    ((set.role && set.role !== 'company_admin') || (set.status && set.status !== 'active'));
+  if (losesAdmin) {
+    const admins = await tx
+      .select({ id: memberships.id })
+      .from(memberships)
+      .where(and(inCompany, eq(memberships.role, 'company_admin'), eq(memberships.status, 'active')));
+    if (!admins.some((a) => a.id !== membershipId)) {
+      throw new Error('A company needs at least one active company admin. Make someone else an admin first.');
+    }
+  }
   await tx.update(memberships).set(set).where(and(eq(memberships.id, membershipId), eq(memberships.companyId, ctx.companyId)));
   if (set.status === 'active') await activateRequestedPortals(tx, [membershipId]);
   await audit(tx, {

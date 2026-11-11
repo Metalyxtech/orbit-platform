@@ -1,8 +1,9 @@
 'use client';
 import { useRouter } from 'next/navigation';
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { toEntries } from './menu';
 import { NotificationCenter } from './NotificationCenter';
+import { SideFoot } from './SideFoot';
 import { SideMenu } from './SideMenu';
 
 export interface ShellNavItem {
@@ -25,6 +26,7 @@ export interface AppShellProps {
   nav: ShellNavItem[];
   user: { name: string; title: string | null };
   onSwitchCompany?: (companyId: string) => Promise<void>;
+  /** Where the sign-out form posts. */
   signOutHref: string;
   children: ReactNode;
 }
@@ -43,25 +45,27 @@ export function AppShell(props: AppShellProps) {
           <div className="o-brand-mark" aria-hidden />
           <div>
             <div className="o-brand-name">{props.brand}</div>
-            <div className="o-brand-co">{props.companyName}</div>
+            <div className="o-brand-co" title={props.companyName}>
+              {props.companyName}
+            </div>
           </div>
           <NotificationCenter />
         </div>
-        <div className="o-switch">
-          <span>{props.portalName}</span>
-          {props.portals.length > 1 ? (
-            <select aria-label="Switch portal" value="" onChange={(e) => router.push(`/${e.target.value}`)}>
-              <option value="">switch</option>
+        {props.portals.length > 1 && (
+          <div className="o-switch">
+            <select
+              aria-label="Switch portal"
+              value={props.portals.find((p) => p.name === props.portalName)?.id ?? ''}
+              onChange={(e) => router.push(`/${e.target.value}`)}
+            >
               {props.portals.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
               ))}
             </select>
-          ) : (
-            <span className="faint">switch</span>
-          )}
-        </div>
+          </div>
+        )}
         <SideMenu
           sections={[
             { entries: toEntries(main) },
@@ -71,23 +75,16 @@ export function AppShell(props: AppShellProps) {
             },
           ]}
         />
-        <div className="o-side-foot">
-          <strong>{props.user.name}</strong>
-          {props.user.title}
+        <SideFoot name={props.user.name} title={props.user.title} signOutAction={props.signOutHref}>
           {props.companies.length > 1 && props.onSwitchCompany && (
             <select
-              className="o-select"
-              style={{ marginTop: 8, background: 'transparent', color: '#c9cfd5' }}
               aria-label="Switch company"
-              defaultValue=""
+              value={props.companies.find((c) => c.name === props.companyName)?.id ?? ''}
               onChange={async (e) => {
                 await props.onSwitchCompany!(e.target.value);
                 router.refresh();
               }}
             >
-              <option value="" disabled>
-                Switch company
-              </option>
               {props.companies.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -95,21 +92,7 @@ export function AppShell(props: AppShellProps) {
               ))}
             </select>
           )}
-          <div>
-            <a href={props.signOutHref} style={{ color: '#9aa3ab', fontSize: 12 }}>
-              Sign out
-            </a>
-          </div>
-          <div style={{ fontSize: 11, marginTop: 6 }}>
-            <a href="/legal/terms" target="_blank" rel="noreferrer" style={{ color: '#9aa3ab' }}>
-              Terms
-            </a>
-            <span style={{ color: '#5d666e' }}> · </span>
-            <a href="/legal/privacy" target="_blank" rel="noreferrer" style={{ color: '#9aa3ab' }}>
-              Privacy
-            </a>
-          </div>
-        </div>
+        </SideFoot>
       </aside>
       <div className="o-main">{props.children}</div>
     </div>
@@ -119,11 +102,20 @@ export function AppShell(props: AppShellProps) {
 export function TopBar({ crumbs, children }: { crumbs: string[]; children?: ReactNode }) {
   return (
     <header className="o-top">
-      <div className="o-crumbs">
-        {crumbs.slice(0, -1).join(' / ')}
-        {crumbs.length > 1 ? ' / ' : ''}
-        <strong>{crumbs.at(-1)}</strong>
-      </div>
+      <nav className="o-crumbs" aria-label="Breadcrumb">
+        {crumbs.map((c, i) =>
+          i === crumbs.length - 1 ? (
+            <strong key={i} aria-current="page">
+              {c}
+            </strong>
+          ) : (
+            <Fragment key={i}>
+              <span>{c}</span>
+              <i aria-hidden>/</i>
+            </Fragment>
+          ),
+        )}
+      </nav>
       {children}
     </header>
   );

@@ -10,27 +10,29 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
   }, [error]);
   if (reloading)
     return (
-      <div className="o-page" style={{ maxWidth: 480, margin: '80px auto' }}>
-        <p className="muted">Orbit was updated. Loading the new version…</p>
+      <div className="o-state">
+        <div>
+          <div className="o-brand-mark dark" aria-hidden />
+          <p>Orbit was updated. Loading the new version…</p>
+        </div>
       </div>
     );
   return (
-    <div className="o-page" style={{ maxWidth: 480, margin: '80px auto' }}>
-      <h1>Something went wrong</h1>
-      <p className="muted">Couldn't load this page. Please try again in a few seconds.</p>
-      <div className="o-row">
-        <button className="o-btn primary" onClick={reset}>
-          Try again
-        </button>
-        <button className="o-btn" onClick={() => window.location.reload()}>
-          Reload page
-        </button>
+    <div className="o-state">
+      <div>
+        <div className="o-brand-mark dark" aria-hidden />
+        <h1>Something went wrong</h1>
+        <p>Couldn't load this page. Please try again in a few seconds.</p>
+        <div className="o-row">
+          <button className="o-btn primary" onClick={reset}>
+            Try again
+          </button>
+          <button className="o-btn" onClick={() => window.location.reload()}>
+            Reload page
+          </button>
+        </div>
+        {error.digest && <span className="code">Reference {error.digest}</span>}
       </div>
-      {error.digest && (
-        <p className="faint" style={{ fontSize: 11, marginTop: 16 }}>
-          Reference: {error.digest}
-        </p>
-      )}
     </div>
   );
 }

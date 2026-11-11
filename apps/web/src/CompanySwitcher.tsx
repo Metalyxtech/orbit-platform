@@ -6,8 +6,6 @@ export function CompanySwitcher({ companies, current }: { companies: { id: strin
   if (companies.length < 2) return null;
   return (
     <select
-      className="o-select"
-      style={{ marginTop: 8, background: 'transparent', color: '#c9cfd5' }}
       aria-label="Switch company"
       value={current}
       onChange={async (e) => {
@@ -16,7 +14,7 @@ export function CompanySwitcher({ companies, current }: { companies: { id: strin
       }}
     >
       {companies.map((c) => (
-        <option key={c.id} value={c.id} style={{ color: '#000' }}>
+        <option key={c.id} value={c.id}>
           {c.name}
         </option>
       ))}

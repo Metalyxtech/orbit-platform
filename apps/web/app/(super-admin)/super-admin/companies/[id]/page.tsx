@@ -16,6 +16,7 @@ import {
 } from '../../actions';
 import { ROLE_LABEL, companyStatusChip, fmtDate, loadMemberPortals, loadPeople, loadPortals, memberStatusChip, requireSuperAdminPage } from '../../data';
 import { RemoveMemberButton } from '../../RemoveMemberButton';
+import { ResetButton } from '../../ResetButton';
 import { MemberPortals } from '../../MemberPortals';
 import { loadCompanyBilling } from '../../billing-data';
 import { BillingPanel } from './BillingPanel';
@@ -86,9 +87,7 @@ export default async function CompanyPage({ params, searchParams }: { params: Pr
             </button>
           )}
           {c.stage === 'sandbox' && c.status === 'active' && (
-            <button className="o-btn small danger" formAction={resetSandboxAction.bind(null, c.id)}>
-              Reset sandbox data
-            </button>
+            <ResetButton companyName={c.name} action={resetSandboxAction.bind(null, c.id)} />
           )}
         </form>
       </header>
@@ -123,10 +122,10 @@ export default async function CompanyPage({ params, searchParams }: { params: Pr
               <div className="o-panel-head">
                 <h2>Stage</h2>
               </div>
-              <form className="o-row">
+              <form className="o-seg" role="group" aria-label="Stage">
                 {(['sandbox', 'pilot', 'live'] as const).map((st) => (
-                  <button key={st} className={`o-btn small ${c.stage === st ? 'primary' : ''}`} formAction={setStageAction.bind(null, c.id, st)}>
-                    {st}
+                  <button key={st} aria-pressed={c.stage === st} formAction={setStageAction.bind(null, c.id, st)}>
+                    {st[0].toUpperCase() + st.slice(1)}
                   </button>
                 ))}
               </form>

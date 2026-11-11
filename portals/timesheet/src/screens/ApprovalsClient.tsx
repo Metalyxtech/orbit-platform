@@ -1,7 +1,7 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { ApprovalRoute, Button, ConfirmDialog, EmptyState, TopBar, useToast } from '@orbit/ui';
+import { ApprovalRoute, Avatar, Button, ConfirmDialog, EmptyState, TopBar, useToast } from '@orbit/ui';
 import { decideAction, decideBulkAction, taskDetailAction } from '../actions';
 import { messages } from '../messages';
 import type { InboxRow } from '../server/approvals';
@@ -81,20 +81,20 @@ export function ApprovalsClient({ rows }: { rows: InboxRow[] }) {
           <div className="o-stack">
             <div>
               <h1>Waiting for your approval</h1>
-              <p className="muted" style={{ fontSize: 12, margin: '4px 0 0' }}>
-                {rows.length} timesheets.{oldest ? ` Oldest was submitted ${Math.round((Date.now() - new Date(oldest).getTime()) / 3_600_000)} h ago.` : ''}
+              <p className="o-page-sub">
+                {rows.length} {rows.length === 1 ? 'timesheet' : 'timesheets'}.{oldest ? ` Oldest was submitted ${Math.round((Date.now() - new Date(oldest).getTime()) / 3_600_000)} h ago.` : ''}
               </p>
             </div>
-            <div className="o-panel flush" style={{ overflowX: 'auto' }}>
+            <div className="o-panel flush o-scroll">
               {rows.length === 0 ? (
                 <EmptyState title={messages.emptyApprovals} />
               ) : (
                 <>
-                  <div className="o-row" style={{ padding: '8px 12px', borderBottom: '1px solid var(--line)' }}>
-                    <label className="o-toggle" style={{ fontSize: 12 }}>
+                  <div className="o-toolbar">
+                    <label>
                       <input
                         type="checkbox"
-                        style={{ appearance: 'auto', width: 14, height: 14, background: 'none' }}
+                        className="o-check"
                         checked={bulkable.length > 0 && bulkable.every((r) => checked.has(r.taskId))}
                         onChange={(e) => setChecked(e.target.checked ? new Set(bulkable.map((r) => r.taskId)) : new Set())}
                       />
@@ -119,7 +119,7 @@ export function ApprovalsClient({ rows }: { rows: InboxRow[] }) {
                     </thead>
                     <tbody>
                       {visible.map((r) => (
-                        <tr key={r.taskId} className={selected === r.taskId ? 'selected' : undefined} onClick={() => setSelected(r.taskId)} style={{ cursor: 'pointer' }}>
+                        <tr key={r.taskId} className={`clickable ${selected === r.taskId ? 'selected' : ''}`} onClick={() => setSelected(r.taskId)}>
                           <td onClick={(e) => e.stopPropagation()}>
                             <input
                               type="checkbox"
@@ -137,20 +137,18 @@ export function ApprovalsClient({ rows }: { rows: InboxRow[] }) {
                           </td>
                           <td>
                             <div className="o-row">
-                              <span className="o-chip" style={{ borderRadius: '50%', width: 28, height: 28, display: 'grid', placeItems: 'center', padding: 0 }}>
-                                {r.initials}
-                              </span>
+                              <Avatar name={r.employee} initials={r.initials} size="sm" />
                               <div>
-                                <div>{r.employee}</div>
-                                <div className="faint" style={{ fontSize: 11 }}>{r.employeeTitle}</div>
+                                <div className="nw">{r.employee}</div>
+                                <div className="sub">{r.employeeTitle}</div>
                               </div>
                             </div>
                           </td>
                           <td className="num">{r.week}</td>
                           <td className="num">{r.total.toFixed(1)}</td>
                           <td className="num">{r.overtime > 0 ? <span className="o-chip hivis">{r.overtime.toFixed(1)} h</span> : <span className="faint">0.0</span>}</td>
-                          <td>{r.resubmitted ? 'Returned, resubmitted' : ago(r.submittedAt)}</td>
-                          <td>{r.overdue ? <span className="o-chip bad">{due(r.dueAt)}</span> : due(r.dueAt)}</td>
+                          <td className="nw">{r.resubmitted ? 'Returned, resubmitted' : ago(r.submittedAt)}</td>
+                          <td className="nw">{r.overdue ? <span className="o-chip bad">{due(r.dueAt)}</span> : due(r.dueAt)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -161,22 +159,20 @@ export function ApprovalsClient({ rows }: { rows: InboxRow[] }) {
           </div>
 
           {detail && (
-            <div className="o-panel" style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 480 }}>
+            <div className="o-panel" style={{ display: 'flex', flexDirection: 'column', gap: 14, minHeight: 440, position: 'sticky', top: 76 }}>
               <div className="o-row">
-                <span className="o-chip" style={{ borderRadius: '50%', width: 32, height: 32, display: 'grid', placeItems: 'center', padding: 0 }}>
-                  {detail.initials}
-                </span>
+                <Avatar name={detail.employee} initials={detail.initials} />
                 <div>
                   <strong>
                     {detail.employee}, week {detail.week}
                   </strong>
-                  <div className="faint" style={{ fontSize: 11 }}>{detail.rangeLabel}</div>
+                  <div className="faint" style={{ fontSize: 12 }}>{detail.rangeLabel}</div>
                 </div>
                 <span className="o-spacer" />
                 <span className="o-chip steel">{detail.stepLabel}</span>
               </div>
               <div>
-                <div className="o-kv faint" style={{ fontSize: 11 }}>
+                <div className="o-kv head">
                   <span>Project / cost code</span>
                   <span>Hours</span>
                 </div>

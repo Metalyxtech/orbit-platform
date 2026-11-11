@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { requireSuperAdminPage } from './data';
+import { SideFoot } from '@orbit/ui';
 import { SuperNav } from './SuperNav';
 import { superAdminBadges } from './badges';
 
@@ -21,31 +22,9 @@ export default async function SuperAdminLayout({ children }: { children: ReactNo
         </div>
         <div className="o-nav-title">Platform</div>
         <SuperNav requests={total} payments={payments} custom={custom} />
-        <div className="o-side-foot">
-          <strong>{me.name}</strong>
-          Super Admin
-          {me.hasCompany && (
-            <div>
-              <a href="/" style={{ color: '#9aa3ab', fontSize: 12 }}>
-                Back to portals
-              </a>
-            </div>
-          )}
-          <div>
-            <a href="/auth/sign-out" style={{ color: '#9aa3ab', fontSize: 12 }}>
-              Sign out
-            </a>
-          </div>
-          <div style={{ fontSize: 11, marginTop: 6 }}>
-            <a href="/legal/terms" target="_blank" rel="noreferrer" style={{ color: '#9aa3ab' }}>
-              Terms
-            </a>
-            <span style={{ color: '#5d666e' }}> · </span>
-            <a href="/legal/privacy" target="_blank" rel="noreferrer" style={{ color: '#9aa3ab' }}>
-              Privacy
-            </a>
-          </div>
-        </div>
+        <SideFoot name={me.name} title="Super Admin">
+          {me.hasCompany && <a href="/">Back to portals</a>}
+        </SideFoot>
       </aside>
       <div className="o-main">{children}</div>
     </div>

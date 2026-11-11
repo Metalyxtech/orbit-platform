@@ -4,6 +4,7 @@ import { getSession, query } from '@orbit/core/next';
 import { isManager } from '@/management/workspaces';
 import { accessiblePortals } from '@/portal-access';
 import { portalModules } from '@/portals';
+import { SignOutButton } from '@orbit/ui';
 import { AuthCard } from '../AuthCard';
 import { requireAgreement } from '@/legal/gate';
 
@@ -50,9 +51,9 @@ export default async function Portals() {
         ))}
         {open.length === 0 && waiting.length === 0 && <p className="muted">No portals are switched on for you yet. Ask your company admin.</p>}
       </div>
-      <a className="o-btn" href="/auth/sign-out" style={{ marginTop: 16 }}>
-        Sign out
-      </a>
+      <div style={{ marginTop: 16 }}>
+        <SignOutButton />
+      </div>
     </AuthCard>
   );
 }

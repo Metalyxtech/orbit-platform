@@ -145,24 +145,35 @@ export async function setMemberBlockedAction(companyId: string, membershipId: st
   revalidatePath('/super-admin', 'layout');
 }
 
-export async function setStageAction(companyId: string, stage: 'sandbox' | 'pilot' | 'live') {
-  await requireSuperAdmin();
+export async function setStageAction(rawId: string, rawStage: 'sandbox' | 'pilot' | 'live') {
+  const userId = await requireSuperAdmin();
+  const companyId = z.uuid().parse(rawId);
+  const stage = z.enum(['sandbox', 'pilot', 'live']).parse(rawStage);
   const db = await getDb();
-  await db.update(companies).set({ stage: z.enum(['sandbox', 'pilot', 'live']).parse(stage) }).where(eq(companies.id, companyId));
+  const [before] = await db.select({ stage: companies.stage }).from(companies).where(eq(companies.id, companyId));
+  if (!before) throw new Error('Company not found');
+  if (before.stage === stage) return;
+  await db.update(companies).set({ stage }).where(eq(companies.id, companyId));
+  // Stage decides who receives real email, so every change is on the company's audit trail.
+  await withTenant(db, { companyId, userId }, (tx) =>
+    audit(tx, { companyId, actorId: null, action: 'company.set_stage', entity: 'companies', entityId: companyId, data: { from: before.stage, to: stage } }),
+  );
   revalidatePath('/super-admin', 'layout');
 }
 
 /** Sandbox reset: the company-purge Lambda deletes transactional rows and the S3 prefix. */
-export async function resetSandboxAction(companyId: string) {
+export async function resetSandboxAction(rawId: string) {
   const userId = await requireSuperAdmin();
+  const companyId = z.uuid().parse(rawId);
   const db = await getDb();
   const [c] = await db.select().from(companies).where(eq(companies.id, companyId));
   if (!c || c.stage !== 'sandbox') throw new Error('Only sandbox companies can be reset');
   const effects = new Effects();
   const scope = { companyId, userId };
-  await withTenant(db, scope, (tx) =>
-    effects.emit(tx, newEvent('company.purge_requested', { companyId, companyStage: c.stage, requestId: uuidv7() }, { reason: 'sandbox_reset' })),
-  );
+  await withTenant(db, scope, async (tx) => {
+    await effects.emit(tx, newEvent('company.purge_requested', { companyId, companyStage: c.stage, requestId: uuidv7() }, { reason: 'sandbox_reset' }));
+    await audit(tx, { companyId, actorId: null, action: 'company.sandbox_reset', entity: 'companies', entityId: companyId });
+  });
   await effects.flush(db, scope);
   revalidatePath('/super-admin', 'layout');
 }

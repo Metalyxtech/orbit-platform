@@ -72,7 +72,7 @@ export const CYCLES: { id: Cycle; label: string; months: number; discount: numbe
  * Portals not priced in any plan yet: included with every plan and the trial, never paused by a
  * plan change. A new portal goes here until it gets bundles and prices above.
  */
-export const UNPRICED_PORTALS: string[] = [];
+export const UNPRICED_PORTALS: string[] = ['production'];
 
 /** Limits while on the free trial: every portal, Growth team size. */
 export const TRIAL_LIMITS = { users: 40, portals: ['timesheet', 'procurement', 'sales', ...UNPRICED_PORTALS] };
@@ -93,7 +93,7 @@ export function planOf(id: string) {
 }
 
 /** Display name of a portal id. */
-export const portalName = (p: string) => (({ procurement: 'Purchase', timesheet: 'Timesheet', sales: 'Sales' }) as Record<string, string>)[p] ?? p;
+export const portalName = (p: string) => (({ procurement: 'Purchase', timesheet: 'Timesheet', sales: 'Sales', production: 'Production' }) as Record<string, string>)[p] ?? p;
 
 /** Portals in use that a plan does not include: they are paused when the company moves to it. */
 export function portalsOutside(id: string, inUse: string[]) {

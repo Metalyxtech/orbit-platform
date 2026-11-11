@@ -2,7 +2,7 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { SessionContext } from '@orbit/core';
 import { auditLog, memberships, users, type Tx } from '@orbit/db';
 
-export type ChangeArea = 'Purchase' | 'Timesheet' | 'Sales' | 'People and access' | 'Company';
+export type ChangeArea = 'Purchase' | 'Timesheet' | 'Sales' | 'Production' | 'People and access' | 'Company';
 
 /** Plain-language name and area for each recorded action. */
 const ACTIONS: Record<string, { area: ChangeArea; label: string }> = {
@@ -36,6 +36,21 @@ const ACTIONS: Record<string, { area: ChangeArea; label: string }> = {
   'sales.order.status': { area: 'Sales', label: 'Sales order moved on' },
   'sales.invoice.raise': { area: 'Sales', label: 'Invoice raised' },
   'sales.payment': { area: 'Sales', label: 'Payment recorded' },
+  'production.settings': { area: 'Production', label: 'Production settings changed' },
+  'production.role': { area: 'Production', label: 'Production role changed' },
+  'production.wo.create': { area: 'Production', label: 'Work order planned' },
+  'production.wo.submit': { area: 'Production', label: 'Work order sent for release' },
+  'production.wo.release': { area: 'Production', label: 'Work order released' },
+  'production.wo.return': { area: 'Production', label: 'Work order sent back' },
+  'production.wo.cancel': { area: 'Production', label: 'Work order cancelled' },
+  'production.wo.start': { area: 'Production', label: 'Production started' },
+  'production.wo.final_qc': { area: 'Production', label: 'Ready for final QC' },
+  'production.wo.complete': { area: 'Production', label: 'Work order completed' },
+  'production.wo.dispatch': { area: 'Production', label: 'Work order dispatched' },
+  'production.store.issue': { area: 'Production', label: 'Material issued' },
+  'production.qc.pass': { area: 'Production', label: 'QC passed' },
+  'production.qc.fail': { area: 'Production', label: 'QC failed, NCR raised' },
+  'production.ncr.close': { area: 'Production', label: 'NCR closed' },
   'workflow.bind': { area: 'Timesheet', label: 'Timesheet approval workflow changed' },
   'ts_settings.update': { area: 'Timesheet', label: 'Timesheet settings changed' },
   'timesheet.form': { area: 'Timesheet', label: 'Timesheet form changed' },

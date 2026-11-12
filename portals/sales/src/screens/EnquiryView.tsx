@@ -130,13 +130,13 @@ export function EnquiryView({ d }: { d: EnquiryDetail }) {
             {e.quoteNo && <QuotePreview d={d} />}
             <div className="o-panel">
               <h2>History</h2>
-              <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <ul className="o-history">
                 {d.events.map((x) => (
-                  <li key={x.id} style={{ fontSize: 13 }}>
+                  <li key={x.id}>
                     {x.text}
-                    <div className="faint" style={{ fontSize: 11 }}>
+                    <small>
                       {x.by || 'Orbit'} · {new Date(x.at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
-                    </div>
+                    </small>
                   </li>
                 ))}
               </ul>
@@ -149,13 +149,22 @@ export function EnquiryView({ d }: { d: EnquiryDetail }) {
             {d.can.followUp && <FollowUpPanel d={d} />}
             <div className="o-panel">
               <h2>Customer</h2>
-              <div className="p-dl" style={{ fontSize: 13 }}>
-                <div><span>Name</span><strong>{d.customer.name}</strong></div>
-                <div><span>City</span><strong>{d.customer.city || '-'}</strong></div>
-                <div><span>Contact</span><strong>{d.customer.contact || '-'}</strong></div>
-                <div><span>Phone</span><strong>{d.customer.phone || '-'}</strong></div>
-                <div><span>Email</span><strong>{d.customer.email || '-'}</strong></div>
-                <div><span>GSTIN</span><strong>{d.customer.gstin || '-'}</strong></div>
+              <div>
+                {(
+                  [
+                    ['Name', d.customer.name],
+                    ['City', d.customer.city],
+                    ['Contact', d.customer.contact],
+                    ['Phone', d.customer.phone],
+                    ['Email', d.customer.email],
+                    ['GSTIN', d.customer.gstin],
+                  ] as const
+                ).map(([k, v]) => (
+                  <div className="o-kv" key={k}>
+                    <span className="muted">{k}</span>
+                    <span style={{ textAlign: 'right', overflowWrap: 'anywhere' }}>{v || '-'}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -254,22 +263,22 @@ function TotalsPanel({ d, draft, setDraftDisc }: { d: EnquiryDetail; draft: Draf
         <h2>Totals</h2>
         {live && <Chip tone="hivis">Not saved</Chip>}
       </div>
-      <div className="p-dl" style={{ fontSize: 13 }}>
-        <div><span>Gross</span><strong>{fmtMoney(cur, t.gross)}</strong></div>
-        <div><span>Discount {disc}%</span><strong>- {fmtMoney(cur, t.disc)}</strong></div>
-        <div><span>Net (before GST)</span><strong>{fmtMoney(cur, t.net)}</strong></div>
-        <div><span>GST {d.cfg.gst}%</span><strong>{fmtMoney(cur, t.tax)}</strong></div>
-        <div><span>Total</span><strong>{fmtMoney(cur, t.total)}</strong></div>
+      <div className="s-totals">
+        <div><span>Gross</span><span>{fmtMoney(cur, t.gross)}</span></div>
+        <div><span>Discount {disc}%</span><span>- {fmtMoney(cur, t.disc)}</span></div>
+        <div><span>Net (before GST)</span><span>{fmtMoney(cur, t.net)}</span></div>
+        <div><span>GST {d.cfg.gst}%</span><span>{fmtMoney(cur, t.tax)}</span></div>
+        <div className="total"><span>Total</span><strong>{fmtMoney(cur, t.total)}</strong></div>
         {live && (
-          <div>
-            <span>Saved value</span>
-            <strong className="muted">{fmtMoney(cur, d.totals.total)}</strong>
-          </div>
+          <div className="note"><span>Saved value</span><span>{fmtMoney(cur, d.totals.total)}</span></div>
         )}
-      {d.can.seeCost && t.cost > 0 && (
+        {d.can.seeCost && t.cost > 0 && (
           <>
-            <div><span>Cost</span><strong>{fmtMoney(cur, t.cost)}</strong></div>
-            <div><span>Margin</span><strong className={t.margin < d.cfg.minMargin ? 'bad' : ''}>{t.margin.toFixed(1)}%</strong></div>
+            <div className="sep"><span>Cost</span><span>{fmtMoney(cur, t.cost)}</span></div>
+            <div>
+              <span>Margin</span>
+              <Chip tone={t.margin < d.cfg.minMargin ? 'bad' : 'ok'}>{t.margin.toFixed(1)}%</Chip>
+            </div>
           </>
         )}
       </div>

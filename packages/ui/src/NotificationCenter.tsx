@@ -87,7 +87,10 @@ export function NotificationCenter({
               setOpen(false);
             }}
           >
-            <span className="o-note-portal">{i.portal}</span>
+            <span className="o-note-top">
+              <span className="o-note-portal">{i.portal}</span>
+              {i.urgent && <span className="o-note-flag">Needs action</span>}
+            </span>
             <strong>{i.title}</strong>
             <span>{i.detail}</span>
           </Link>
@@ -156,6 +159,7 @@ export function NotificationCenter({
           <div className="o-notice pop" role="status" aria-live="polite">
             <div className="o-notice-head">
               <strong>
+                <i className="o-notice-dot" aria-hidden />
                 {fresh.length} new {fresh.length === 1 ? "task" : "tasks"} for
                 you
               </strong>

@@ -7,6 +7,7 @@ import { tradeOf } from '../trades';
 import { drawingCounts } from './drawings';
 import { afterOpsChange, sendToQualityOrComplete } from './progress';
 import { hasRole, loadConfig, lockWo, logEvent, myRole, peopleById, requireRole, today } from './shared';
+import { hiddenIds } from './scope';
 
 // Shop floor: the supervisor's daily production report (output, hours, crew per operation)
 // and marking rework done after QC sends something back.
@@ -70,7 +71,8 @@ export async function finalReworkDone(tx: Tx, ctx: ActionContext, raw: { workOrd
 
 /** Operations the supervisor can report on today, across all work orders on the floor. */
 export async function floorOperations(tx: Tx, ctx: SessionContext) {
-  const wos = await tx.select().from(prodWorkOrders).where(and(eq(prodWorkOrders.companyId, ctx.companyId), inArray(prodWorkOrders.status, ['released', 'in_progress']))).orderBy(asc(prodWorkOrders.due));
+  const hidden = await hiddenIds(tx, ctx);
+  const wos = (await tx.select().from(prodWorkOrders).where(and(eq(prodWorkOrders.companyId, ctx.companyId), inArray(prodWorkOrders.status, ['released', 'in_progress']))).orderBy(asc(prodWorkOrders.due))).filter((w) => !hidden.has(w.id));
   if (!wos.length) return [];
   const ops = await tx.select().from(prodOperations).where(inArray(prodOperations.workOrderId, wos.map((w) => w.id))).orderBy(asc(prodOperations.position));
   const drawings = await drawingCounts(tx, ctx);
@@ -103,6 +105,10 @@ export async function outputLog(tx: Tx, ctx: SessionContext, days = 14) {
     .where(and(...conds))
     .orderBy(desc(prodReports.day), desc(prodReports.createdAt))
     .limit(500);
+  const hiddenWo = await hiddenIds(tx, ctx);
+  const seen = rows.filter((x) => !hiddenWo.has(x.r.workOrderId));
+  rows.length = 0;
+  rows.push(...seen);
   const people = await peopleById(tx, rows.map((x) => x.r.byId));
   const totals = await tx
     .select({ day: prodReports.day, hours: sql<number>`coalesce(sum(${prodReports.hours}), 0)::float`, workers: sql<number>`coalesce(sum(${prodReports.workers}), 0)::int`, lines: sql<number>`count(*)::int` })

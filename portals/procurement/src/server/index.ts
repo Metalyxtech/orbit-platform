@@ -7,6 +7,7 @@ export * as team from './team';
 export * as quoteFiles from './quote-files';
 export * as receiptFiles from './receipt-files';
 export * as supply from './supply';
+export * as scope from './scope';
 export { NOT_READY, notReady, myRole, loadConfig, projectNames } from './shared';
 export type { RequestDetail, RequestRow, CreateRequestInput, RequestFilter } from './requests';
 export type { StockItemRow } from './stock';

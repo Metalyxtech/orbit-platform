@@ -4,6 +4,7 @@ import { prodMaterials, prodMatRequests, prodOperations, prodWorkOrders, type Tx
 import { OPEN_STATUSES, type ProdRole } from '../config';
 import { productionTeam } from './admin';
 import { myRole, notReady, today } from './shared';
+import { hiddenIds, visibleItems } from './scope';
 
 // What is waiting for the signed-in person, by production role (menu badge and notifications).
 
@@ -84,7 +85,7 @@ async function mrItems(tx: Tx, ctx: SessionContext, acts: (...r: ProdRole[]) => 
 /** Items waiting for this person; empty before migration 0023. */
 export async function myQueue(tx: Tx, ctx: SessionContext): Promise<QueueItem[]> {
   try {
-    return await tx.transaction((sp) => build(sp, ctx));
+    return await tx.transaction(async (sp) => visibleItems(await build(sp, ctx), await hiddenIds(sp, ctx)));
   } catch (err) {
     if (notReady(err)) return [];
     throw err;

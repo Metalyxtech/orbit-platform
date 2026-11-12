@@ -3,6 +3,7 @@ import type { SessionContext } from '@orbit/core';
 import { qcInspections, type Tx } from '@orbit/db';
 import { hoursBetween, SOURCE_IDS, type QcSource } from '../config';
 import { myRole, peopleById } from './shared';
+import { hiddenIds } from './scope';
 
 // Quality dashboard for the QC manager and GM: work in hand, results, turnaround, trends and
 // the parties (suppliers, customers' jobs) with the most failures.
@@ -10,7 +11,8 @@ import { myRole, peopleById } from './shared';
 export async function dashboard(tx: Tx, ctx: SessionContext) {
   const me = await myRole(tx, ctx);
   const since = new Date(Date.now() - 183 * 86_400_000);
-  const rows = await tx.select().from(qcInspections).where(and(eq(qcInspections.companyId, ctx.companyId), gte(qcInspections.createdAt, since))).orderBy(desc(qcInspections.createdAt));
+  const hidden = await hiddenIds(tx, ctx);
+  const rows = (await tx.select().from(qcInspections).where(and(eq(qcInspections.companyId, ctx.companyId), gte(qcInspections.createdAt, since))).orderBy(desc(qcInspections.createdAt))).filter((r) => !hidden.has(r.id));
   const final = rows.filter((r) => r.status === 'approved');
   const m0 = new Date();
   m0.setUTCDate(1);

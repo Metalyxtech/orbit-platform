@@ -64,6 +64,7 @@ const ACTIONS: Record<string, { area: ChangeArea; label: string }> = {
   'control.hold': { area: 'GM control', label: 'Process stopped (on hold)' },
   'control.release': { area: 'GM control', label: 'Process resumed' },
   'control.comment': { area: 'GM control', label: 'Comment on a process' },
+  'team.save': { area: 'People and access', label: 'Project team changed' },
   'quality.report.pass': { area: 'Quality', label: 'Inspection passed' },
   'quality.report.fail': { area: 'Quality', label: 'Inspection failed, NCR raised' },
   'quality.report.return': { area: 'Quality', label: 'Report sent back to QC engineer' },

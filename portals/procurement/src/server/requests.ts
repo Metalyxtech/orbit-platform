@@ -27,6 +27,7 @@ import {
 } from '../engine';
 import { filesForRequest } from './quote-file-store';
 import { receiptFilesFor } from './receipt-file-store';
+import { hiddenIds, salesProjects } from './scope';
 import { holdersOf } from './team';
 import { loadConfig, moneyText, myRole, myRoles, nextNumber, peopleById, requireRole, today } from './shared';
 
@@ -73,6 +74,7 @@ export async function requestDetail(tx: Tx, ctx: SessionContext, id: string) {
   const { role: me, roles } = await myRoles(tx, ctx);
   const [r] = await tx.select().from(procRequests).where(and(eq(procRequests.id, id), eq(procRequests.companyId, ctx.companyId)));
   if (!r) return null;
+  if ((await hiddenIds(tx, ctx)).has(r.id)) return null; // another team's project
   const [qc, qcOn] = r.stage === 'inspection' || r.stage === 'invoice' || r.stage === 'closed' ? await Promise.all([latestInspection(tx, ctx.companyId, 'purchase', r.id), qualityOn(tx, ctx.companyId)]) : [null, false];
   const [lines, quotes, receipts, events] = await Promise.all([
     linesOf(tx, id),
@@ -242,7 +244,8 @@ export async function listRequests(tx: Tx, ctx: SessionContext, opts: { filter?:
     : [[], [], []];
   const people = await peopleById(tx, rows.map((r) => r.requesterId));
   const t = today(ctx);
-  const list = rows.map((r) => {
+  const hidden = await hiddenIds(tx, ctx);
+  const list = rows.filter((r) => !hidden.has(r.id)).map((r) => {
     const ls = lines.filter((l) => l.requestId === r.id).sort((a, b) => a.sort - b.sort);
     const aw = quotes.find((q) => q.id === r.awardQuoteId);
     const value = aw ? quoteValue(ls, aw.rates) : estValue(ls);
@@ -412,9 +415,11 @@ export async function createRequest(tx: Tx, ctx: ActionContext, raw: CreateReque
   });
   if (input.needBy < today(ctx)) throw new Error('The need-by date is in the past');
   const number = await nextNumber(tx, ctx.companyId, 'pr', cfg);
+  // A project from Sales ties the request to its project team.
+  const order = (await salesProjects(tx, ctx)).find((p) => p.label === input.project);
   const [r] = await tx
     .insert(procRequests)
-    .values({ companyId: ctx.companyId, number, title: input.title, project: input.project, needBy: input.needBy, priority: input.priority, requesterId: ctx.membershipId, stage: 'draft', header: input.header })
+    .values({ companyId: ctx.companyId, number, title: input.title, project: input.project, needBy: input.needBy, priority: input.priority, requesterId: ctx.membershipId, stage: 'draft', header: { ...input.header, ...(order ? { _order: order.id } : {}) } })
     .returning();
   await tx.insert(procLines).values(input.lines.map((l, i) => ({ companyId: ctx.companyId, requestId: r.id, sort: i, ...l })));
   const lines = await linesOf(tx, r.id);

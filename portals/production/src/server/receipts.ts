@@ -6,6 +6,7 @@ import { addInspectionDocuments, qualityOn, requestInspection, type QualityDecis
 import { prodReceiptFiles, prodReceipts, type Tx } from '@orbit/db';
 import { fmtQty, RECEIPT_DOCS } from '../config';
 import { stockIn } from './stock';
+import { hiddenIds } from './scope';
 import { myRole, peopleById, requireRole } from './shared';
 
 // Material received into the production store (the store supervisor's "Material received").
@@ -77,7 +78,8 @@ export async function listReceipts(tx: Tx, ctx: SessionContext) {
         .where(and(inArray(prodReceiptFiles.receiptId, rows.map((r) => r.id)), eq(prodReceiptFiles.uploaded, true)))
     : [];
   const people = await peopleById(tx, rows.map((r) => r.byId));
-  return rows.map((r) => ({
+  const hidden = await hiddenIds(tx, ctx);
+  return rows.filter((r) => !hidden.has(r.id)).map((r) => ({
     id: r.id,
     number: r.number,
     reference: r.reference,

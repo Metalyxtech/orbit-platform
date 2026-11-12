@@ -6,6 +6,7 @@ import { prodReceipts, qcEvents, qcInspections, type Tx } from '@orbit/db';
 import { processThread } from '@orbit/core/holds';
 import { QC_STATUS, type Finding, type QcSource, type QcStatus } from '../config';
 import { hasRole, lockInspection, logEvent, myRole, peopleById, requireRole } from './shared';
+import { hiddenIds } from './scope';
 
 // Inspections: the QC engineer inspects (checklist, readings, remarks, pass or fail with an NCR)
 // and submits the report; the QC manager gives final approval or sends it back. Final approval
@@ -69,7 +70,9 @@ export async function listInspections(tx: Tx, ctx: SessionContext, f: { filter?:
   const rows = await tx.select().from(qcInspections).where(and(...conds)).orderBy(filter === 'approved' ? desc(qcInspections.approvedAt) : asc(qcInspections.createdAt)).limit(500);
   const people = await peopleById(tx, rows.flatMap((r) => [r.inspectorId, r.approverId]));
   const q = (f.q ?? '').toLowerCase();
+  const hidden = await hiddenIds(tx, ctx);
   return rows
+    .filter((r) => !hidden.has(r.id))
     .filter((r) => !q || `${r.number} ${r.sourceRef} ${r.title} ${r.party ?? ''}`.toLowerCase().includes(q))
     .map((r) => ({
       id: r.id,
@@ -95,6 +98,7 @@ export async function inspectionDetail(tx: Tx, ctx: SessionContext, id: string) 
   const me = await myRole(tx, ctx);
   const [r] = await tx.select().from(qcInspections).where(and(eq(qcInspections.id, id), eq(qcInspections.companyId, ctx.companyId)));
   if (!r) return null;
+  if ((await hiddenIds(tx, ctx)).has(r.id)) return null; // another team's project
   const [events, history] = await Promise.all([
     tx.select().from(qcEvents).where(eq(qcEvents.inspectionId, r.id)).orderBy(desc(qcEvents.createdAt)),
     tx

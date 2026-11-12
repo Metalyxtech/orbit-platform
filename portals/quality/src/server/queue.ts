@@ -4,6 +4,7 @@ import { qcInspections, type Tx } from '@orbit/db';
 import { SOURCE_KIND, type QcRole, type QcSource } from '../config';
 import { qualityTeam } from './admin';
 import { myRole, notReady } from './shared';
+import { hiddenIds, visibleItems } from './scope';
 
 export interface QueueItem {
   id: string;
@@ -33,7 +34,7 @@ async function build(tx: Tx, ctx: SessionContext): Promise<QueueItem[]> {
 
 export async function myQueue(tx: Tx, ctx: SessionContext): Promise<QueueItem[]> {
   try {
-    return await tx.transaction((sp) => build(sp, ctx));
+    return await tx.transaction(async (sp) => visibleItems(await build(sp, ctx), await hiddenIds(sp, ctx)));
   } catch (err) {
     if (notReady(err)) return [];
     throw err;

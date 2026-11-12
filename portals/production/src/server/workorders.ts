@@ -7,7 +7,9 @@ import { prodEvents, prodMaterials, prodOperations, prodReports, prodWorkOrders,
 import { OPEN_STATUSES, WO_STATUS, type OpStatus, type ProdRole, type WoStatus } from '../config';
 import { TRADES, tradeOf } from '../trades';
 import { customerDocuments, listDrawings } from './drawings';
-import { listMrs, type MrRow } from './mr';
+import { listMrs, supplyForWo, type MrRow, type WoSupply } from './mr';
+import { MR_STATUS } from '../config';
+import { purchaseOn } from '@orbit/core/supply';
 import { hasRole, loadConfig, lockWo, logEvent, myRole, nextNumber, peopleById, requireRole, today } from './shared';
 
 // Work orders: planning (trade form, materials, operations), release by the production manager,
@@ -186,6 +188,9 @@ export async function workOrderDetail(tx: Tx, ctx: SessionContext, id: string) {
   const status = wo.status as WoStatus;
   const floor = status === 'released' || status === 'in_progress';
   const opName = new Map(ops.map((o) => [o.id, o.name]));
+  /** Material requests with lines and the purchase behind each (empty before migration 0027). */
+  const supply = await tx.transaction((sp) => supplyForWo(sp, ctx, wo.id)).catch((): WoSupply[] => []);
+  const purchaseUsed = await purchaseOn(tx, ctx.companyId).catch(() => false);
   return {
     me,
     cfg,
@@ -193,6 +198,9 @@ export async function workOrderDetail(tx: Tx, ctx: SessionContext, id: string) {
     wo: { ...wo, status, createdByName: name(wo.createdBy), releasedByName: name(wo.releasedBy), salesOrder, late: !!wo.due && wo.due < today() && OPEN_STATUSES.includes(status) },
     ops: ops.map((o) => ({ ...o, status: o.status as OpStatus })),
     materials: mats,
+    supply,
+    purchaseUsed,
+    summary: summarise(wo, status, ops, mats, supply, reports),
     /** GM hold and comments. */
     control: await processThread(tx, ctx, 'work_order', wo.id),
     /** Material requests on this work order (empty before migration 0027). */
@@ -218,6 +226,50 @@ export async function workOrderDetail(tx: Tx, ctx: SessionContext, id: string) {
   };
 }
 export type WoDetail = NonNullable<Awaited<ReturnType<typeof workOrderDetail>>>;
+
+/** The page's "at a glance" numbers and, in plain words, what the work order is waiting on. */
+function summarise(
+  wo: typeof prodWorkOrders.$inferSelect,
+  status: WoStatus,
+  ops: { name: string; status: string; doneQty: number }[],
+  mats: { qty: number; issuedQty: number }[],
+  supply: WoSupply[],
+  reports: { hours: number; day: string }[],
+) {
+  const progress = ops.length ? Math.round((ops.reduce((n, o) => n + Math.min(1, wo.qty ? o.doneQty / wo.qty : 0), 0) / ops.length) * 100) : 0;
+  const planned = mats.reduce((n, m) => n + m.qty, 0);
+  const issued = mats.reduce((n, m) => n + Math.min(m.qty, m.issuedQty), 0);
+  const open = supply.filter((m) => !['issued', 'rejected', 'cancelled'].includes(m.status));
+  const daysLeft = wo.due ? Math.round((Date.parse(wo.due) - Date.parse(today())) / 864e5) : null;
+  const waiting: string[] = [];
+  if (status === 'draft') waiting.push('The production engineer is still planning it.');
+  if (status === 'pending_release') waiting.push('Waiting for the production manager to release it.');
+  if (status === 'final_qc') waiting.push('With QC in the Quality portal.');
+  if (status === 'completed') waiting.push('Waiting for the store to dispatch.');
+  for (const m of open) {
+    if (m.status === 'purchase') waiting.push(`${m.number}: Purchase is buying it${m.purchase ? ` (${m.purchase.poNo ?? m.purchase.number}, ${m.purchase.stageLabel.toLowerCase()})` : m.purchaseRef ? ` (${m.purchaseRef})` : ''}.`);
+    else waiting.push(`${m.number}: ${MR_STATUS[m.status].who ? `with the ${MR_STATUS[m.status].who.toLowerCase()}` : MR_STATUS[m.status].label.toLowerCase()}${m.status === 'ready' ? ' to issue' : ''}.`);
+  }
+  if ((status === 'released' || status === 'in_progress') && !open.length) {
+    if (wo.returnedNote) waiting.push('QC failed it. The shop floor is correcting it.');
+    else if (mats.length && issued < planned - 1e-9 && !ops.some((o) => o.doneQty > 0)) waiting.push('Materials are not fully issued yet.');
+    else waiting.push(ops.some((o) => o.status === 'running') ? 'In production on the shop floor.' : 'Released. Waiting for the shop floor to start.');
+  }
+  return {
+    progress,
+    opsDone: ops.filter((o) => o.status === 'done').length,
+    opsTotal: ops.length,
+    current: ops.find((o) => o.status === 'running' || o.status === 'rework') ?? null,
+    hours: Math.round(reports.reduce((n, r) => n + r.hours, 0) * 10) / 10,
+    lastReport: reports[0]?.day ?? null,
+    materialsPct: planned > 0 ? Math.round((issued / planned) * 100) : null,
+    materialLines: mats.length,
+    openRequests: open.length,
+    withPurchase: open.filter((m) => m.status === 'purchase').length,
+    daysLeft,
+    waiting,
+  };
+}
 
 async function salesOrderNumber(tx: Tx, companyId: string, id: string) {
   try {

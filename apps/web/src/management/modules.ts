@@ -1,4 +1,5 @@
 import { procurementManagement } from '@orbit/portal-procurement/management';
+import { productionManagement } from '@orbit/portal-production/management';
 import { timesheetManagement } from '@orbit/portal-timesheet/management';
 import type { ManagementModule } from './types';
 
@@ -10,4 +11,5 @@ import type { ManagementModule } from './types';
 export const managementModules: Record<string, ManagementModule> = {
   timesheet: timesheetManagement,
   procurement: procurementManagement,
+  production: productionManagement,
 };

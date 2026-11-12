@@ -355,3 +355,44 @@ export async function mrParents(tx: Tx, companyId: string, id: string) {
   const [r] = await tx.select({ wo: prodMatRequests.workOrderId }).from(prodMatRequests).where(and(eq(prodMatRequests.id, id), eq(prodMatRequests.companyId, companyId)));
   return r ? [{ entity: 'work_order' as const, id: r.wo }] : [];
 }
+
+/**
+ * A work order's material requests with their lines and, when the company uses Purchase, where
+ * each purchase stands (request and PO number, stage). For the work-order page.
+ */
+export async function supplyForWo(tx: Tx, ctx: SessionContext, workOrderId: string) {
+  const rows = await tx
+    .select()
+    .from(prodMatRequests)
+    .where(and(eq(prodMatRequests.companyId, ctx.companyId), eq(prodMatRequests.workOrderId, workOrderId)))
+    .orderBy(desc(prodMatRequests.createdAt));
+  const people = await peopleById(tx, rows.map((r) => r.requestedBy));
+  const out = [];
+  for (const m of rows) {
+    const p = m.purchaseId ? await purchaseStatus(tx, ctx.companyId, m.purchaseId) : null;
+    out.push({
+      id: m.id,
+      number: m.number,
+      status: m.status,
+      by: people.get(m.requestedBy) ?? '',
+      at: m.createdAt.toISOString(),
+      days: Math.max(0, Math.floor((Date.now() - m.updatedAt.getTime()) / 864e5)),
+      returnNote: m.returnNote,
+      lines: m.lines.map((l) => ({ item: l.item, unit: l.unit, qty: l.qty, issued: l.issued, toBuy: l.toBuy, received: l.received })),
+      purchaseId: m.purchaseId,
+      purchaseRef: m.purchaseRef,
+      purchase: p ? { number: p.number, stageLabel: p.stageLabel, poNo: p.poNo, receiving: p.receiving } : null,
+    });
+  }
+  return out;
+}
+export type WoSupply = Awaited<ReturnType<typeof supplyForWo>>[number];
+
+/** Open material requests per status, for the dashboard. */
+export async function openMrCounts(tx: Tx, ctx: SessionContext) {
+  const rows = await tx
+    .select({ status: prodMatRequests.status, workOrderId: prodMatRequests.workOrderId })
+    .from(prodMatRequests)
+    .where(and(eq(prodMatRequests.companyId, ctx.companyId), inArray(prodMatRequests.status, OPEN)));
+  return rows;
+}

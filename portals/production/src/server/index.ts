@@ -18,5 +18,5 @@ export type { WoRow, WoDetail, WoInput, WoFilter } from './workorders';
 export type { FloorWo } from './floor';
 export type { QueueItem } from './queue';
 export type { ProdPerson } from './admin';
-export type { MrRow, MrDetail, MrFilter } from './mr';
+export type { MrRow, MrDetail, MrFilter, WoSupply } from './mr';
 export type { ReceiptRow } from './receipts';

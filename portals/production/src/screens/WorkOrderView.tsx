@@ -10,6 +10,7 @@ import { DrawingsPanel } from './Drawings';
 import { PriorityChip, Progress, StatusChip } from './ui';
 import { useRun } from './useRun';
 import { WoMaterialRequests } from './MaterialsClient';
+import { SupplyPanel, WoSummary } from './Summary';
 
 /** One work order: plan, materials, operations with progress, QC, NCRs, history and the next step for each role. */
 export function WorkOrderView({ d }: { d: WoDetail }) {
@@ -62,13 +63,16 @@ export function WorkOrderView({ d }: { d: WoDetail }) {
         )}
 
         <HoldBanner thread={d.control} />
+        {w.status !== 'cancelled' && <WoSummary d={d} />}
         <div className="o-cols-wide">
           <div className="o-stack">
-            <DrawingsPanel workOrderId={w.id} docs={d.drawings} customerDocs={d.customerDocs} canEdit={d.can.drawings} />
             <OperationsPanel d={d} />
             {d.can.report && <ReportPanel d={d} />}
             <MaterialsPanel d={d} />
-            <WoMaterialRequests workOrderId={w.id} materials={d.materials} mrs={d.mrs} canRequest={d.can.requestMaterial} />
+            <SupplyPanel supply={d.supply} purchaseUsed={d.purchaseUsed} />
+            {/* The list is in the panel above; this keeps the "Request material" form. */}
+            <WoMaterialRequests workOrderId={w.id} materials={d.materials} mrs={d.supply.length ? [] : d.mrs} canRequest={d.can.requestMaterial} />
+            <DrawingsPanel workOrderId={w.id} docs={d.drawings} customerDocs={d.customerDocs} canEdit={d.can.drawings} />
             {d.reports.length > 0 && (
               <div className="o-panel flush">
                 <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>

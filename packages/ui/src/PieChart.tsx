@@ -11,6 +11,8 @@ export function PieChart({
   max = 8,
   size = 200,
   decimals = 1,
+  empty = 'No hours in this period yet.',
+  label = 'Hours by person',
 }: {
   slices: { label: string; value: number; detail?: string; color?: string }[];
   unit?: string;
@@ -18,13 +20,17 @@ export function PieChart({
   size?: number;
   /** Decimal places for values (0 for counts). */
   decimals?: number;
+  /** Shown when every slice is zero. */
+  empty?: string;
+  /** Accessible name of the chart. */
+  label?: string;
 }) {
   const sorted = slices.filter((s) => s.value > 0).sort((a, b) => b.value - a.value);
   const shown = sorted.slice(0, max);
   const rest = sorted.slice(max).reduce((n, s) => n + s.value, 0);
   const data = rest > 0 ? [...shown, { label: `Others (${sorted.length - max})`, value: rest }] : shown;
   const total = data.reduce((n, s) => n + s.value, 0);
-  if (total === 0) return <div className="o-empty">No hours in this period yet.</div>;
+  if (total === 0) return <div className="o-empty">{empty}</div>;
 
   const r = size / 2;
   const ring = size * 0.18;
@@ -50,7 +56,7 @@ export function PieChart({
 
   return (
     <div className="o-pie">
-      <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} role="img" aria-label="Hours by person">
+      <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} role="img" aria-label={label}>
         {arcs.map((a) => (
           <path key={a.label} d={a.d} fill={a.color} fillRule="evenodd" stroke="var(--sheet)" strokeWidth={1}>
             <title>{`${a.label}: ${a.value.toFixed(decimals)} ${unit} (${a.pct}%)`}</title>
@@ -60,7 +66,7 @@ export function PieChart({
           {total.toFixed(0)}
         </text>
         <text x={r} y={r + 14} textAnchor="middle" fontSize={11} fill="var(--ink-2)">
-          total {unit}
+          {unit ? `total ${unit}` : 'total'}
         </text>
       </svg>
       <ul className="o-pie-legend">

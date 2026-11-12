@@ -203,6 +203,7 @@ export function Avatar({ name, initials, size }: { name: string; initials?: stri
 const MENU_ICONS: [RegExp, IconName][] = [
   [/dashboard|overview|home/, 'grid'],
   [/management/, 'building'],
+  [/process control/, 'shield'],
   [/approval|task/, 'check'],
   [/message/, 'mail'],
   [/terms|privacy/, 'shield'],

@@ -6,6 +6,7 @@ import { fmtDate, fmtQty, roleLabel, type Priority } from '../config';
 import { TRADES } from '../trades';
 import { admin, dashboard, floor, loadConfig, myRole, NOT_READY, notReady, queue, store, workorders, type WoFilter } from '../server';
 import { DailyReportClient } from './DailyReportClient';
+import { HoursByTrade, OrdersAtAGlance, ProductionCharts } from './DashboardCharts';
 import { SettingsClient } from './SettingsClient';
 import { NotReady, PageHead, PriorityChip, Progress, woHref, WoTable } from './ui';
 import { WorkOrderForm } from './WorkOrderForm';
@@ -38,7 +39,6 @@ const Message = ({ title }: { title: string }) => (
 const Dashboard: Screen = async () => {
   const d = await query((tx, ctx) => dashboard.dashboard(tx, ctx));
   const k = d.kpi;
-  const maxH = Math.max(1, ...d.hoursByTrade.map((h) => h.hours));
   return (
     <>
       <TopBar crumbs={['Production', 'Dashboard']} />
@@ -60,19 +60,12 @@ const Dashboard: Screen = async () => {
             { value: String(k.open), label: 'Open work orders' },
             { value: String(k.floor), label: 'On the shop floor' },
             { value: String(k.late), label: 'Past due date', tone: k.late ? 'hivis' : undefined },
-            { value: String(k.qc), label: 'With QC' },
-            { value: String(k.ready), label: 'Ready to dispatch' },
-          ]}
-        />
-        <KpiStrip
-          items={[
-            { value: `${fmtQty(k.hoursToday)} h`, label: `Hours reported today (${k.reportsToday} lines)` },
             { value: String(k.rework), label: 'Back from QC for rework', tone: k.rework ? 'hivis' : undefined },
           ]}
         />
         <div className="o-panel">
           <div className="o-panel-head">
-            <h2>Work orders by stage</h2>
+            <h2>Pipeline</h2>
             <Link className="o-btn small" href="/production/board">
               Shop-floor board
             </Link>
@@ -86,46 +79,23 @@ const Dashboard: Screen = async () => {
             ))}
           </div>
         </div>
+        <ProductionCharts d={d} />
+        <OrdersAtAGlance d={d} />
         <div className="o-half">
-          <div className="o-panel flush">
-            <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
-              <h2>Needs attention</h2>
-              <Link className="o-btn small" href="/production/queue">
-                My tasks
-              </Link>
-            </div>
-            <WoTable rows={d.attention} empty="Nothing late, urgent or in rework." />
-          </div>
-          <div className="o-stack">
-            <div className="o-panel">
-              <h2>Hours by trade (7 days)</h2>
-              {d.hoursByTrade.length === 0 && <p className="faint" style={{ margin: 0 }}>No production reported this week.</p>}
-              {d.hoursByTrade.map((h) => (
-                <div key={h.trade} className="o-stack-row">
-                  <span className="o-stack-label">{h.trade}</span>
-                  <span className="o-stack-track">
-                    <span className="o-stack-part" style={{ width: `${(h.hours / maxH) * 100}%`, background: 'var(--steel)' }} />
-                  </span>
-                  <span className="num" style={{ fontSize: 12 }}>
-                    {fmtQty(h.hours)} h
-                  </span>
-                </div>
+          <HoursByTrade d={d} />
+          <div className="o-panel">
+            <h2>Recent activity</h2>
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {d.recent.length === 0 && <li className="faint">No activity yet.</li>}
+              {d.recent.map((x) => (
+                <li key={x.id} style={{ fontSize: 13 }}>
+                  <Link href={woHref(x.woId)}>{x.number}</Link> {x.text}
+                  <div className="faint" style={{ fontSize: 11 }}>
+                    {x.by || 'Orbit'} · {new Date(x.at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
+                  </div>
+                </li>
               ))}
-            </div>
-            <div className="o-panel">
-              <h2>Recent activity</h2>
-              <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {d.recent.length === 0 && <li className="faint">No activity yet.</li>}
-                {d.recent.map((x) => (
-                  <li key={x.id} style={{ fontSize: 13 }}>
-                    <Link href={woHref(x.woId)}>{x.number}</Link> {x.text}
-                    <div className="faint" style={{ fontSize: 11 }}>
-                      {x.by || 'Orbit'} · {new Date(x.at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            </ul>
           </div>
         </div>
       </div>

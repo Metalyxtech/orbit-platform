@@ -254,9 +254,17 @@ export async function askApproval(tx: Tx, ctx: ActionContext, raw: z.input<typeo
   if (!['draft', 'rejected'].includes(r.quoteStatus)) throw new Error('This quotation is already in approval or approved');
   const q = await quoteState(tx, r, ctx.companyId);
   if (!q.lines.length || q.lines.some((l) => l.qty > 0 && !(l.rate > 0))) throw new Error('Enter a rate for every line');
+  const sent = await wasSent(tx, r.id, r.quoteNo);
+  const what = sent ? `${r.quoteNo} Rev ${r.rev + 1} (revision)` : `${r.quoteNo} Rev ${r.rev}`;
+  // The sales manager is the approver: their own quotation is approved in the same step.
+  if (hasRole(me, 'manager')) {
+    await tx.update(salesEnquiries).set({ quoteStatus: 'approved', ...clearReturn, updatedAt: new Date() }).where(eq(salesEnquiries.id, r.id));
+    await logEvent(tx, ctx, r.id, `Sales manager approved ${what} at ${r.discount}% discount, ${fmtMoney(q.cfg.currency, q.t.total)} incl. GST`, 'sales.quote.approve');
+    return { gm: false, status: 'approved' as const };
+  }
   await tx.update(salesEnquiries).set({ quoteStatus: 'pending', ...clearReturn, updatedAt: new Date() }).where(eq(salesEnquiries.id, r.id));
-  await logEvent(tx, ctx, r.id, `${r.quoteNo} with ${r.discount}% discount sent to the sales manager for approval${q.gm ? ', then the GM' : ''}`, 'sales.quote.ask');
-  return { gm: q.gm };
+  await logEvent(tx, ctx, r.id, `${what} with ${r.discount}% discount (${fmtMoney(q.cfg.currency, q.t.total)} incl. GST) sent to the sales manager for approval`, 'sales.quote.ask');
+  return { gm: false, status: 'pending' as const };
 }
 
 const decideInput = z.object({
@@ -324,7 +332,13 @@ export async function sendQuote(tx: Tx, ctx: ActionContext, raw: { id: string })
   const q = await quoteState(tx, r, ctx.companyId);
   if (q.lines.some((l) => l.qty > 0 && !(l.rate > 0))) throw new Error('Enter a rate for every line');
   if (r.quoteStatus !== 'approved' && r.quoteStatus !== 'sent') throw new Error('The quotation needs the sales manager’s approval first');
-  const rev = r.quoteStatus === 'sent' || (await wasSent(tx, r.id, r.quoteNo)) ? r.rev + 1 : r.rev;
+  // Unchanged: the same revision goes out again. A new revision needs changed rates or discount and a new approval.
+  if (r.quoteStatus === 'sent') {
+    await tx.update(salesEnquiries).set({ followUp: addDays(today(), 3), updatedAt: new Date() }).where(eq(salesEnquiries.id, r.id));
+    await logEvent(tx, ctx, r.id, `Re-sent ${r.quoteNo} Rev ${r.rev} (no changes) for ${fmtMoney(q.cfg.currency, q.t.total)} incl. GST`, 'sales.quote.send');
+    return { rev: r.rev };
+  }
+  const rev = (await wasSent(tx, r.id, r.quoteNo)) ? r.rev + 1 : r.rev;
   await tx.update(salesEnquiries).set({ quoteStatus: 'sent', rev, followUp: addDays(today(), 3), updatedAt: new Date() }).where(eq(salesEnquiries.id, r.id));
   await logEvent(tx, ctx, r.id, `Sent ${r.quoteNo} Rev ${rev} for ${fmtMoney(q.cfg.currency, q.t.total)} incl. GST`, 'sales.quote.send');
   return { rev };
@@ -475,6 +489,16 @@ export async function enquiryDetail(tx: Tx, ctx: SessionContext, id: string) {
     costingDocs: seeCost ? docs.filter((d) => d.section === 'costing').map((d) => ({ ...d, by: d.byId ? (people.get(d.byId) ?? '') : '' })) : [],
     /** The quotation already went to the customer once, so the next send is a revision. */
     sentBefore: !!e.quoteNo && events.some((x) => x.text.startsWith(`Sent ${e.quoteNo} Rev `)),
+    /** Every revision that went to the customer, newest first (from the history). */
+    revisions: events
+      .filter((x) => !!e.quoteNo && x.text.startsWith(`Sent ${e.quoteNo} Rev `))
+      .map((x) => {
+        const m = x.text.match(/Rev (\d+) for (.+) incl\. GST/);
+        return { rev: Number(m?.[1] ?? 0), total: m?.[2] ?? '', at: x.createdAt.toISOString(), by: x.byId ? (people.get(x.byId) ?? '') : '' };
+      })
+      .sort((a, b) => b.rev - a.rev),
+    /** This person approves quotations (their own are approved when they press Approve). */
+    isManager: hasRole(me, 'manager'),
     events: events.map((x) => ({ id: x.id, text: x.text, at: x.createdAt.toISOString(), by: x.byId ? (people.get(x.byId) ?? '') : '' })),
     can: {
       editProject: sales && projectOpen,

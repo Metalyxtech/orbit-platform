@@ -145,6 +145,7 @@ export function EnquiryView({ d }: { d: EnquiryDetail }) {
           <div className="o-stack">
             {!d.can.editCost && <TotalsPanel key={e.discount} d={d} draft={draft} setDraftDisc={setDraftDisc} />}
             <ActionsPanel d={d} draft={draft} />
+            {d.revisions.length > 0 && <RevisionsPanel d={d} />}
             <ProcessControl thread={d.control} setHold={setHoldAction} comment={addProcessCommentAction} />
             {d.can.followUp && <FollowUpPanel d={d} />}
             <div className="o-panel">
@@ -451,7 +452,13 @@ function ActionsPanel({ d, draft }: { d: EnquiryDetail; draft: Draft }) {
         {canAsk && (
           <>
             <p className="muted" style={{ fontSize: 12, margin: 0 }}>
-              {dirty ? 'Your new rates and discount are saved and sent together' : 'Check the rates and discount, then send for approval'}: sales manager{d.gm ? ', then the GM' : ''}.
+              {d.sentBefore
+                ? `The customer has Rev ${e.rev}. Your changed rates or discount become Rev ${e.rev + 1}: ${d.isManager ? 'approve it, then send it.' : 'the sales manager approves it, then you send it.'}`
+                : d.isManager
+                  ? 'You are the approver: check the rates and discount, approve, then send it to the customer.'
+                  : dirty
+                    ? 'Your new rates and discount are saved and go to the sales manager for approval.'
+                    : 'Check the rates and discount, then send for the sales manager’s approval.'}
             </p>
             <Button
               variant="primary"
@@ -459,11 +466,17 @@ function ActionsPanel({ d, draft }: { d: EnquiryDetail; draft: Draft }) {
               onClick={() =>
                 run(
                   () => askApprovalAction({ id: e.id, rates: draft.lines?.map((l) => l.rate), discount: draft.discount ?? undefined }),
-                  dirty ? 'Changes saved and sent to the sales manager for approval.' : 'Sent to the sales manager for approval.',
+                  d.isManager ? 'Approved. Send it to the customer.' : dirty ? 'Changes saved and sent to the sales manager for approval.' : 'Sent to the sales manager for approval.',
                 )
               }
             >
-              {dirty ? 'Save and send for approval' : 'Send for approval'}
+              {d.isManager
+                ? dirty
+                  ? `Save and approve${d.sentBefore ? ` Rev ${e.rev + 1}` : ''}`
+                  : `Approve quotation${d.sentBefore ? ` Rev ${e.rev + 1}` : ''}`
+                : dirty
+                  ? `Save and send for approval${d.sentBefore ? ` (Rev ${e.rev + 1})` : ''}`
+                  : `Send for approval${d.sentBefore ? ` (Rev ${e.rev + 1})` : ''}`}
             </Button>
           </>
         )}
@@ -472,14 +485,20 @@ function ActionsPanel({ d, draft }: { d: EnquiryDetail; draft: Draft }) {
             {d.sentBefore ? `Approved. Send the revised quotation to ${d.customer.name}; it goes out as Rev ${e.rev + 1}.` : `Approved. Send the quotation to ${d.customer.name}.`}
           </p>
         )}
-        {c.send && !dirty && (
+        {c.send && !dirty && e.quoteStatus === 'approved' && (
           <Button variant="primary" disabled={busy} onClick={() => run(() => sendQuoteAction({ id: e.id }), d.sentBefore ? `Revised quotation Rev ${e.rev + 1} sent.` : 'Quotation sent.')}>
-            {e.quoteStatus === 'approved' && d.sentBefore
-              ? `Send revised quotation (Rev ${e.rev + 1})`
-              : e.quoteStatus === 'approved'
-                ? 'Send quotation to customer'
-                : `Send again as Rev ${e.rev + 1}`}
+            {d.sentBefore ? `Send revised quotation (Rev ${e.rev + 1})` : 'Send quotation to customer'}
           </Button>
+        )}
+        {c.send && !dirty && e.quoteStatus === 'sent' && (
+          <>
+            <p className="muted" style={{ fontSize: 12, margin: 0 }}>
+              The customer has Rev {e.rev}. To change the offer, edit the rates or discount: the change goes for approval as Rev {e.rev + 1}.
+            </p>
+            <Button size="small" disabled={busy} onClick={() => run(() => sendQuoteAction({ id: e.id }), `Rev ${e.rev} sent again (no changes).`)}>
+              Resend Rev {e.rev} (no changes)
+            </Button>
+          </>
         )}
         {c.negotiate && <Button disabled={busy} onClick={() => run(() => toNegotiationAction({ id: e.id }), 'Moved to negotiation.')}>Customer is negotiating</Button>}
         {c.won && (
@@ -573,5 +592,34 @@ function QuotePreview({ d }: { d: EnquiryDetail }) {
         <p className="muted" style={{ fontSize: 12, whiteSpace: 'pre-wrap' }}>{d.cfg.terms}</p>
       </div>
     </details>
+  );
+}
+
+/** Every revision the customer received: number, value incl. GST, when and by whom. */
+function RevisionsPanel({ d }: { d: EnquiryDetail }) {
+  return (
+    <div className="o-panel">
+      <h2>Revisions sent</h2>
+      <div className="o-stack" style={{ gap: 6 }}>
+        {d.revisions.map((r, i) => (
+          <div key={`${r.rev}-${r.at}`} className="o-row" style={{ justifyContent: 'space-between', gap: 8, fontSize: 13 }}>
+            <span>
+              <strong>
+                {d.enquiry.quoteNo} Rev {r.rev}
+              </strong>
+              {i === 0 && (
+                <span style={{ marginLeft: 6 }}>
+                  <Chip tone="ok">Current</Chip>
+                </span>
+              )}
+              <div className="faint" style={{ fontSize: 11 }}>
+                {fmtDate(r.at)} · {r.by}
+              </div>
+            </span>
+            <span className="num">{r.total}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

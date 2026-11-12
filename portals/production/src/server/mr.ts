@@ -6,6 +6,7 @@ import { deliverToProduction, purchaseOn, purchaseStatus, raisePurchase, type Su
 import { prodIssues, prodMaterials, prodMatRequests, prodReceipts, prodWorkOrders, type MrLine, type MrStatus, type Tx } from '@orbit/db';
 import { fmtQty, MR_STATUS } from '../config';
 import { availability, r3, stockIn, stockOut } from './stock';
+import { hiddenIds } from './scope';
 import { hasRole, lockWo, logEvent, myRole, peopleById, requireRole, today } from './shared';
 
 // Material requests (MR). The supervisor asks for material on a work order; the production store
@@ -142,6 +143,7 @@ export async function decideMr(tx: Tx, ctx: ActionContext, raw: z.input<typeof d
     project: (wo.customer || wo.title).slice(0, 200),
     needBy: wo.due ?? today(),
     priority: wo.priority === 'urgent' ? 'Urgent' : 'Normal',
+    salesOrderId: wo.salesOrderId,
     note: [mr.note, v.note].filter(Boolean).join(' · ') || null,
     lines: idx.map((i) => ({ description: mr.lines[i].item, qty: mr.lines[i].toBuy, unit: mr.lines[i].unit })),
   });
@@ -268,7 +270,9 @@ export async function listMrs(tx: Tx, ctx: SessionContext, opts: { filter?: MrFi
     .orderBy(desc(prodMatRequests.createdAt))
     .limit(300);
   const people = await peopleById(tx, rows.map((r) => r.m.requestedBy));
+  const hidden = await hiddenIds(tx, ctx);
   return rows
+    .filter((r) => !hidden.has(r.m.id))
     .map(({ m, wo, woTitle }) => ({
       id: m.id,
       number: m.number,
@@ -292,6 +296,7 @@ export async function mrDetail(tx: Tx, ctx: SessionContext, id: string) {
   const me = await myRole(tx, ctx);
   const [m] = await tx.select().from(prodMatRequests).where(and(eq(prodMatRequests.id, id), eq(prodMatRequests.companyId, ctx.companyId)));
   if (!m) return null;
+  if ((await hiddenIds(tx, ctx)).has(m.id)) return null; // another team's project
   const [wo] = await tx.select().from(prodWorkOrders).where(eq(prodWorkOrders.id, m.workOrderId));
   const avail = await availability(tx, ctx.companyId);
   const people = await peopleById(tx, [m.requestedBy, m.engineerId, m.managerId]);

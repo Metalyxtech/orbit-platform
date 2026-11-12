@@ -29,6 +29,8 @@ export interface SupplyRequest {
   needBy: string;
   priority: 'Normal' | 'Urgent';
   note?: string | null;
+  /** The project (sales order) the work order is for, so the purchase follows its project team. */
+  salesOrderId?: string | null;
   lines: SupplyLine[];
 }
 

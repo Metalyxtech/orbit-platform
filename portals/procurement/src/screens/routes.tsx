@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { query } from '@orbit/core/next';
 import { Chip, DataTable, EmptyState, KpiStrip, TopBar } from '@orbit/ui';
 import { roleLabel, type Stage } from '../config';
-import { admin, dashboard, loadConfig, myRole, NOT_READY, notReady, projectNames, requests, stock, suppliers, type RequestFilter } from '../server';
+import { admin, dashboard, loadConfig, myRole, NOT_READY, notReady, projectNames, requests, scope, stock, suppliers, type RequestFilter } from '../server';
 import { ApprovalsClient } from './admin/ApprovalsClient';
 import { FormClient } from './admin/FormClient';
 import { MoneyClient } from './admin/MoneyClient';
@@ -180,7 +180,8 @@ const Requests: Screen = async ({ searchParams }) => {
 const NewRequest: Screen = async () => {
   const d = await query(async (tx, ctx) => ({
     cfg: await loadConfig(tx, ctx.companyId),
-    projects: await projectNames(tx, ctx.companyId),
+    // Sales projects (won orders) this person may see first, then the timesheet projects.
+    projects: await projectNames(tx, ctx.companyId, (await scope.salesProjects(tx, ctx)).map((p) => p.label)),
     items: await stock.listItems(tx, ctx),
     me: await myRole(tx, ctx),
   }));

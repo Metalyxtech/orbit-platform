@@ -5,6 +5,7 @@ import { prodIssues, prodMaterials, prodWorkOrders, type Tx } from '@orbit/db';
 import { fmtQty } from '../config';
 import { loadConfig, lockWo, logEvent, myRole, requireRole } from './shared';
 import { stockIn, stockOut } from './stock';
+import { hiddenIds } from './scope';
 
 // Store: issues materials against a work order's bill of materials from the production store stock
 // (a negative quantity is a return) and dispatches finished work orders.
@@ -55,7 +56,8 @@ export async function dispatch(tx: Tx, ctx: ActionContext, raw: { workOrderId: s
 
 /** The store's lists: materials still to issue, and finished work waiting to go out. */
 export async function storeWork(tx: Tx, ctx: SessionContext) {
-  const wos = await tx.select().from(prodWorkOrders).where(and(eq(prodWorkOrders.companyId, ctx.companyId), inArray(prodWorkOrders.status, ['released', 'in_progress', 'final_qc', 'completed'])));
+  const hidden = await hiddenIds(tx, ctx);
+  const wos = (await tx.select().from(prodWorkOrders).where(and(eq(prodWorkOrders.companyId, ctx.companyId), inArray(prodWorkOrders.status, ['released', 'in_progress', 'final_qc', 'completed'])))).filter((w) => !hidden.has(w.id));
   const mats = wos.length ? await tx.select().from(prodMaterials).where(inArray(prodMaterials.workOrderId, wos.map((w) => w.id))) : [];
   return {
     toIssue: wos

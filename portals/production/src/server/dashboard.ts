@@ -5,6 +5,7 @@ import { MR_FLOW, MR_STATUS, WO_FLOW, WO_STATUS } from '../config';
 import { openMrCounts } from './mr';
 import { tradeOf } from '../trades';
 import { listWorkOrders } from './workorders';
+import { hiddenIds } from './scope';
 import { myRole, peopleById, today } from './shared';
 
 // Dashboard: work in hand, delays, output and quality.
@@ -30,7 +31,8 @@ export async function dashboard(tx: Tx, ctx: SessionContext) {
       .orderBy(desc(prodEvents.createdAt))
       .limit(12),
   ]);
-  const ready = await tx.select({ id: prodWorkOrders.id }).from(prodWorkOrders).where(and(eq(prodWorkOrders.companyId, ctx.companyId), inArray(prodWorkOrders.status, ['completed'])));
+  const hiddenWo = await hiddenIds(tx, ctx);
+  const ready = (await tx.select({ id: prodWorkOrders.id }).from(prodWorkOrders).where(and(eq(prodWorkOrders.companyId, ctx.companyId), inArray(prodWorkOrders.status, ['completed'])))).filter((w) => !hiddenWo.has(w.id));
   const people = await peopleById(tx, events.map((e) => e.byId));
   // Charts: hours reported per day (14 days) and open material requests by where they are.
   const from = new Date(Date.now() - 13 * 86_400_000).toISOString().slice(0, 10);

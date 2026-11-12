@@ -7,6 +7,7 @@ import { inApproval, needsGm, fmtMoney, LOST_REASONS, OPEN_STAGES, quoteTotals, 
 import { addCustomer, customerInput } from './customers';
 import { listDocs } from './doc-store';
 import { addDays, hasRole, loadConfig, lockEnquiry, logEvent, myRole, nextNumber, peopleById, requireRole, today } from './shared';
+import { hiddenIds } from './scope';
 
 // Enquiries: the project (details and documents, editable by sales until pricing is done),
 // its quotation lines, costing, discount approval, sending, and won or lost.
@@ -397,7 +398,9 @@ export async function listEnquiries(tx: Tx, ctx: SessionContext, f: EnquiryFilte
   const lines = ids.length ? await tx.select().from(salesLines).where(inArray(salesLines.enquiryId, ids)) : [];
   const people = await peopleById(tx, rows.map((r) => r.e.ownerId));
   const t0 = today();
+  const hidden = await hiddenIds(tx, ctx);
   return rows
+    .filter((r) => !hidden.has(r.e.id))
     .filter((r) => !f.quotes || r.e.quoteNo)
     .map(({ e, customer }) => {
       const t = quoteTotals(lines.filter((l) => l.enquiryId === e.id), e.discount, cfg.gst);
@@ -438,6 +441,7 @@ export async function enquiryDetail(tx: Tx, ctx: SessionContext, id: string) {
     .innerJoin(salesCustomers, eq(salesCustomers.id, salesEnquiries.customerId))
     .where(and(eq(salesEnquiries.id, id), eq(salesEnquiries.companyId, ctx.companyId)));
   if (!row) return null;
+  if ((await hiddenIds(tx, ctx)).has(row.e.id)) return null; // another team's project
   const { e, c } = row;
   if (me === 'exec' && e.ownerId !== ctx.membershipId) return null;
   const [lines, events, docs, order] = await Promise.all([

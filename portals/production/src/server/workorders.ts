@@ -11,6 +11,7 @@ import { listMrs, supplyForWo, type MrRow, type WoSupply } from './mr';
 import { MR_STATUS } from '../config';
 import { purchaseOn } from '@orbit/core/supply';
 import { hasRole, loadConfig, lockWo, logEvent, myRole, nextNumber, peopleById, requireRole, today } from './shared';
+import { hiddenIds } from './scope';
 
 // Work orders: planning (trade form, materials, operations), release by the production manager,
 // cancel, lists and the work-order page with what each role may do next.
@@ -136,7 +137,9 @@ export async function listWorkOrders(tx: Tx, ctx: SessionContext, f: { filter?: 
   const ops = ids.length ? await tx.select({ wo: prodOperations.workOrderId, done: prodOperations.doneQty, status: prodOperations.status }).from(prodOperations).where(inArray(prodOperations.workOrderId, ids)) : [];
   const t0 = today();
   const q = (f.q ?? '').toLowerCase();
+  const hidden = await hiddenIds(tx, ctx);
   return rows
+    .filter((r) => !hidden.has(r.id))
     .filter((r) => !q || `${r.number} ${r.title} ${r.customer ?? ''}`.toLowerCase().includes(q))
     .map((r) => {
       const mine = ops.filter((o) => o.wo === r.id);
@@ -173,6 +176,7 @@ export async function workOrderDetail(tx: Tx, ctx: SessionContext, id: string) {
   const cfg = await loadConfig(tx, ctx.companyId);
   const [wo] = await tx.select().from(prodWorkOrders).where(and(eq(prodWorkOrders.id, id), eq(prodWorkOrders.companyId, ctx.companyId)));
   if (!wo) return null;
+  if ((await hiddenIds(tx, ctx)).has(id)) return null; // another team's project
   const [ops, mats, reports, events, qc] = await Promise.all([
     tx.select().from(prodOperations).where(eq(prodOperations.workOrderId, wo.id)).orderBy(asc(prodOperations.position)),
     tx.select().from(prodMaterials).where(eq(prodMaterials.workOrderId, wo.id)).orderBy(asc(prodMaterials.position)),

@@ -11,3 +11,4 @@ export * from './sales';
 export * from './production';
 export * from './quality';
 export * from './control';
+export * from './teams';

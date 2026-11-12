@@ -5,6 +5,7 @@ import { audit, type ActionContext, type SessionContext } from '@orbit/core';
 import { salesCustomers, salesInvoices, salesOrders, salesPayments, type Tx } from '@orbit/db';
 import { fmtMoney, orderLabel, type OrderStatus } from '../config';
 import { addDays, hasRole, loadConfig, myRole, nextNumber, peopleById, requireRole, today } from './shared';
+import { hiddenIds } from './scope';
 
 // Sales orders (from won enquiries), GST invoices and payments received.
 
@@ -24,10 +25,11 @@ export async function listOrders(tx: Tx, ctx: SessionContext) {
   if (me === 'exec') conds.push(eq(salesOrders.ownerId, ctx.membershipId));
   const rows = await tx.select({ o: salesOrders, customer: salesCustomers.name }).from(salesOrders).innerJoin(salesCustomers, eq(salesCustomers.id, salesOrders.customerId)).where(and(...conds)).orderBy(desc(salesOrders.createdAt)).limit(500);
   const people = await peopleById(tx, rows.map((r) => r.o.ownerId));
+  const hidden = await hiddenIds(tx, ctx);
   return {
     me,
     can: { confirm: hasRole(me, 'manager'), advance: hasRole(me, 'manager'), invoice: hasRole(me, 'accounts') },
-    rows: rows.map(({ o, customer }) => ({ ...o, customer, owner: o.ownerId ? (people.get(o.ownerId) ?? '') : '', statusLabel: orderLabel(o.status), createdAt: o.createdAt.toISOString() })),
+    rows: rows.filter((r) => !hidden.has(r.o.id)).map(({ o, customer }) => ({ ...o, customer, owner: o.ownerId ? (people.get(o.ownerId) ?? '') : '', statusLabel: orderLabel(o.status), createdAt: o.createdAt.toISOString() })),
   };
 }
 export type OrderRow = Awaited<ReturnType<typeof listOrders>>['rows'][number];
@@ -84,7 +86,8 @@ export async function listInvoices(tx: Tx, ctx: SessionContext) {
     .limit(500);
   const t0 = today();
   const day = 86_400_000;
-  const list = rows.map(({ i, customer, order }) => {
+  const hidden = await hiddenIds(tx, ctx);
+  const list = rows.filter((r) => !r.i.orderId || !hidden.has(r.i.orderId)).map(({ i, customer, order }) => {
     const due = i.amount - i.paid;
     const overdueDays = due > 0.5 && i.due < t0 ? Math.round((Date.parse(t0) - Date.parse(i.due)) / day) : 0;
     return { ...i, customer, order, balance: due, overdueDays, createdAt: i.createdAt.toISOString() };

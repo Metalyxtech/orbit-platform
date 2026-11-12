@@ -3,6 +3,7 @@ import type { SessionContext } from '@orbit/core';
 import { salesCustomers, salesEnquiries, salesInvoices, salesLines, salesOrders, type Tx } from '@orbit/db';
 import { DEFAULT_ADMIN_COVERS, fmtShort, OPEN_STAGES, quoteTotals, type SalesRole } from '../config';
 import { loadConfig, myRole, notReady, today } from './shared';
+import { hiddenIds, visibleItems } from './scope';
 
 // What is waiting for the signed-in person, by sales role (menu badge and notification pop-up).
 
@@ -86,7 +87,7 @@ async function build(tx: Tx, ctx: SessionContext): Promise<QueueItem[]> {
 /** Items waiting for this person; empty before migration 0019. */
 export async function myQueue(tx: Tx, ctx: SessionContext): Promise<QueueItem[]> {
   try {
-    return await tx.transaction((sp) => build(sp, ctx));
+    return await tx.transaction(async (sp) => visibleItems(await build(sp, ctx), await hiddenIds(sp, ctx)));
   } catch (err) {
     if (notReady(err)) return [];
     throw err;

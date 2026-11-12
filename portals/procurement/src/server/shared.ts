@@ -71,12 +71,12 @@ export async function peopleById(tx: Tx, ids: (string | null | undefined)[]) {
 }
 
 /** Project names for the requisition form: the company's active projects, plus General stores. */
-export async function projectNames(tx: Tx, companyId: string) {
+export async function projectNames(tx: Tx, companyId: string, extra: string[] = []) {
   const rows = await tx
     .select({ code: projects.code, name: projects.name })
     .from(projects)
     .where(and(eq(projects.companyId, companyId), eq(projects.status, 'active')));
-  return [...rows.map((r) => `${r.code} ${r.name}`), 'General stores'];
+  return [...extra, ...rows.map((r) => `${r.code} ${r.name}`), 'General stores'];
 }
 
 export const today = (ctx: SessionContext) => new Date().toLocaleDateString('en-CA', { timeZone: ctx.timezone });

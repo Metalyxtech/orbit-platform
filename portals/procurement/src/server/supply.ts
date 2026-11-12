@@ -20,7 +20,7 @@ export async function raiseFromProduction(tx: Tx, ctx: ActionContext, req: Suppl
   const needBy = req.needBy >= today(ctx) ? req.needBy : today(ctx);
   const [r] = await tx
     .insert(procRequests)
-    .values({ companyId: ctx.companyId, number, title: req.title, project: req.project, needBy, priority: req.priority, requesterId: ctx.membershipId, stage: 'draft', header: { _from: origin } })
+    .values({ companyId: ctx.companyId, number, title: req.title, project: req.project, needBy, priority: req.priority, requesterId: ctx.membershipId, stage: 'draft', header: { _from: origin, ...(req.salesOrderId ? { _order: req.salesOrderId } : {}) } })
     .returning();
   // Match lines with the main store by item name, so the stock check can reserve them.
   const lines = [];

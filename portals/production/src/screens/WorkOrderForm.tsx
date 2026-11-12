@@ -31,6 +31,7 @@ const fromTrade = (t: Trade): Pick<WoFormValue, 'unit' | 'operations' | 'fields'
 export function WorkOrderForm({
   trades,
   salesOrders,
+  projects = [],
   initial,
   editId,
   number,
@@ -38,6 +39,8 @@ export function WorkOrderForm({
 }: {
   trades: string[];
   salesOrders: { id: string; number: string; title: string; customer: string }[];
+  /** Company projects (no Sales portal): the work order belongs to one, for its project team. */
+  projects?: { id: string; code: string; name: string }[];
   initial?: WoFormValue;
   editId?: string;
   number?: string;
@@ -145,6 +148,20 @@ export function WorkOrderForm({
                       </option>
                     ))}
                   </select>
+                </label>
+              )}
+              {projects.length > 0 && (
+                <label className="o-field" style={{ marginBottom: 10 }}>
+                  Project
+                  <select className="o-select" value={v.fields._project ?? ''} onChange={(e) => set({ fields: { ...v.fields, _project: e.target.value } })}>
+                    <option value="">No project</option>
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.code} · {p.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="help">Only the project's team (with the GM and admins) will see this work order when the project has a team.</span>
                 </label>
               )}
               <div className="o-form-row">

@@ -193,14 +193,14 @@ const Orders: Screen = async ({ searchParams }) => {
 };
 
 const NewWo: Screen = async () => {
-  const d = await query(async (tx, ctx) => ({ me: await myRole(tx, ctx), cfg: await loadConfig(tx, ctx.companyId), so: await workorders.salesOrdersToPlan(tx, ctx) }));
+  const d = await query(async (tx, ctx) => ({ me: await myRole(tx, ctx), cfg: await loadConfig(tx, ctx.companyId), so: await workorders.salesOrdersToPlan(tx, ctx), projects: await workorders.projectsToPlan(tx, ctx) }));
   if (!['engineer', 'manager', 'admin'].includes(d.me)) return <Message title="Your production role does not plan work orders." />;
-  return <WorkOrderForm trades={d.cfg.trades} salesOrders={d.so} />;
+  return <WorkOrderForm trades={d.cfg.trades} salesOrders={d.so} projects={d.projects} />;
 };
 
 const EditWo: Screen = async ({ searchParams }) => {
   const id = one(searchParams.id) ?? '';
-  const d = isId(id) ? await query(async (tx, ctx) => ({ detail: await workorders.workOrderDetail(tx, ctx, id), cfg: await loadConfig(tx, ctx.companyId) })) : null;
+  const d = isId(id) ? await query(async (tx, ctx) => ({ detail: await workorders.workOrderDetail(tx, ctx, id), cfg: await loadConfig(tx, ctx.companyId), projects: await workorders.projectsToPlan(tx, ctx) })) : null;
   if (!d?.detail) return <Message title="Work order not found." />;
   const { wo, materials, ops, can } = d.detail;
   if (!can.edit) return <Message title="Only a draft can be changed." />;
@@ -208,6 +208,7 @@ const EditWo: Screen = async ({ searchParams }) => {
     <WorkOrderForm
       trades={d.cfg.trades}
       salesOrders={[]}
+      projects={d.projects}
       editId={wo.id}
       number={wo.number}
       returnedNote={wo.returnedNote}

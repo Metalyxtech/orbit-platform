@@ -1,23 +1,29 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { saveTeamAction } from '@orbit/core/teams-actions';
+import { addProjectAction, saveTeamAction } from '@orbit/core/teams-actions';
 import { Button, Chip, useToast } from '@orbit/ui';
 import { useRouter } from 'next/navigation';
 
-type Project = { id: string; number: string; title: string; status: string; customer: string; createdAt: string; members: string[] };
+type Project = { kind: 'sales' | 'own'; key: string; number: string; title: string; status: string; customer: string | null; members: string[] };
 type Person = { id: string; name: string; email: string; title: string | null; role: string };
 
 const same = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
 
 /** One row per project: its team as chips; Edit opens a searchable people list. Saved per project. */
-export function TeamsClient({ projects, people }: { projects: Project[]; people: Person[] }) {
+export function TeamsClient({ projects, people, canAdd }: { projects: Project[]; people: Person[]; canAdd: boolean }) {
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<'all' | 'team' | 'open'>('all');
-  const shown = projects.filter((p) => (filter === 'team' ? p.members.length > 0 : filter === 'open' ? p.members.length === 0 : true) && `${p.number} ${p.title} ${p.customer}`.toLowerCase().includes(q.trim().toLowerCase()));
+  const shown = projects.filter((p) => (filter === 'team' ? p.members.length > 0 : filter === 'open' ? p.members.length === 0 : true) && `${p.number} ${p.title} ${p.customer ?? ''}`.toLowerCase().includes(q.trim().toLowerCase()));
   return (
     <>
+      {canAdd && <AddProject />}
+      {projects.length === 0 && (
+        <p className="muted" style={{ margin: 0 }}>
+          {canAdd ? 'No projects yet. Add your first project above.' : 'No projects yet. A project appears here when a sales enquiry is won and becomes a sales order.'}
+        </p>
+      )}
       <div className="o-row" style={{ gap: 8, flexWrap: 'wrap' }}>
-        <input className="o-input" style={{ maxWidth: 320 }} placeholder="Find a project (order no., title, customer)" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a project" />
+        <input className="o-input" style={{ maxWidth: 320 }} placeholder="Find a project (number, title, customer)" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a project" />
         {(['all', 'team', 'open'] as const).map((f) => (
           <Button key={f} size="small" variant={filter === f ? 'primary' : undefined} onClick={() => setFilter(f)}>
             {f === 'all' ? `All (${projects.length})` : f === 'team' ? `With a team (${projects.filter((p) => p.members.length).length})` : `Open to everyone (${projects.filter((p) => !p.members.length).length})`}
@@ -26,7 +32,7 @@ export function TeamsClient({ projects, people }: { projects: Project[]; people:
       </div>
       <div className="o-stack" style={{ gap: 10 }}>
         {shown.map((p) => (
-          <ProjectRow key={`${p.id}:${p.members.join(',')}`} p={p} people={people} />
+          <ProjectRow key={`${p.key}:${p.members.join(',')}`} p={p} people={people} />
         ))}
       </div>
     </>
@@ -45,7 +51,7 @@ function ProjectRow({ p, people }: { p: Project; people: Person[] }) {
   const list = people.filter((x) => `${x.name} ${x.email} ${x.title ?? ''} ${x.role}`.toLowerCase().includes(q.trim().toLowerCase()));
   async function save() {
     setBusy(true);
-    const res = await saveTeamAction({ salesOrderId: p.id, memberIds: draft });
+    const res = await saveTeamAction({ kind: p.kind, key: p.key, memberIds: draft });
     setBusy(false);
     if (!res.ok) return toast(res.error, 'bad');
     toast(draft.length ? `Team saved: ${p.number} is now seen only by its ${draft.length} members, the GM and admins.` : `${p.number} is open to everyone again.`);
@@ -60,7 +66,7 @@ function ProjectRow({ p, people }: { p: Project; people: Person[] }) {
             {p.number} · {p.title}
           </strong>
           <div className="muted" style={{ fontSize: 12 }}>
-            {p.customer} · {p.status}
+            {[p.customer, p.kind === 'own' ? 'Company project' : 'Sales order', p.status].filter(Boolean).join(' · ')}
           </div>
         </div>
         <div className="o-row" style={{ gap: 6 }}>
@@ -108,6 +114,43 @@ function ProjectRow({ p, people }: { p: Project; people: Person[] }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** A company without Sales adds its projects here (code and name). */
+function AddProject() {
+  const router = useRouter();
+  const toast = useToast();
+  const [code, setCode] = useState('');
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="o-panel o-row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+      <label className="o-field" style={{ width: 160 }}>
+        Project code
+        <input className="o-input" value={code} maxLength={20} placeholder="PRJ-101" onChange={(e) => setCode(e.target.value.toUpperCase())} />
+      </label>
+      <label className="o-field" style={{ flex: 1, minWidth: 220 }}>
+        Project name
+        <input className="o-input" value={name} maxLength={120} placeholder="e.g. Warehouse extension, Kochi" onChange={(e) => setName(e.target.value)} />
+      </label>
+      <Button
+        variant="primary"
+        disabled={busy || !code.trim() || name.trim().length < 2}
+        onClick={async () => {
+          setBusy(true);
+          const res = await addProjectAction({ code, name });
+          setBusy(false);
+          if (!res.ok) return toast(res.error, 'bad');
+          toast(`Project ${code} added. Set up its team below.`);
+          setCode('');
+          setName('');
+          router.refresh();
+        }}
+      >
+        Add project
+      </Button>
     </div>
   );
 }

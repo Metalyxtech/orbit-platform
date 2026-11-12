@@ -6,7 +6,7 @@ import { deliverToProduction, purchaseOn, purchaseStatus, raisePurchase, type Su
 import { prodIssues, prodMaterials, prodMatRequests, prodReceipts, prodWorkOrders, type MrLine, type MrStatus, type Tx } from '@orbit/db';
 import { fmtQty, MR_STATUS } from '../config';
 import { availability, r3, stockIn, stockOut } from './stock';
-import { hiddenIds } from './scope';
+import { hiddenIds, projectOfWo } from './scope';
 import { hasRole, lockWo, logEvent, myRole, peopleById, requireRole, today } from './shared';
 
 // Material requests (MR). The supervisor asks for material on a work order; the production store
@@ -143,7 +143,7 @@ export async function decideMr(tx: Tx, ctx: ActionContext, raw: z.input<typeof d
     project: (wo.customer || wo.title).slice(0, 200),
     needBy: wo.due ?? today(),
     priority: wo.priority === 'urgent' ? 'Urgent' : 'Normal',
-    salesOrderId: wo.salesOrderId,
+    salesOrderId: projectOfWo(wo),
     note: [mr.note, v.note].filter(Boolean).join(' · ') || null,
     lines: idx.map((i) => ({ description: mr.lines[i].item, qty: mr.lines[i].toBuy, unit: mr.lines[i].unit })),
   });

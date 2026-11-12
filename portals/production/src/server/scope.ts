@@ -10,13 +10,17 @@ import { prodMatRequests, prodReceipts, prodWorkOrders, type Tx } from '@orbit/d
 export async function hiddenIds(tx: Tx, ctx: SessionContext): Promise<Set<string>> {
   const scope = await projectScope(tx, ctx);
   if (scope.all) return new Set();
-  const wos = await tx.select({ id: prodWorkOrders.id, order: prodWorkOrders.salesOrderId }).from(prodWorkOrders).where(eq(prodWorkOrders.companyId, ctx.companyId));
-  const hiddenWo = wos.filter((w) => !scope.sees(w.order)).map((w) => w.id);
+  const wos = await tx.select({ id: prodWorkOrders.id, order: prodWorkOrders.salesOrderId, fields: prodWorkOrders.fields }).from(prodWorkOrders).where(eq(prodWorkOrders.companyId, ctx.companyId));
+  const hiddenWo = wos.filter((w) => !scope.sees(projectOfWo(w))).map((w) => w.id);
   if (!hiddenWo.length) return new Set();
   const mrs = await tx.select({ id: prodMatRequests.id }).from(prodMatRequests).where(inArray(prodMatRequests.workOrderId, hiddenWo)).catch(() => []);
   const rcs = mrs.length ? await tx.select({ id: prodReceipts.id }).from(prodReceipts).where(inArray(prodReceipts.mrId, mrs.map((m) => m.id))).catch(() => []) : [];
   return new Set([...hiddenWo, ...mrs.map((m) => m.id), ...rcs.map((r) => r.id)]);
 }
+
+/** A work order's project: its sales order, or the company project picked on it. */
+export const projectOfWo = (w: { order?: string | null; salesOrderId?: string | null; fields?: unknown }) =>
+  w.order ?? w.salesOrderId ?? ((w.fields as { _project?: string } | null)?._project || null);
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
 /** Drops task-list items about records this person may not see (their ids are in the item id or link). */

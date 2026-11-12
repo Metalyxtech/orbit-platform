@@ -12,6 +12,7 @@ import { MR_STATUS } from '../config';
 import { purchaseOn } from '@orbit/core/supply';
 import { hasRole, loadConfig, lockWo, logEvent, myRole, nextNumber, peopleById, requireRole, today } from './shared';
 import { hiddenIds } from './scope';
+import { ownProjects, projectScope, salesOn } from '@orbit/core/teams';
 
 // Work orders: planning (trade form, materials, operations), release by the production manager,
 // cancel, lists and the work-order page with what each role may do next.
@@ -290,6 +291,17 @@ async function salesOrderNumber(tx: Tx, companyId: string, id: string) {
  * Won sales orders (Sales portal) not yet planned as a work order, so the engineer can start from
  * them. Empty when the company has no Sales data.
  */
+/** Company projects to make a work order for, when the company has no Sales portal (only ones this person may see). */
+export async function projectsToPlan(tx: Tx, ctx: SessionContext) {
+  try {
+    if (await salesOn(tx, ctx.companyId)) return [];
+    const scope = await projectScope(tx, ctx);
+    return (await ownProjects(tx, ctx.companyId)).filter((p) => p.status === 'active' && scope.sees(p.id)).map((p) => ({ id: p.id, code: p.code, name: p.name }));
+  } catch {
+    return [];
+  }
+}
+
 export async function salesOrdersToPlan(tx: Tx, ctx: SessionContext) {
   try {
     return await tx.transaction(async (sp) => {

@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, lte, or } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, lte, or } from 'drizzle-orm';
 import type { SessionContext } from '@orbit/core';
 import { salesCustomers, salesEnquiries, salesInvoices, salesLines, salesOrders, type Tx } from '@orbit/db';
 import { DEFAULT_ADMIN_COVERS, fmtShort, OPEN_STAGES, quoteTotals, type SalesRole } from '../config';
@@ -52,6 +52,27 @@ async function build(tx: Tx, ctx: SessionContext): Promise<QueueItem[]> {
     for (const { e, customer } of await enq(and(eq(salesEnquiries.stage, 'costing'), isNull(salesEnquiries.pricingDoneAt)))) {
       if (e.returnedTo === 'estimator') items.push({ id: `sc:${e.id}:back`, title: `Re-cost ${e.number}: sent back`, detail: `${e.returnedBy ?? 'Approver'}: ${e.returnedNote ?? ''}`.slice(0, 140), href: enquiryHref(e.id), urgent: true });
       else items.push({ id: `sc:${e.id}`, title: `Cost ${e.number}`, detail: `${customer} · ${e.title}`, href: enquiryHref(e.id) });
+    }
+  }
+  // The estimator pressed "Pricing done": the quotation is ready to check and send for approval.
+  // The owner is told, and so is the sales manager, who would otherwise only hear about it once
+  // someone sends it for approval.
+  if (me === 'exec' || me === 'manager' || me === 'admin') {
+    const priced = await enq(and(inArray(salesEnquiries.stage, ['quoted', 'negotiation']), isNotNull(salesEnquiries.pricingDoneAt), eq(salesEnquiries.quoteStatus, 'draft'), acts('manager') ? undefined : eq(salesEnquiries.ownerId, ctx.membershipId)));
+    if (priced.length) {
+      const lines = await tx.select().from(salesLines).where(inArray(salesLines.enquiryId, priced.map((p) => p.e.id)));
+      for (const { e, customer } of priced) {
+        const t = quoteTotals(lines.filter((l) => l.enquiryId === e.id), e.discount, cfg.gst);
+        const mine = e.ownerId === ctx.membershipId;
+        items.push({
+          // A new estimate (after a reopen or a send-back) is a new task and pops up again.
+          id: `se:${e.id}:${e.pricingDoneAt?.getTime() ?? 0}`,
+          title: `Estimate ready: ${e.quoteNo ?? e.number}`,
+          detail: `${customer} · ${fmtShort(cfg.currency, t.net)}${acts('manager') && t.cost > 0 ? ` · margin ${t.margin.toFixed(1)}%` : ''} · ${mine || acts('manager') ? 'check the rates and send for approval' : 'ready for sales'}`,
+          href: enquiryHref(e.id),
+          urgent: true,
+        });
+      }
     }
   }
   // Approval: the sales manager (final). Quotations left "with the GM" from before are theirs too.

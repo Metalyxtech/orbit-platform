@@ -35,12 +35,9 @@ importers:
       '@aws-sdk/client-ssm':
         specifier: 3.1158.0
         version: 3.1158.0
-      '@fontsource/ibm-plex-sans':
-        specifier: 5.3.0
-        version: 5.3.0
-      '@fontsource/ibm-plex-sans-condensed':
-        specifier: 5.3.0
-        version: 5.3.0
+      '@fontsource/inter':
+        specifier: 5.2.8
+        version: 5.2.8
       '@orbit/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -1086,11 +1083,8 @@ packages:
   '@fast-csv/parse@4.3.6':
     resolution: {integrity: sha512-uRsLYksqpbDmWaSmzvJcuApSEe38+6NQZBUsuAyMZKqHxH0g1wcJgsKUvN3WC8tewaqFjBMMGrkHmC+T7k8LvA==}
 
-  '@fontsource/ibm-plex-sans-condensed@5.3.0':
-    resolution: {integrity: sha512-fQyBpwbkguP4azjq7Cw8h/J3C/d8MFAzXOiSoFxyKCUK4x0XKrWEh3tGdTxhDM0HctVRQilQo1zGoyxDHLm5jQ==}
-
-  '@fontsource/ibm-plex-sans@5.3.0':
-    resolution: {integrity: sha512-CbE4CbbEEZJX860XyUiRpsksXIQR8Rp2XDva2VO53NJox9tVNtusrysd2x5YkUEY3ErQ66W1IiiQL8/wihhw5w==}
+  '@fontsource/inter@5.2.8':
+    resolution: {integrity: sha512-P6r5WnJoKiNVV+zvW2xM13gNdFhAEpQ9dQJHt3naLvfg+LkF2ldgSLiF4T41lf1SQCM9QmkqPTn4TH568IRagg==}
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -3596,9 +3590,7 @@ snapshots:
       lodash.isundefined: 3.0.1
       lodash.uniq: 4.5.0
 
-  '@fontsource/ibm-plex-sans-condensed@5.3.0': {}
-
-  '@fontsource/ibm-plex-sans@5.3.0': {}
+  '@fontsource/inter@5.2.8': {}
 
   '@img/colour@1.1.0':
     optional: true

@@ -27,7 +27,7 @@ import {
 } from '../engine';
 import { filesForRequest } from './quote-file-store';
 import { receiptFilesFor } from './receipt-file-store';
-import { hiddenIds, salesProjects } from './scope';
+import { hiddenIds, ownProjectByLabel, salesProjects } from './scope';
 import { holdersOf } from './team';
 import { loadConfig, moneyText, myRole, myRoles, nextNumber, peopleById, requireRole, today } from './shared';
 
@@ -417,9 +417,10 @@ export async function createRequest(tx: Tx, ctx: ActionContext, raw: CreateReque
   const number = await nextNumber(tx, ctx.companyId, 'pr', cfg);
   // A project from Sales ties the request to its project team.
   const order = (await salesProjects(tx, ctx)).find((p) => p.label === input.project);
+  const own = order ? null : await ownProjectByLabel(tx, ctx, input.project);
   const [r] = await tx
     .insert(procRequests)
-    .values({ companyId: ctx.companyId, number, title: input.title, project: input.project, needBy: input.needBy, priority: input.priority, requesterId: ctx.membershipId, stage: 'draft', header: { ...input.header, ...(order ? { _order: order.id } : {}) } })
+    .values({ companyId: ctx.companyId, number, title: input.title, project: input.project, needBy: input.needBy, priority: input.priority, requesterId: ctx.membershipId, stage: 'draft', header: { ...input.header, ...(order ? { _order: order.id } : {}), ...(own ? { _project: own.id } : {}) } })
     .returning();
   await tx.insert(procLines).values(input.lines.map((l, i) => ({ companyId: ctx.companyId, requestId: r.id, sort: i, ...l })));
   const lines = await linesOf(tx, r.id);

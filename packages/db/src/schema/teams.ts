@@ -2,8 +2,9 @@ import { sql } from 'drizzle-orm';
 import { index, pgTable, primaryKey, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { companies, memberships } from './platform';
 import { salesOrders } from './sales';
+import { projects } from './timesheet';
 
-// Project teams (migration 0029): who works on which project (a won sales order).
+// Project teams (migration 0029): who works on which project (a sales order, or a company project).
 
 export const projectTeams = pgTable(
   'project_teams',
@@ -12,14 +13,15 @@ export const projectTeams = pgTable(
     companyId: uuid('company_id')
       .notNull()
       .references(() => companies.id),
-    salesOrderId: uuid('sales_order_id')
-      .notNull()
-      .references(() => salesOrders.id),
+    /** A project from Sales (won order) … */
+    salesOrderId: uuid('sales_order_id').references(() => salesOrders.id),
+    /** … or from the company project list, for companies without the Sales portal. */
+    projectId: uuid('project_id').references(() => projects.id),
     createdBy: uuid('created_by').references(() => memberships.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex('project_teams_order').on(t.companyId, t.salesOrderId)],
+  (t) => [uniqueIndex('project_teams_order').on(t.companyId, t.salesOrderId), uniqueIndex('project_teams_project').on(t.companyId, t.projectId)],
 );
 
 export const projectTeamMembers = pgTable(

@@ -720,6 +720,8 @@ export async function matchInvoice(tx: Tx, ctx: ActionContext, raw: z.input<type
 
 /** Requests waiting for this person's role, oldest first. */
 export async function myQueue(tx: Tx, ctx: SessionContext) {
+  // The GM only views, stops and comments: no step is ever theirs, so skip loading every request.
+  if ((await myRole(tx, ctx)) === 'gm') return [];
   const rows = await listRequests(tx, ctx, { filter: 'action' });
   return rows.sort((a, b) => b.daysInStage - a.daysInStage);
 }

@@ -20,6 +20,8 @@ const woHref = (id: string) => `/production/order?id=${id}`;
 
 async function build(tx: Tx, ctx: SessionContext): Promise<QueueItem[]> {
   const me = await myRole(tx, ctx);
+  // The GM only views, stops and comments: nothing waits for them here.
+  if (me === 'gm') return [];
   // A production admin gets only the tasks of the roles they cover (Production settings).
   const covers: ProdRole[] = me === 'admin' ? ((await productionTeam(tx, ctx)).find((p) => p.membershipId === ctx.membershipId)?.covers ?? []) : [me];
   const acts = (...r: ProdRole[]) => r.some((x) => covers.includes(x));

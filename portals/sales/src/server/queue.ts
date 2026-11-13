@@ -19,6 +19,8 @@ const enquiryHref = (id: string) => `/sales/enquiry?id=${id}`;
 
 async function build(tx: Tx, ctx: SessionContext): Promise<QueueItem[]> {
   const me = await myRole(tx, ctx);
+  // The GM only views, stops and comments: nothing waits for them here.
+  if (me === 'gm') return [];
   const cfg = await loadConfig(tx, ctx.companyId);
   // A sales admin's task list follows the jobs the company admin chose for them (e.g. accounts).
   const covers: SalesRole[] = me === 'admin' ? (cfg.adminCovers[ctx.membershipId] ?? DEFAULT_ADMIN_COVERS) : [me];

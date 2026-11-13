@@ -902,3 +902,7 @@ p { margin: 0 0 12px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* "Loading Orbit…" full-page state: the brand mark breathes while the server prepares the page. */
+.o-loading-mark { animation: o-pulse 1.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .o-loading-mark { animation: none; } }

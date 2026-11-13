@@ -75,7 +75,7 @@ export async function raiseInvoice(tx: Tx, ctx: ActionContext, raw: { id: string
 
 export async function listInvoices(tx: Tx, ctx: SessionContext) {
   const me = await myRole(tx, ctx);
-  requireRole(me, 'accounts', 'manager');
+  requireRole(me, 'accounts', 'manager', 'gm');
   const rows = await tx
     .select({ i: salesInvoices, customer: salesCustomers.name, order: salesOrders.number })
     .from(salesInvoices)

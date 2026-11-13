@@ -14,6 +14,16 @@ const fail = (msg: string) => {
 const [{ bypass }] = (await db.execute(sql`select rolbypassrls as bypass from pg_roles where rolname = current_user`)).rows as { bypass: boolean }[];
 if (bypass) fail('app_user has BYPASSRLS');
 
+// Every table that carries company_id must have row-level security switched on and forced.
+const open = (
+  await db.execute(sql`
+    select c.relname as name from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+    join pg_attribute a on a.attrelid = c.oid and a.attname = 'company_id' and not a.attisdropped
+    where c.relkind = 'r' and c.relname <> 'companies' and not (c.relrowsecurity and c.relforcerowsecurity)`)
+).rows as { name: string }[];
+if (open.length) fail(`tables with company_id but no forced RLS: ${open.map((t) => t.name).join(', ')}`);
+
 const unscoped = await db.select().from(timesheets);
 if (unscoped.length !== 0) fail(`unscoped query saw ${unscoped.length} timesheets`);
 

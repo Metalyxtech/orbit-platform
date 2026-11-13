@@ -9,6 +9,9 @@ const ALLOWED_TYPES = new Set([
   'application/pdf',
   'text/csv',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  // Customers' own forms for custom work (Word documents and phone photos).
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'image/webp',
 ]);
 
 const bucket = () => {
@@ -22,14 +25,18 @@ export function companyKey(companyId: string, ...parts: string[]) {
   return [companyId, ...parts].join('/');
 }
 
-/** Pre-signed browser PUT, valid 5 minutes. Type and size are checked here, server side. */
-export async function presignUpload(key: string, contentType: string, size: number) {
-  if (!ALLOWED_TYPES.has(contentType)) throw new Error('File type not allowed');
-  if (size > MAX_UPLOAD_BYTES) throw new Error('File is larger than 10 MB');
+/**
+ * Pre-signed browser PUT. Type and size are checked here, server side. A caller can narrow the
+ * types and raise the size limit (e.g. 100 MB project PDFs); the link then lasts long enough to upload it.
+ */
+export async function presignUpload(key: string, contentType: string, size: number, opts: { maxBytes?: number; types?: string[] } = {}) {
+  const max = opts.maxBytes ?? MAX_UPLOAD_BYTES;
+  if (!(opts.types ? opts.types.includes(contentType) : ALLOWED_TYPES.has(contentType))) throw new Error('File type not allowed');
+  if (size > max) throw new Error(`File is larger than ${Math.round(max / 1024 / 1024)} MB`);
   return getSignedUrl(
     s3Client(),
     new PutObjectCommand({ Bucket: bucket(), Key: key, ContentType: contentType, ContentLength: size }),
-    { expiresIn: 300 },
+    { expiresIn: max > MAX_UPLOAD_BYTES ? 3600 : 300 },
   );
 }
 

@@ -8,17 +8,16 @@ import { Effects } from '../effects';
 import { uuidv7 } from '../events';
 import type { ActionContext, SessionContext } from '../session';
 import { WorkflowConflictError } from '../workflow/types';
-import { devAuthEnabled, readIdentity } from './auth';
+import { COMPANY_COOKIE, devAuthEnabled, readIdentity } from './auth';
 import { getDb } from './db';
 
-export const COMPANY_COOKIE = 'orbit_company';
 const NO_COMPANY = '00000000-0000-0000-0000-000000000000';
 
 export type SessionState =
   | { state: 'signed_out' }
   | { state: 'no_company'; userId: string; email: string; name: string; isSuperAdmin: boolean }
-  | { state: 'pending'; companyName: string; isSuperAdmin: boolean }
-  | { state: 'ok'; ctx: SessionContext; companies: { id: string; name: string }[] };
+  | { state: 'pending'; companyName: string; isSuperAdmin: boolean; blocked: boolean }
+  | { state: 'ok'; ctx: SessionContext; companies: { id: string; name: string; role: string }[] };
 
 /** Resolves who is calling and which company they act in. Cached per request. */
 export const getSession = cache(async (): Promise<SessionState> => {
@@ -39,7 +38,7 @@ export const getSession = cache(async (): Promise<SessionState> => {
       .onConflictDoUpdate({
         target: users.email,
         set: { workosUserId: identity.workosUserId },
-        // Link only rows that still hold a placeholder id (seed| / invite|). A row already bound to a
+        // Link only rows that still hold a placeholder id (seed| / invited|). A row already bound to a
         // real WorkOS user is never re-bound to a different one that merely shares the email.
         setWhere: sql`${users.workosUserId} not like 'user\\_%'`,
       })
@@ -48,18 +47,22 @@ export const getSession = cache(async (): Promise<SessionState> => {
   if (!user) return { state: 'signed_out' };
 
   // RLS lets a user see their own memberships in any company (app.user_id).
-  const rows = await withTenant(db, { companyId: NO_COMPANY, userId: user.id }, (tx) =>
+  const all = await withTenant(db, { companyId: NO_COMPANY, userId: user.id }, (tx) =>
     tx
       .select({ m: memberships, c: companies })
       .from(memberships)
       .innerJoin(companies, eq(companies.id, memberships.companyId))
       .where(eq(memberships.userId, user.id)),
   );
+  // A removed membership is history only: the person counts as having no company there.
+  const rows = all.filter((r) => r.m.status !== 'removed');
   const active = rows.filter((r) => r.m.status === 'active' && r.c.status === 'active');
   if (active.length === 0) {
     const pending = rows.find((r) => r.m.status === 'pending' || r.c.status === 'pending');
-    return pending
-      ? { state: 'pending', companyName: pending.c.name, isSuperAdmin: user.isSuperAdmin }
+    // A disabled membership or a suspended company must not fall through to "register a new company".
+    const blocked = rows.find((r) => r.m.status === 'disabled' || r.c.status === 'suspended');
+    return pending || blocked
+      ? { state: 'pending', companyName: (pending ?? blocked)!.c.name, isSuperAdmin: user.isSuperAdmin, blocked: !pending }
       : { state: 'no_company', userId: user.id, email: user.email, name: user.name, isSuperAdmin: user.isSuperAdmin };
   }
 
@@ -71,7 +74,7 @@ export const getSession = cache(async (): Promise<SessionState> => {
   const h = await headers();
   return {
     state: 'ok',
-    companies: active.map((r) => ({ id: r.c.id, name: r.c.name })),
+    companies: active.map((r) => ({ id: r.c.id, name: r.c.name, role: r.m.role })),
     ctx: {
       requestId: h.get('x-amzn-trace-id') ?? h.get('x-vercel-id') ?? uuidv7(),
       userId: user.id,

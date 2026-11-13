@@ -4,7 +4,7 @@ import type { StageConfig } from './types';
 export const prod: StageConfig = {
   stage: 'prod',
   region: 'ap-southeast-1',
-  githubOwner: 'metalyxtech',
+  githubOwner: 'Metalyxtech',
   githubRepo: 'orbit-platform',
   appBaseUrl: 'https://app.example.com',
   corsOrigins: ['https://app.example.com'],

@@ -10,9 +10,8 @@ const STATUS: Record<string, { label: string; tone: ChipTone }> = {
   pending: { label: 'Pending', tone: 'warn' },
   active: { label: 'Active', tone: 'ok' },
   disabled: { label: 'Disabled', tone: 'grey' },
-  suspended: { label: 'Suspended', tone: 'bad' },
-  closed: { label: 'Closed', tone: 'grey' },
-  archived: { label: 'Archived', tone: 'grey' },
+  blocked: { label: 'Blocked', tone: 'bad' },
+  removed: { label: 'Removed', tone: 'grey' },
 };
 
 /** Draft (grey), In approval (steel), Returned (warn), Locked (ok), Rejected (bad), Revision n (grey). */

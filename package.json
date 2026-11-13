@@ -9,7 +9,8 @@
     "dev": "pnpm --filter web dev",
     "build": "pnpm --filter web build",
     "lint": "pnpm -r --if-present lint",
-    "typecheck": "pnpm -r --if-present typecheck",
+    "typecheck": "pnpm -r --if-present typecheck && node scripts/check-boundaries.mjs",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
     "test": "pnpm -r --if-present test",
     "db:generate": "pnpm --filter @orbit/db generate",
     "db:migrate": "pnpm --filter @orbit/db migrate",
@@ -17,6 +18,9 @@
     "cdk": "pnpm --filter @orbit/infra cdk"
   },
   "devDependencies": {
+    "next": "15.5.28",
+    "react": "19.1.10",
+    "react-dom": "19.1.10",
     "typescript": "5.9.3"
   },
   "pnpm": {

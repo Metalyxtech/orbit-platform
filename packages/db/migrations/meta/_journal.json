@@ -15,6 +15,209 @@
       "when": 1793211250033,
       "tag": "0001_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793400000000,
+      "tag": "0002_workflow_library",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793500000000,
+      "tag": "0003_company_workflows",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793600000000,
+      "tag": "0004_management_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793700000000,
+      "tag": "0005_member_portals",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793800000000,
+      "tag": "0006_member_portal_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793900000000,
+      "tag": "0007_member_removed",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794000000000,
+      "tag": "0008_messages",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794100000000,
+      "tag": "0009_portal_forms",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794200000000,
+      "tag": "0010_purchase_portal",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794300000000,
+      "tag": "0011_billing",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794400000000,
+      "tag": "0012_billing_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794500000000,
+      "tag": "0013_legal",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1794600000000,
+      "tag": "0014_legal_copies",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1794700000000,
+      "tag": "0015_custom_work",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1794800000000,
+      "tag": "0016_proc_quote_files",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794900000000,
+      "tag": "0017_custom_quotes",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795000000000,
+      "tag": "0018_custom_installments",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1795100000000,
+      "tag": "0019_sales",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1795200000000,
+      "tag": "0020_sales_costing",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1795300000000,
+      "tag": "0021_sales_two_step",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1795400000000,
+      "tag": "0022_sales_send_back",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1795500000000,
+      "tag": "0023_production",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1795600000000,
+      "tag": "0024_production_drawings",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1795700000000,
+      "tag": "0025_quality",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1795800000000,
+      "tag": "0026_ts_admin_covers",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1795900000000,
+      "tag": "0027_material_flow",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1796000000000,
+      "tag": "0028_process_control",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1796100000000,
+      "tag": "0029_project_teams",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1796200000000,
+      "tag": "0030_team_own_projects",
+      "breakpoints": true
     }
   ]
 }

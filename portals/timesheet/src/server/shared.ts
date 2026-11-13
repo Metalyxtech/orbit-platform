@@ -1,12 +1,14 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { newEvent, type ActionContext, type EmailIntent, type EventMap, type EventType } from '@orbit/core';
-import type { Approver, ApproverResolver, MemberRole, WorkflowDefinition } from '@orbit/core/workflow';
+import { effectiveRule, type Approver, type ApproverResolver, type MemberRole, type WorkflowDefinition } from '@orbit/core/workflow';
 import {
   companyPortals,
   memberships,
   projects,
+  tsAdminCovers,
   tsSettings,
   users,
+  workflowDefinitionColumns,
   workflowDefinitions,
   type Queryable,
 } from '@orbit/db';
@@ -16,6 +18,24 @@ import { defaultRules, type TsRules } from '../calc';
 import { timesheetManifest } from '../manifest';
 
 export type TsSettingsRow = typeof tsSettings.$inferSelect;
+
+/** Approver roles a company admin can also cover in Timesheet. */
+export const TS_COVER_ROLES = ['supervisor', 'project_manager', 'management'] as const;
+export type TsCoverRole = (typeof TS_COVER_ROLES)[number];
+
+/**
+ * Roles each company admin also covers (membershipId -> roles). Empty before migration 0026,
+ * so approvals keep working while the database update is pending.
+ */
+export async function readAdminCovers(tx: Tx, companyId: string): Promise<Map<string, TsCoverRole[]>> {
+  try {
+    const rows = await tx.transaction((sp) => sp.select({ id: tsAdminCovers.membershipId, roles: tsAdminCovers.roles }).from(tsAdminCovers).where(eq(tsAdminCovers.companyId, companyId)));
+    return new Map(rows.map((r) => [r.id, r.roles.filter((x): x is TsCoverRole => (TS_COVER_ROLES as readonly string[]).includes(x))]));
+  } catch (err) {
+    if (/ts_admin_covers/.test(String(err)) || (err as { code?: string; cause?: { code?: string } })?.cause?.code === '42P01' || (err as { code?: string })?.code === '42P01') return new Map();
+    throw err;
+  }
+}
 
 export async function loadSettings(tx: Tx, companyId: string): Promise<Omit<TsSettingsRow, 'companyId'>> {
   const [row] = await tx.select().from(tsSettings).where(eq(tsSettings.companyId, companyId));
@@ -90,21 +110,32 @@ const toApprover = (m: { membershipId: string; name: string; email: string; titl
 /** Turns workflow approver rules into people. Nobody approves their own timesheet. */
 export function approverResolver(tx: Tx, companyId: string): ApproverResolver {
   return {
-    async resolve(rule, ctx) {
+    async resolve(rule, ctx): Promise<Approver[]> {
+      if (rule.type === 'matrix') {
+        const cell = effectiveRule(rule, ctx);
+        return cell ? this.resolve(cell, ctx) : [];
+      }
       const submitter = (await membersById(tx, [ctx.submitterId])).get(ctx.submitterId);
-      const admins = async () =>
-        (await membersWithRole(tx, companyId, 'company_admin'))
-          .filter((m) => m.membershipId !== ctx.submitterId)
-          .map(toApprover);
+      const allAdmins = async () => (await membersWithRole(tx, companyId, 'company_admin')).filter((m) => m.membershipId !== ctx.submitterId);
+      /** Company admins covering a role (Users page). */
+      const covering = async (role: string) => {
+        const covers = await readAdminCovers(tx, companyId);
+        return (await allAdmins()).filter((m) => (covers.get(m.membershipId) as string[] | undefined)?.includes(role));
+      };
+      // Nobody to route to: the admins covering that role, or every company admin when none does.
+      const admins = async (role?: string) => {
+        const cover = role ? await covering(role) : [];
+        return (cover.length ? cover : await allAdmins()).map(toApprover);
+      };
 
       if (rule.type === 'supervisor') {
-        if (!submitter?.supervisorId) return admins();
+        if (!submitter?.supervisorId) return admins('supervisor');
         const sup = (await membersById(tx, [submitter.supervisorId])).get(submitter.supervisorId);
-        return sup ? [{ ...toApprover(sup), title: sup.title ?? 'Supervisor' }] : admins();
+        return sup ? [{ ...toApprover(sup), title: sup.title ?? 'Supervisor' }] : admins('supervisor');
       }
       if (rule.type === 'project_managers') {
         const ids = ctx.projectIds ?? [];
-        if (ids.length === 0) return admins();
+        if (ids.length === 0) return admins('project_manager');
         const pms = await tx
           .select({ pmId: projects.pmId, code: projects.code })
           .from(projects)
@@ -118,10 +149,22 @@ export function approverResolver(tx: Tx, companyId: string): ApproverResolver {
             ...toApprover(m),
             title: `Project manager, ${pms.filter((p) => p.pmId === m.membershipId).map((p) => p.code).join(', ')}`,
           }));
-        return out.length ? out : admins();
+        return out.length ? out : admins('project_manager');
       }
+      if (rule.type === 'person') {
+        // A named approver who left, was disabled or is the submitter falls back to the admins.
+        const [m] = await tx
+          .select({ membershipId: memberships.id, name: users.name, email: users.email, title: memberships.title })
+          .from(memberships)
+          .innerJoin(users, eq(users.id, memberships.userId))
+          .where(and(eq(memberships.id, rule.membershipId), eq(memberships.companyId, companyId), eq(memberships.status, 'active')));
+        return m && m.membershipId !== ctx.submitterId ? [toApprover(m)] : admins();
+      }
+      // A role step: any one holder approves. Admins covering the role join the holders.
       const holders = (await membersWithRole(tx, companyId, rule.role)).filter((m) => m.membershipId !== ctx.submitterId);
-      return holders.length ? holders.map(toApprover) : admins();
+      const extra = (await covering(rule.role)).filter((a) => !holders.some((h) => h.membershipId === a.membershipId));
+      const all = [...holders, ...extra];
+      return all.length ? all.map(toApprover) : admins();
     },
   };
 }
@@ -135,13 +178,13 @@ export async function boundWorkflow(tx: Tx, companyId: string) {
   const where = binding?.id
     ? eq(workflowDefinitions.id, binding.id)
     : eq(workflowDefinitions.key, timesheetManifest.defaultWorkflowKey);
-  const [def] = await tx.select().from(workflowDefinitions).where(where).orderBy(desc(workflowDefinitions.version)).limit(1);
+  const [def] = await tx.select(workflowDefinitionColumns).from(workflowDefinitions).where(where).orderBy(desc(workflowDefinitions.version)).limit(1);
   if (!def) throw new Error('No approval workflow is set for the Timesheet portal. Ask Orbit support.');
   return { ...def, definition: def.definition as WorkflowDefinition };
 }
 
 export async function loadDefinition(tx: Tx, id: string) {
-  const [def] = await tx.select().from(workflowDefinitions).where(eq(workflowDefinitions.id, id));
+  const [def] = await tx.select(workflowDefinitionColumns).from(workflowDefinitions).where(eq(workflowDefinitions.id, id));
   return def.definition as WorkflowDefinition;
 }
 

@@ -11,11 +11,11 @@ export function AuthCard({ title, children }: { title: string; children: ReactNo
             Orbit
           </div>
         </div>
-        <h2>Timesheets and approvals for project teams.</h2>
+        <h2>One place for your company's timesheets, purchasing and sales.</h2>
         <ul>
-          <li>Weekly timesheets that save as you type</li>
-          <li>Approval routes with overtime checks</li>
-          <li>Month-end labour hours, ready for Excel</li>
+          <li>Weekly timesheets with approval routes</li>
+          <li>Purchase requests from requisition to invoice</li>
+          <li>Enquiries, quotations and orders in one pipeline</li>
         </ul>
         <small>Your company's data is kept separate from every other company.</small>
       </aside>
@@ -27,6 +27,9 @@ export function AuthCard({ title, children }: { title: string; children: ReactNo
           </div>
           <h1>{title}</h1>
           {children}
+          <p className="o-auth-legal">
+            <a href="/legal/terms">Terms and Conditions</a> · <a href="/legal/privacy">Privacy Policy</a>
+          </p>
         </div>
       </div>
     </main>

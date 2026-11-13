@@ -53,7 +53,7 @@ export async function completeSignIn(code: string): Promise<AuthIdentity> {
     code,
     clientId: process.env.NEXT_PUBLIC_WORKOS_CLIENT_ID!,
   });
-  // Accounts are matched to invited users by email, so the address must be proven.
+  // Accounts are matched to invited people by email, so the address must be proven.
   if (!res.user.emailVerified) throw new Error('Email address is not verified');
   const sid = JSON.parse(Buffer.from(res.accessToken.split('.')[1], 'base64url').toString()).sid as string | undefined;
   const identity: AuthIdentity = {
@@ -89,12 +89,17 @@ export async function readIdentity(): Promise<AuthIdentity | null> {
   return identity && identity.exp > Date.now() ? identity : null;
 }
 
+/** The company a person chose to work in (people in several companies). Cleared at sign-out. */
+export const COMPANY_COOKIE = 'orbit_company';
+
 /** Clears our cookie and returns the WorkOS logout URL (ends the AuthKit session too). */
 export async function signOutUrl(): Promise<string> {
   const identity = await readIdentity();
   const jar = await cookies();
   jar.delete(SESSION_COOKIE);
   jar.delete(DEV_COOKIE);
+  // Someone in several companies is asked again which one to open at the next sign-in.
+  jar.delete(COMPANY_COOKIE);
   if (identity?.sessionId && !devAuthEnabled()) {
     const w = await getWorkOS();
     return w.userManagement.getLogoutUrl({ sessionId: identity.sessionId, returnTo: process.env.APP_BASE_URL });

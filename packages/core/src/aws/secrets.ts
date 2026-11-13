@@ -7,7 +7,10 @@ export type SecretName =
   | 'workosApiKey'
   | 'workosCookiePassword'
   | 'timerHmacSecret'
-  | 'sesWebhookTopicArn';
+  | 'sesWebhookTopicArn'
+  | 'razorpayKeyId'
+  | 'razorpayKeySecret'
+  | 'razorpayWebhookSecret';
 
 const TTL_MS = 5 * 60 * 1000;
 const ALL: SecretName[] = [
@@ -16,6 +19,9 @@ const ALL: SecretName[] = [
   'workosApiKey',
   'workosCookiePassword',
   'timerHmacSecret',
+  'razorpayKeyId',
+  'razorpayKeySecret',
+  'razorpayWebhookSecret',
 ];
 
 let cache: { at: number; values: Partial<Record<SecretName, string>> } | undefined;

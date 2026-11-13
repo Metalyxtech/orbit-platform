@@ -3,7 +3,7 @@
 // RLS-scoped transaction (runAction), then publishes outbox events and timers after commit.
 import { runAction } from '@orbit/core/next';
 import type { GridRow } from './calc';
-import { admin, approvals, reports, week } from './server';
+import { admin, approvals, covers, forms, reports, week } from './server';
 
 export async function saveEntriesAction(input: Parameters<typeof week.saveEntries>[2]) {
   return runAction((tx, ctx) => week.saveEntries(tx, ctx, input));
@@ -43,4 +43,29 @@ export async function updateMemberAction(input: Parameters<typeof admin.updateMe
 }
 export async function decideCorrectionAction(input: { id: string; approve: boolean }) {
   return runAction((tx, ctx) => admin.decideCorrection(tx, ctx, input));
+}
+export async function setWorkflowAction(input: { workflowDefinitionId: string }) {
+  return runAction((tx, ctx) => admin.setWorkflow(tx, ctx, input));
+}
+export async function addMemberAction(input: Parameters<typeof admin.addMember>[2]) {
+  return runAction((tx, ctx) => admin.addMember(tx, ctx, input));
+}
+export async function saveProjectAction(input: Parameters<typeof admin.saveProject>[2]) {
+  return runAction((tx, ctx) => admin.saveProject(tx, ctx, input));
+}
+export async function saveCostCodeAction(input: Parameters<typeof admin.saveCostCode>[2]) {
+  return runAction((tx, ctx) => admin.saveCostCode(tx, ctx, input));
+}
+export async function saveCustomWorkflowAction(input: Parameters<typeof admin.saveCustomWorkflow>[2]) {
+  return runAction((tx, ctx) => admin.saveCustomWorkflow(tx, ctx, input));
+}
+export async function changeMemberPortalAction(input: Parameters<typeof admin.changeMemberPortal>[2]) {
+  return runAction((tx, ctx) => admin.changeMemberPortal(tx, ctx, input));
+}
+export async function setFormChoiceAction(input: { role: string; formId: string }) {
+  return runAction((tx, ctx) => forms.setFormChoice(tx, ctx, input));
+}
+
+export async function saveAdminCoversAction(input: Parameters<typeof covers.saveAdminCovers>[2]) {
+  return runAction((tx, ctx) => covers.saveAdminCovers(tx, ctx, input));
 }

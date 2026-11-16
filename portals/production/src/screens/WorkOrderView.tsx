@@ -15,7 +15,9 @@ import { SupplyPanel, WoSummary } from './Summary';
 /** One work order: plan, materials, operations with progress, QC, NCRs, history and the next step for each role. */
 export function WorkOrderView({ d }: { d: WoDetail }) {
   const w = d.wo;
-  const at = WO_FLOW.indexOf(w.status);
+  // Without the Quality portal there is no QC stage on the track.
+  const flow = WO_FLOW.filter((s) => d.qcOn || s !== 'final_qc' || w.status === 'final_qc');
+  const at = flow.indexOf(w.status);
   return (
     <>
       <TopBar crumbs={['Production', 'Work orders', w.number]} />
@@ -47,7 +49,7 @@ export function WorkOrderView({ d }: { d: WoDetail }) {
 
         {w.status !== 'cancelled' && (
           <ol className="p-track" aria-label="Stages">
-            {WO_FLOW.map((s, i) => (
+            {flow.map((s, i) => (
               <li key={s} className={i < at ? 'done' : i === at ? 'now' : ''}>
                 {WO_STATUS[s].label}
               </li>
@@ -339,7 +341,7 @@ function NextStep({ d }: { d: WoDetail }) {
     released: 'Released. The store issues materials; the supervisor reports output.',
     in_progress: w.returnedNote ? 'QC failed it. The floor is correcting it.' : 'In production on the shop floor.',
     final_qc: 'All operations done. With QC in the Quality portal.',
-    completed: 'QC passed. Waiting for the store to dispatch.',
+    completed: d.qc ? 'QC passed. Waiting for the store to dispatch.' : 'All operations done. Waiting for the store to dispatch.',
     dispatched: `Dispatched${w.dispatchedAt ? ` on ${fmtDate(new Date(w.dispatchedAt).toISOString())}` : ''}.`,
     cancelled: 'Cancelled.',
   };

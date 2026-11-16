@@ -9,6 +9,9 @@ import { portalModules } from '@/portals';
 import { confirmed, removeMembership, REMOVE_WORD } from './remove-member';
 import { hasCustomRequest } from '@/custom/requests';
 import { requireSuperAdmin, setPortal } from './guard';
+import { extendFreePeriod } from '@/billing/admin';
+import { TRIAL_DAYS } from '@/billing/plans';
+import { billingStateFor } from '@/billing/state';
 import { timesheetManifest } from '@orbit/portal-timesheet/manifest';
 
 /**
@@ -33,6 +36,11 @@ export async function approveCompanyAction(companyId: string) {
     // No portal asked for: Timesheet, unless the company signed up for a custom portal only.
     const fallback = (await hasCustomRequest(tx, id)) ? [] : [timesheetManifest.id];
     for (const portal of requested.length ? requested : fallback) await setPortal(tx, id, portal, true);
+    // The free week starts at approval, not at sign-up (a company may wait days to be approved).
+    const billing = await tx.transaction((sp) => billingStateFor(sp, id)).catch(() => null);
+    if (billing && (billing.status === 'trial' || billing.status === 'trial_ended') && billing.trialDaysLeft < TRIAL_DAYS) {
+      await tx.transaction((sp) => extendFreePeriod(sp, id, TRIAL_DAYS - billing.trialDaysLeft)).catch(() => undefined);
+    }
     await audit(tx, { companyId: id, actorId: null, action: 'company.approve', entity: 'companies', entityId: id, data: { portals: requested } });
   });
   revalidatePath('/super-admin', 'layout');

@@ -4,6 +4,7 @@ import { getSession, query } from '@orbit/core/next';
 import { approvals } from '@orbit/portal-timesheet/server';
 import { NotificationCenter, SideFoot, SideMenu } from '@orbit/ui';
 import { BillingBanner } from '@/billing/BillingBanner';
+import { SubscriptionGate } from '@/billing/lock';
 import { unreadCount } from '@/messages';
 import { accessiblePortals } from '@/portal-access';
 import { portalRolesFor, queueCounts } from '@/portal-role';
@@ -60,7 +61,7 @@ export default async function ManageLayout({ children }: { children: ReactNode }
             Sandbox company: emails only go to verified test addresses.
           </div>
         )}
-        {children}
+        <SubscriptionGate role={ctx.role}>{children}</SubscriptionGate>
       </div>
     </div>
   );

@@ -878,6 +878,15 @@ p { margin: 0 0 12px; }
 .o-notice-more:hover { background: var(--wash); }
 @media (max-width: 767px) { .o-notice { width: auto; } }
 
+/* Subscription period ended: a pop-up over the page area, shown for every menu item. */
+.o-lock { flex: 1; min-height: 70vh; display: grid; place-items: center; padding: 32px 20px; background: radial-gradient(ellipse at center, rgba(31, 37, 43, 0.14), rgba(31, 37, 43, 0.05) 70%); }
+.o-lock-card { width: 100%; max-width: 480px; background: var(--sheet); border: 1px solid var(--line); border-top: 4px solid var(--hivis); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 32px 32px 28px; text-align: center; animation: o-dlg 0.16s ease-out; }
+.o-lock-mark { width: 56px; height: 56px; margin: 0 auto 16px; border-radius: 50%; display: grid; place-items: center; background: var(--hivis-tint); color: #b54a08; }
+.o-lock-card h1 { font-size: 21px; margin-bottom: 10px; }
+.o-lock-card p { color: var(--ink-2); font-size: 14.5px; line-height: 1.6; margin: 0 0 22px; }
+.o-lock-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.o-lock-actions .o-btn { padding: 8px 18px; }
+
 /* Phone: brand and signed-in user on the first row, the menu scrolls sideways below. */
 @media (max-width: 767px) {
   .o-side { position: static; height: auto; overflow: visible; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }

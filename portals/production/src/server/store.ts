@@ -6,6 +6,7 @@ import { fmtQty } from '../config';
 import { loadConfig, lockWo, logEvent, myRole, requireRole } from './shared';
 import { stockIn, stockOut } from './stock';
 import { hiddenIds } from './scope';
+import { syncSalesOrder } from './sales-link';
 
 // Store: issues materials against a work order's bill of materials from the production store stock
 // (a negative quantity is a return) and dispatches finished work orders.
@@ -48,9 +49,10 @@ export async function dispatch(tx: Tx, ctx: ActionContext, raw: { workOrderId: s
   const v = z.object({ workOrderId: z.uuid(), reference: z.string().trim().min(2, 'Enter the delivery note or vehicle number').max(200) }).parse(raw);
   requireRole(await myRole(tx, ctx), 'store', 'manager');
   const wo = await lockWo(tx, ctx, v.workOrderId);
-  if (wo.status !== 'completed') throw new Error('Only a completed work order (QC passed) can be dispatched');
+  if (wo.status !== 'completed') throw new Error('Only a finished work order can be dispatched');
   await tx.update(prodWorkOrders).set({ status: 'dispatched', dispatchedAt: new Date(), updatedAt: new Date() }).where(eq(prodWorkOrders.id, wo.id));
   await logEvent(tx, ctx, wo.id, `Dispatched: ${fmtQty(wo.qty)} ${wo.unit}. ${v.reference}`, 'production.wo.dispatch');
+  await syncSalesOrder(tx, ctx, wo.salesOrderId);
   return { ok: true as const };
 }
 

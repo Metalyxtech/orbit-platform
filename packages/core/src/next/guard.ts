@@ -114,17 +114,33 @@ function userMessage(err: unknown): string {
   return SERVER_ERROR;
 }
 
+type ActionGate = (tx: Tx, ctx: ActionContext) => Promise<void>;
+// On globalThis so every bundle that loads this module shares the one gate set at start-up.
+const GATE = Symbol.for('orbit.action.gate');
+const gateBox = globalThis as unknown as Record<symbol, ActionGate | undefined>;
+
+/**
+ * Sets a check that runs before every server action (the app uses it to stop changes once a
+ * company's subscription period has ended). It throws a plain Error to refuse the action.
+ */
+export function registerActionGate(gate: ActionGate) {
+  gateBox[GATE] = gate;
+}
+
 /**
  * Runs a server action as the signed-in member: one RLS-scoped transaction, then the
- * outbox publish and timers after commit.
+ * outbox publish and timers after commit. `always` skips the action gate (paying for a plan).
  */
-export async function runAction<T>(fn: (tx: Tx, ctx: ActionContext) => Promise<T>): Promise<ActionResult<T>> {
+export async function runAction<T>(fn: (tx: Tx, ctx: ActionContext) => Promise<T>, opts: { always?: boolean } = {}): Promise<ActionResult<T>> {
   const session = await requireSession();
   const db = await getDb();
   const ctx: ActionContext = { ...session, effects: new Effects() };
   const scope = { companyId: ctx.companyId, userId: ctx.userId };
   try {
-    const data = await withTenant(db, scope, (tx) => fn(tx, ctx));
+    const data = await withTenant(db, scope, async (tx) => {
+      if (!opts.always) await gateBox[GATE]?.(tx, ctx);
+      return fn(tx, ctx);
+    });
     await ctx.effects.flush(db, scope);
     return { ok: true, data };
   } catch (err) {

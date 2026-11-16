@@ -30,14 +30,14 @@ export const QC_STATUS: Record<QcStatus, { label: string; tone: Tone }> = {
   approved: { label: 'Final', tone: 'ok' },
   cancelled: { label: 'Cancelled', tone: 'grey' },
 };
-export const SOURCES = { purchase: 'Incoming material (Purchase)', production: 'Finished work (Production)', store: 'Material at the production store' } as const;
+export const SOURCES = { purchase: 'Incoming material (Purchase)', production: 'Finished work (Production)', store: 'Material at the production store', direct: 'Direct inspection' } as const;
 export type QcSource = keyof typeof SOURCES;
 export const SOURCE_IDS = Object.keys(SOURCES) as QcSource[];
 /** The portal a result goes back to. */
-export const SOURCE_PORTAL: Record<QcSource, string> = { purchase: 'Purchase', production: 'Production', store: 'the production store' };
+export const SOURCE_PORTAL: Record<QcSource, string> = { purchase: 'Purchase', production: 'Production', store: 'the production store', direct: 'the person who asked' };
 /** Short kind of inspection, for lists and charts. */
-export const SOURCE_KIND: Record<QcSource, string> = { purchase: 'Incoming material', production: 'Finished work', store: 'Shop-floor receipt' };
-export const SOURCE_COLOR: Record<QcSource, string> = { purchase: 'var(--steel)', production: 'var(--hivis)', store: 'var(--ok)' };
+export const SOURCE_KIND: Record<QcSource, string> = { purchase: 'Incoming material', production: 'Finished work', store: 'Shop-floor receipt', direct: 'Direct inspection' };
+export const SOURCE_COLOR: Record<QcSource, string> = { purchase: 'var(--steel)', production: 'var(--hivis)', store: 'var(--ok)', direct: '#8b5fbf' };
 
 export interface Finding {
   item: string;
@@ -50,3 +50,7 @@ export const fmtDate = (d: string | Date | null | undefined) =>
 export const fmtDateTime = (d: string | Date | null | undefined) => (d ? new Date(d).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '-');
 /** Hours between two instants, rounded to one decimal. */
 export const hoursBetween = (a: Date | string, b: Date | string) => Math.round(((new Date(b).getTime() - new Date(a).getTime()) / 36e5) * 10) / 10;
+
+/** Which portal must be on for a kind of inspection to exist (direct ones always can). */
+export const SOURCE_NEEDS: Record<QcSource, string | null> = { purchase: 'procurement', production: 'production', store: 'production', direct: null };
+export const UNITS = ['nos', 'kg', 'MT', 'm', 'm²', 'L', 'set', 'lot'];

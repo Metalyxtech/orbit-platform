@@ -14,3 +14,6 @@ export async function decideAction(input: { id: string; approve: boolean; note?:
 export async function saveQualityAdminAction(input: In<typeof admin.saveQualityAdmin>) {
   return runAction((tx, ctx) => admin.saveQualityAdmin(tx, ctx, input));
 }
+export async function createDirectAction(input: In<typeof inspections.createDirect>) {
+  return runAction((tx, ctx) => inspections.createDirect(tx, ctx, input));
+}

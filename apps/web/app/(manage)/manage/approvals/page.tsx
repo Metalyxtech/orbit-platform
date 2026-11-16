@@ -2,7 +2,9 @@ import { redirect } from 'next/navigation';
 import { getSession, query } from '@orbit/core/next';
 import { approvals } from '@orbit/portal-timesheet/server';
 import { DataTable, EmptyState } from '@orbit/ui';
+import { inboxItems } from '@/inbox';
 import { isManager } from '@/management/workspaces';
+import { accessiblePortals } from '@/portal-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +12,16 @@ export const dynamic = 'force-dynamic';
 export default async function MyApprovals() {
   const s = await getSession();
   if (s.state !== 'ok' || !isManager(s.ctx)) redirect('/manage/messages');
-  const rows = await query((tx, ctx) => approvals.mine(tx, ctx));
+  // Timesheet approvals only for companies with Timesheet; every other portal's tasks come from its own queue.
+  const { rows, timesheet, tasks } = await query(async (tx, ctx) => {
+    const portals = await accessiblePortals(tx, ctx);
+    const timesheet = portals.includes('timesheet');
+    return {
+      timesheet,
+      rows: timesheet ? await approvals.mine(tx, ctx) : [],
+      tasks: (await inboxItems(tx, ctx)).filter((i) => i.portal !== 'Timesheet' && i.portal !== 'Messages'),
+    };
+  });
   return (
     <>
       <header className="o-top">
@@ -18,8 +29,39 @@ export default async function MyApprovals() {
       </header>
       <div className="o-page">
         <p className="muted" style={{ fontSize: 12, margin: 0 }}>
-          Only the steps your approval workflow sends to you, for example the final level after the project manager.
+          Everything waiting for you across your portals. Open a task to decide it in its own portal.
         </p>
+        {(tasks.length > 0 || !timesheet) && (
+          <div className="o-panel flush">
+            <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
+              <h2>Waiting for you</h2>
+            </div>
+            {tasks.length === 0 ? (
+              <EmptyState title="Nothing is waiting for you." />
+            ) : (
+              <DataTable
+                rows={tasks}
+                rowKey={(t) => t.id}
+                columns={[
+                  { key: 'p', header: 'Portal', render: (t) => <span className="o-chip steel">{t.portal}</span> },
+                  { key: 't', header: 'Task', render: (t) => <strong style={{ fontWeight: 600 }}>{t.title}</strong> },
+                  { key: 'd', header: 'Details', render: (t) => <span className="muted">{t.detail}</span> },
+                  { key: 'u', header: '', render: (t) => (t.urgent ? <span className="o-chip hivis">Needs action</span> : null) },
+                  {
+                    key: 'a',
+                    header: '',
+                    render: (t) => (
+                      <a className="o-btn small primary" href={t.href}>
+                        Open
+                      </a>
+                    ),
+                  },
+                ]}
+              />
+            )}
+          </div>
+        )}
+        {timesheet && (
         <div className="o-panel flush">
           <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
             <h2>Timesheet</h2>
@@ -44,6 +86,7 @@ export default async function MyApprovals() {
             />
           )}
         </div>
+        )}
       </div>
     </>
   );

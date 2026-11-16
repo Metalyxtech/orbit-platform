@@ -1,8 +1,8 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { assertNotHeld } from '@orbit/core/holds';
 import { audit, type ActionContext, type SessionContext } from '@orbit/core';
-import { salesCustomers, salesInvoices, salesOrders, salesPayments, type Tx } from '@orbit/db';
+import { prodWorkOrders, salesCustomers, salesInvoices, salesOrders, salesPayments, type Tx } from '@orbit/db';
 import { fmtMoney, orderLabel, type OrderStatus } from '../config';
 import { addDays, hasRole, loadConfig, myRole, nextNumber, peopleById, requireRole, today } from './shared';
 import { hiddenIds } from './scope';
@@ -26,10 +26,17 @@ export async function listOrders(tx: Tx, ctx: SessionContext) {
   const rows = await tx.select({ o: salesOrders, customer: salesCustomers.name }).from(salesOrders).innerJoin(salesCustomers, eq(salesCustomers.id, salesOrders.customerId)).where(and(...conds)).orderBy(desc(salesOrders.createdAt)).limit(500);
   const people = await peopleById(tx, rows.map((r) => r.o.ownerId));
   const hidden = await hiddenIds(tx, ctx);
+  // Work orders made for these orders (companies that also use Production): the order follows them.
+  const ids = rows.map((r) => r.o.id);
+  const wos = ids.length
+    ? await tx
+        .transaction((sp) => sp.select({ order: prodWorkOrders.salesOrderId, number: prodWorkOrders.number, status: prodWorkOrders.status }).from(prodWorkOrders).where(and(eq(prodWorkOrders.companyId, ctx.companyId), inArray(prodWorkOrders.salesOrderId, ids))))
+        .catch(() => [] as { order: string | null; number: string; status: string }[])
+    : [];
   return {
     me,
     can: { confirm: hasRole(me, 'manager'), advance: hasRole(me, 'manager'), invoice: hasRole(me, 'accounts') },
-    rows: rows.filter((r) => !hidden.has(r.o.id)).map(({ o, customer }) => ({ ...o, customer, owner: o.ownerId ? (people.get(o.ownerId) ?? '') : '', statusLabel: orderLabel(o.status), createdAt: o.createdAt.toISOString() })),
+    rows: rows.filter((r) => !hidden.has(r.o.id)).map(({ o, customer }) => ({ ...o, workOrders: wos.filter((w) => w.order === o.id && w.status !== 'cancelled').map((w) => ({ number: w.number, status: w.status })), customer, owner: o.ownerId ? (people.get(o.ownerId) ?? '') : '', statusLabel: orderLabel(o.status), createdAt: o.createdAt.toISOString() })),
   };
 }
 export type OrderRow = Awaited<ReturnType<typeof listOrders>>['rows'][number];

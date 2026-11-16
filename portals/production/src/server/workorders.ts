@@ -1,12 +1,13 @@
 import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { ActionContext, SessionContext } from '@orbit/core';
-import { latestInspection } from '@orbit/core/quality';
+import { latestInspection, qualityOn } from '@orbit/core/quality';
 import { processThread } from '@orbit/core/holds';
 import { prodEvents, prodMaterials, prodOperations, prodReports, prodWorkOrders, salesCustomers, salesOrders, type Tx } from '@orbit/db';
 import { OPEN_STATUSES, WO_STATUS, type OpStatus, type ProdRole, type WoStatus } from '../config';
 import { TRADES, tradeOf } from '../trades';
 import { customerDocuments, listDrawings } from './drawings';
+import { syncSalesOrder } from './sales-link';
 import { listMrs, supplyForWo, type MrRow, type WoSupply } from './mr';
 import { MR_STATUS } from '../config';
 import { purchaseOn } from '@orbit/core/supply';
@@ -93,6 +94,7 @@ export async function submitForRelease(tx: Tx, ctx: ActionContext, raw: { id: st
   } else {
     await tx.update(prodWorkOrders).set({ status: 'released', returnedNote: null, releasedBy: ctx.membershipId, releasedAt: new Date(), updatedAt: new Date() }).where(eq(prodWorkOrders.id, r.id));
     await logEvent(tx, ctx, r.id, 'Released to the shop floor', 'production.wo.release');
+    await syncSalesOrder(tx, ctx, r.salesOrderId);
   }
   return { ok: true as const };
 }
@@ -107,6 +109,7 @@ export async function decideRelease(tx: Tx, ctx: ActionContext, raw: { id: strin
   if (v.release) {
     await tx.update(prodWorkOrders).set({ status: 'released', releasedBy: ctx.membershipId, releasedAt: new Date(), updatedAt: new Date() }).where(eq(prodWorkOrders.id, r.id));
     await logEvent(tx, ctx, r.id, `Released to the shop floor${v.note ? `. Note: ${v.note}` : ''}`, 'production.wo.release');
+    await syncSalesOrder(tx, ctx, r.salesOrderId);
   } else {
     await tx.update(prodWorkOrders).set({ status: 'draft', returnedNote: v.note, updatedAt: new Date() }).where(eq(prodWorkOrders.id, r.id));
     await logEvent(tx, ctx, r.id, `Sent back to the engineer: ${v.note}`, 'production.wo.return');
@@ -206,6 +209,8 @@ export async function workOrderDetail(tx: Tx, ctx: SessionContext, id: string) {
     supply,
     purchaseUsed,
     summary: summarise(wo, status, ops, mats, supply, reports),
+    /** Finished work goes to QC only when the company has the Quality portal. */
+    qcOn: await qualityOn(tx, ctx.companyId),
     /** GM hold and comments. */
     control: await processThread(tx, ctx, 'work_order', wo.id),
     /** Material requests on this work order (empty before migration 0027). */

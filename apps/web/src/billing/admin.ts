@@ -1,7 +1,7 @@
-import { and, desc, eq, gt, inArray } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNotNull } from 'drizzle-orm';
 import { z } from 'zod';
-import { billingEvents, companyBilling, type Tx } from '@orbit/db';
-import { cycleOf, priceFor, type Currency, type Cycle } from './plans';
+import { billingEvents, companies, companyBilling, companySubscriptions, type Tx } from '@orbit/db';
+import { BILLING_LAUNCH, cycleOf, priceFor, type Currency, type Cycle } from './plans';
 import { customPrice, getCustomPlan, type CustomCycle } from '../custom/plan';
 import { billingSettings, billingStateFor, missing } from './state';
 
@@ -14,7 +14,7 @@ export const CONFIRMATIONS = ['checkout.completed', 'subscription.activated', 's
 export const settingsInput = z.object({
   currency: z.enum(['INR', 'USD']),
   showPlans: z.boolean(),
-  trialDays: z.coerce.number().int().min(0).max(90),
+  trialDays: z.coerce.number().int().min(0).max(3650),
 });
 export type SettingsInput = z.infer<typeof settingsInput>;
 
@@ -26,6 +26,30 @@ export async function saveBillingSettings(tx: Tx, companyId: string, raw: z.inpu
     .values({ companyId, currency: s.currency, showPlans: s.showPlans, trialDays: s.trialDays })
     .onConflictDoUpdate({ target: companyBilling.companyId, set: { currency: s.currency, showPlans: s.showPlans, trialDays: s.trialDays, updatedAt: new Date() } });
   return s;
+}
+
+const DAY = 864e5;
+
+/**
+ * Gives a company `days` of free use from now, or adds them to a free period that is still
+ * running. The free period is stored as days from sign-up, so the new length is worked out
+ * from the date it should end on. Returns that date.
+ */
+export async function extendFreePeriod(tx: Tx, companyId: string, days: number) {
+  const add = z.number().int().min(1).max(365).parse(days);
+  const state = await billingStateFor(tx, companyId);
+  const settings = await billingSettings(tx, companyId);
+  const [company] = await tx.select({ createdAt: companies.createdAt }).from(companies).where(eq(companies.id, companyId));
+  if (!company) throw new Error('Company not found');
+  const start = Math.max(company.createdAt.getTime(), new Date(BILLING_LAUNCH).getTime());
+  const from = Math.max(Date.now(), new Date(state.trialEndsAt).getTime());
+  const end = new Date(from + add * DAY);
+  // Whole days from sign-up, rounded down so "+7 days" reads as 7 days left, not 8.
+  const trialDays = Math.min(3650, Math.max(1, Math.floor((end.getTime() - start) / DAY)));
+  await saveBillingSettings(tx, companyId, { ...settings, trialDays });
+  // A checkout that was started keeps its own copy of the trial end: move that too.
+  await tx.update(companySubscriptions).set({ trialEndsAt: end, updatedAt: new Date() }).where(and(eq(companySubscriptions.companyId, companyId), isNotNull(companySubscriptions.trialEndsAt)));
+  return end;
 }
 
 /** Super Admin has looked at this company's payments: they stop showing as new. */

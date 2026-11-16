@@ -8,8 +8,12 @@ import type { ActionContext } from './session';
 // the source portal's registered handler moves its own record on. No portal imports another.
 
 export const QUALITY_PORTAL = 'quality';
-/** purchase: goods receipt on a PO; production: finished work order; store: material received into the production store. */
-export type QcSource = 'purchase' | 'production' | 'store';
+/**
+ * purchase: goods receipt on a PO; production: finished work order; store: material received into
+ * the production store; direct: raised in the Quality portal itself (a company that uses Quality
+ * on its own, or an ad-hoc inspection). A direct inspection has no other portal to report back to.
+ */
+export type QcSource = 'purchase' | 'production' | 'store' | 'direct';
 
 export interface InspectionRequest {
   source: QcSource;
@@ -84,7 +88,7 @@ export async function requestInspection(tx: Tx, ctx: ActionContext, req: Inspect
       requestedBy: ctx.membershipId,
     })
     .returning({ id: qcInspections.id, number: qcInspections.number });
-  await tx.insert(qcEvents).values({ companyId: ctx.companyId, inspectionId: row.id, text: `${n ? `Re-inspection (round ${n + 1})` : 'Inspection'} requested from ${req.source === 'purchase' ? 'Purchase' : req.source === 'store' ? 'Production store' : 'Production'}: ${req.sourceRef}`, byId: ctx.membershipId });
+  await tx.insert(qcEvents).values({ companyId: ctx.companyId, inspectionId: row.id, text: `${n ? `Re-inspection (round ${n + 1})` : 'Inspection'} requested${req.source === 'direct' ? '' : ` from ${req.source === 'purchase' ? 'Purchase' : req.source === 'store' ? 'Production store' : 'Production'}`}: ${req.sourceRef}`, byId: ctx.membershipId });
   return row;
 }
 
@@ -140,6 +144,8 @@ export function onQualityDecision(source: QcSource, handler: Handler) {
 
 /** Called by the Quality portal inside the approval transaction. */
 export async function applyQualityDecision(tx: Tx, ctx: ActionContext, d: QualityDecision) {
+  // Raised in Quality itself: the final report is the end of the line.
+  if (d.source === 'direct') return;
   const handler = registry.get(d.source);
   if (!handler) throw new Error(`Orbit cannot reach the ${d.source} portal right now. Try again in a moment.`);
   await handler(tx, ctx, d);

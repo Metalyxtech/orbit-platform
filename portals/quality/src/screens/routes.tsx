@@ -2,9 +2,10 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { query } from '@orbit/core/next';
 import { Chip, ColumnChart, EmptyState, KpiStrip, PieChart, TopBar } from '@orbit/ui';
-import { fmtDate, roleLabel, SOURCE_COLOR, SOURCE_IDS, SOURCE_KIND } from '../config';
+import { fmtDate, roleLabel, SOURCE_COLOR, SOURCE_IDS, SOURCE_KIND, SOURCES } from '../config';
 import { admin, dashboard, inspections, myRole, NOT_READY, notReady, queue, type QcFilter } from '../server';
 import { InspectionView } from './InspectionView';
+import { NewInspectionClient } from './NewInspectionClient';
 import { SettingsClient } from './SettingsClient';
 import { inspHref, InspTable, NotReady, PageHead, ResultChip, SourceTag } from './ui';
 
@@ -203,12 +204,19 @@ const Inspections: Screen = async ({ searchParams }) => {
   const filter = (FILTERS.find((f) => f.id === one(searchParams.f))?.id ?? 'open') as QcFilter;
   const source = SOURCE_IDS.find((s) => s === one(searchParams.source));
   const q = one(searchParams.q) ?? '';
-  const rows = await query((tx, ctx) => inspections.listInspections(tx, ctx, { filter, source, q }));
+  const { rows, sources, me } = await query(async (tx, ctx) => ({ rows: await inspections.listInspections(tx, ctx, { filter, source, q }), sources: await inspections.sourcesOn(tx, ctx), me: await myRole(tx, ctx) }));
+  const others = sources.filter((x) => x !== 'direct');
   return (
     <>
       <TopBar crumbs={['Quality', 'Inspections']} />
       <div className="o-page">
-        <PageHead title="Inspections" lead="Requests from Purchase (incoming material) and Production (finished work)." />
+        <PageHead title="Inspections" lead={others.length ? `Requests from ${[sources.includes('purchase') && 'Purchase (incoming material)', sources.includes('production') && 'Production (finished work)'].filter(Boolean).join(' and ')}, and the ones raised here.` : 'Every inspection raised here, from request to final report.'}>
+          {['inspector', 'manager', 'admin'].includes(me) && (
+            <Link className="o-btn primary" href="/quality/new">
+              New inspection
+            </Link>
+          )}
+        </PageHead>
         <div className="o-row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
           <nav className="o-tabs" aria-label="Filter">
             {FILTERS.map((f) => (
@@ -219,12 +227,17 @@ const Inspections: Screen = async ({ searchParams }) => {
           </nav>
           <form className="o-row" style={{ gap: 6 }}>
             <input type="hidden" name="f" value={filter} />
-            <select className="o-select" name="source" defaultValue={source ?? ''} aria-label="From" style={{ width: 200 }}>
-              <option value="">Purchase and Production</option>
-              <option value="purchase">Incoming material (Purchase)</option>
-              <option value="production">Finished work (Production)</option>
-            </select>
-            <input className="o-input" name="q" defaultValue={q} placeholder="Report, PO, WO, supplier" style={{ width: 220 }} aria-label="Search" />
+            {sources.length > 1 && (
+              <select className="o-select" name="source" defaultValue={source ?? ''} aria-label="Kind" style={{ width: 230 }}>
+                <option value="">Every kind</option>
+                {sources.map((x) => (
+                  <option key={x} value={x}>
+                    {SOURCES[x]}
+                  </option>
+                ))}
+              </select>
+            )}
+            <input className="o-input" name="q" defaultValue={q} placeholder="Report, reference, supplier" style={{ width: 220 }} aria-label="Search" />
             <button className="o-btn small" type="submit">
               Go
             </button>
@@ -241,7 +254,7 @@ const Inspections: Screen = async ({ searchParams }) => {
 const Reports: Screen = async ({ searchParams }) => {
   const result = (['pass', 'fail'] as const).find((r) => r === one(searchParams.result));
   const source = SOURCE_IDS.find((s) => s === one(searchParams.source));
-  const rows = await query((tx, ctx) => inspections.listInspections(tx, ctx, { filter: 'approved', result, source }));
+  const { rows, sources } = await query(async (tx, ctx) => ({ rows: await inspections.listInspections(tx, ctx, { filter: 'approved', result, source }), sources: await inspections.sourcesOn(tx, ctx) }));
   const link = (r?: string, s?: string) => `?${[r ? `result=${r}` : '', s ? `source=${s}` : ''].filter(Boolean).join('&')}`;
   return (
     <>
@@ -259,10 +272,12 @@ const Reports: Screen = async ({ searchParams }) => {
             Failed
           </Link>
           <span style={{ flex: 1 }} />
-          <Link href={link(result, undefined)} aria-current={!source ? 'page' : undefined}>
-            All
-          </Link>
-          {SOURCE_IDS.map((s) => (
+          {sources.length > 1 && (
+            <Link href={link(result, undefined)} aria-current={!source ? 'page' : undefined}>
+              Every kind
+            </Link>
+          )}
+          {(sources.length > 1 ? sources : []).map((s) => (
             <Link key={s} href={link(result, s)} aria-current={source === s ? 'page' : undefined}>
               {SOURCE_KIND[s]}
             </Link>
@@ -286,6 +301,17 @@ const Inspection: Screen = async ({ searchParams }) => {
       </div>
     );
   return <InspectionView d={d} />;
+};
+
+const NewInspection: Screen = async () => {
+  const { me, sources } = await query(async (tx, ctx) => ({ me: await myRole(tx, ctx), sources: await inspections.sourcesOn(tx, ctx) }));
+  if (!['inspector', 'manager', 'admin'].includes(me))
+    return (
+      <div className="o-page">
+        <EmptyState title="Only QC engineers and QC managers raise inspections." />
+      </div>
+    );
+  return <NewInspectionClient linked={[sources.includes('purchase') && 'Purchase', sources.includes('production') && 'Production'].filter((x): x is string => !!x)} />;
 };
 
 const Settings: Screen = async () => {
@@ -314,6 +340,7 @@ export const qualityRoutes: Record<string, Screen> = Object.fromEntries(
     inspections: Inspections,
     reports: Reports,
     inspection: Inspection,
+    new: NewInspection,
     'admin/settings': Settings,
   }).map(([k, s]) => [k, guard(s)]),
 );

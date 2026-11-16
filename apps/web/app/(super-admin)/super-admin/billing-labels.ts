@@ -4,7 +4,7 @@ import type { BillingStatus } from '@/billing/state';
 
 export const STATUS_LABEL: Record<BillingStatus, { label: string; tone: string }> = {
   trial: { label: 'Free trial', tone: '' },
-  trial_ended: { label: 'Trial ended', tone: 'bad' },
+  trial_ended: { label: 'Free period ended', tone: 'bad' },
   active: { label: 'Paid', tone: 'ok' },
   past_due: { label: 'Payment due', tone: 'warn' },
   cancelled: { label: 'Cancelled', tone: 'bad' },

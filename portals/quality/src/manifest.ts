@@ -13,6 +13,7 @@ export const qualityManifest: PortalManifest = {
     { path: '', label: 'Quality dashboard', section: 'main', portalRoles: ALL },
     { path: 'queue', label: 'My tasks', section: 'main', portalRoles: ALL, badge: 'approvals' },
     { path: 'inspections', label: 'Inspections', section: 'main', portalRoles: ALL },
+    { path: 'new', label: 'New inspection', section: 'main', portalRoles: ['inspector', 'manager', 'admin'] },
     { path: 'reports', label: 'Final reports', section: 'main', portalRoles: ALL },
     { path: 'admin/settings', label: 'Quality settings', section: 'admin', roles: ['company_admin'] },
   ],

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { getSession, query } from '@orbit/core/next';
 import { AppShell } from '@orbit/ui';
 import { BillingBanner } from '@/billing/BillingBanner';
+import { SubscriptionGate } from '@/billing/lock';
 import { unreadCount } from '@/messages';
 import { isManager, workspaceFor } from '@/management/workspaces';
 import { accessiblePortals } from '@/portal-access';
@@ -75,7 +76,7 @@ export default async function PortalLayout({ children, params }: { children: Rea
           Sandbox company: emails only go to verified test addresses.
         </div>
       )}
-      {children}
+      <SubscriptionGate role={ctx.role}>{children}</SubscriptionGate>
     </AppShell>
   );
 }

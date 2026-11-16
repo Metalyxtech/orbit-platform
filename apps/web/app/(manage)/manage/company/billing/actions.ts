@@ -7,18 +7,18 @@ import { cancelPlan, confirmCheckout, startCheckout } from '@/billing/state';
 type In<F> = F extends (tx: never, ctx: never, input: infer I) => unknown ? I : never;
 
 export async function startCheckoutAction(input: In<typeof startCheckout>) {
-  return runAction((tx, ctx) => startCheckout(tx, ctx, input));
+  return runAction((tx, ctx) => startCheckout(tx, ctx, input), { always: true });
 }
 export async function confirmCheckoutAction(input: In<typeof confirmCheckout>) {
-  const res = await runAction((tx, ctx) => confirmCheckout(tx, ctx, input));
+  const res = await runAction((tx, ctx) => confirmCheckout(tx, ctx, input), { always: true });
   revalidatePath('/manage', 'layout');
   return res;
 }
 export async function cancelPlanAction() {
-  const res = await runAction((tx, ctx) => cancelPlan(tx, ctx));
+  const res = await runAction((tx, ctx) => cancelPlan(tx, ctx), { always: true });
   revalidatePath('/manage', 'layout');
   return res;
 }
 export async function startCustomCheckoutAction(input: In<typeof startCustomCheckout>) {
-  return runAction((tx, ctx) => startCustomCheckout(tx, ctx, input));
+  return runAction((tx, ctx) => startCustomCheckout(tx, ctx, input), { always: true });
 }

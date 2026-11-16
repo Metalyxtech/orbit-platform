@@ -19,7 +19,7 @@ export async function BillingBanner({ role }: { role: SessionContext['role'] }) 
   let tone = 'info';
   if (s.status === 'trial' && s.trialDaysLeft <= 7 && admin) text = `Your free trial ends in ${s.trialDaysLeft} ${s.trialDaysLeft === 1 ? 'day' : 'days'}. Choose a plan to keep everything running.`;
   else if (s.status === 'trial_ended' || s.status === 'cancelled' || s.status === 'pending_payment') {
-    text = admin ? 'Your Orbit plan is not active. Choose a plan to keep adding people and portals.' : 'Your company’s Orbit plan is not active. Ask your company admin to renew it.';
+    text = admin ? 'Your subscription period has ended. Choose a plan to open every portal again.' : 'Your company’s subscription period has ended. Ask your company admin to renew it.';
     tone = 'bad';
   } else if (s.status === 'past_due' && admin) {
     text = 'Razorpay could not take the last payment and is retrying. Check your payment method.';

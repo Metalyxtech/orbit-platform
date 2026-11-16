@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hoursBetween, QC_ROLES, QC_STATUS, SOURCES } from './config';
+import { hoursBetween, QC_ROLES, QC_STATUS, SOURCE_NEEDS, SOURCES } from './config';
 import { qualityManifest } from './manifest';
 
 describe('quality config', () => {
@@ -8,7 +8,9 @@ describe('quality config', () => {
   });
   it('labels every status and source', () => {
     expect(Object.keys(QC_STATUS)).toEqual(['pending', 'submitted', 'approved', 'cancelled']);
-    expect(Object.keys(SOURCES)).toEqual(['purchase', 'production', 'store']);
+    expect(Object.keys(SOURCES)).toEqual(['purchase', 'production', 'store', 'direct']);
+    // Direct inspections need no other portal; the rest need the portal they come from.
+    expect(SOURCE_NEEDS).toEqual({ purchase: 'procurement', production: 'production', store: 'production', direct: null });
   });
   it('defaults company admins to admin, management to GM, others to inspector', () => {
     expect(qualityManifest.defaultPortalRole?.('company_admin')).toBe('admin');

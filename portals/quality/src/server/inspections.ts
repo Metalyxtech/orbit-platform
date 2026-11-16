@@ -1,10 +1,10 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import type { ActionContext, SessionContext } from '@orbit/core';
-import { applyQualityDecision, type QcSource as CoreSource } from '@orbit/core/quality';
-import { prodReceipts, qcEvents, qcInspections, type Tx } from '@orbit/db';
+import { applyQualityDecision, requestInspection, type QcSource as CoreSource } from '@orbit/core/quality';
+import { companyPortals, prodReceipts, qcEvents, qcInspections, type Tx } from '@orbit/db';
 import { processThread } from '@orbit/core/holds';
-import { QC_STATUS, type Finding, type QcSource, type QcStatus } from '../config';
+import { QC_STATUS, SOURCE_IDS, SOURCE_NEEDS, type Finding, type QcSource, type QcStatus } from '../config';
 import { hasRole, lockInspection, logEvent, myRole, peopleById, requireRole } from './shared';
 import { hiddenIds } from './scope';
 
@@ -150,6 +150,7 @@ export async function describeInspection(tx: Tx, companyId: string, id: string) 
 export async function inspectionParents(tx: Tx, companyId: string, id: string) {
   const [r] = await tx.select({ source: qcInspections.source, sourceId: qcInspections.sourceId }).from(qcInspections).where(and(eq(qcInspections.id, id), eq(qcInspections.companyId, companyId)));
   if (!r) return [];
+  if (r.source === 'direct') return [];
   if (r.source === 'purchase') return [{ entity: 'proc_request' as const, id: r.sourceId }];
   if (r.source === 'production') return [{ entity: 'work_order' as const, id: r.sourceId }];
   const [rc] = await tx.select({ mrId: prodReceipts.mrId, purchaseId: prodReceipts.purchaseId }).from(prodReceipts).where(eq(prodReceipts.id, r.sourceId));
@@ -157,4 +158,40 @@ export async function inspectionParents(tx: Tx, companyId: string, id: string) {
     ...(rc?.mrId ? [{ entity: 'mat_request' as const, id: rc.mrId }] : []),
     ...(rc?.purchaseId ? [{ entity: 'proc_request' as const, id: rc.purchaseId }] : []),
   ];
+}
+
+const directInput = z.object({
+  title: z.string().trim().min(3, 'Say what is to be inspected').max(200),
+  reference: z.string().trim().max(60).optional(),
+  party: z.string().trim().max(160).optional(),
+  notes: z.string().trim().max(2000).optional(),
+  items: z.array(z.object({ item: z.string().trim().min(1).max(200), qty: z.number().min(0).max(1e9), unit: z.string().trim().min(1).max(20) })).min(1, 'Add at least one item to inspect').max(100),
+  checklist: z.array(z.string().trim().min(1).max(200)).max(60).default([]),
+});
+
+/**
+ * An inspection raised in Quality itself: for companies that use Quality on its own, and for
+ * ad-hoc checks. It follows the same path (QC engineer inspects, QC manager approves) and ends
+ * with the final report; no other portal is waiting for the result.
+ */
+export async function createDirect(tx: Tx, ctx: ActionContext, raw: z.input<typeof directInput>) {
+  requireRole(await myRole(tx, ctx), 'inspector', 'manager');
+  const v = directInput.parse(raw);
+  const req = { source: 'direct' as const, sourceId: crypto.randomUUID(), sourceRef: v.reference || 'Direct', title: v.title, party: v.party || null, details: v.notes ? [{ label: 'Notes', value: v.notes }] : [], items: v.items, checklist: v.checklist, documents: [] };
+  try {
+    // In a savepoint, so a database that has not had migration 0031 yet gives a clear message.
+    const row = await tx.transaction((sp) => requestInspection(sp, ctx, req));
+    return { id: row.id, number: row.number };
+  } catch (err) {
+    if (/qc_inspections_source_check/.test(String(err) + String((err as { cause?: unknown })?.cause ?? ''))) {
+      throw new Error('Direct inspections switch on after the latest database update. Ask the person who runs Orbit for your company.');
+    }
+    throw err;
+  }
+}
+
+/** Kinds of inspection this company can have: direct ones always, the rest when their portal is on. */
+export async function sourcesOn(tx: Tx, ctx: SessionContext): Promise<QcSource[]> {
+  const on = (await tx.select({ portal: companyPortals.portal }).from(companyPortals).where(and(eq(companyPortals.companyId, ctx.companyId), eq(companyPortals.enabled, true)))).map((r) => r.portal);
+  return SOURCE_IDS.filter((s) => !SOURCE_NEEDS[s] || on.includes(SOURCE_NEEDS[s]!));
 }

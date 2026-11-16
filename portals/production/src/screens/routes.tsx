@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { query } from '@orbit/core/next';
+import { qualityOn } from '@orbit/core/quality';
 import { Chip, DataTable, EmptyState, KpiStrip, TopBar } from '@orbit/ui';
 import { fmtDate, fmtQty, roleLabel, type Priority } from '../config';
 import { TRADES } from '../trades';
@@ -60,7 +61,7 @@ const Dashboard: Screen = async () => {
             { value: String(k.open), label: 'Open work orders' },
             { value: String(k.floor), label: 'On the shop floor' },
             { value: String(k.late), label: 'Past due date', tone: k.late ? 'hivis' : undefined },
-            { value: String(k.rework), label: 'Back from QC for rework', tone: k.rework ? 'hivis' : undefined },
+            d.qcOn ? { value: String(k.rework), label: 'Back from QC for rework', tone: k.rework ? 'hivis' : undefined } : { value: String(k.ready), label: 'Ready to dispatch' },
           ]}
         />
         <div className="o-panel">
@@ -236,7 +237,7 @@ const Order: Screen = async ({ searchParams }) => {
   return <WorkOrderView d={d} />;
 };
 
-const BOARD = [
+const ALL_COLUMNS = [
   { id: 'pending_release', label: 'Waiting release' },
   { id: 'released', label: 'Released' },
   { id: 'in_progress', label: 'In production' },
@@ -245,7 +246,9 @@ const BOARD = [
 ] as const;
 
 const Board: Screen = async () => {
-  const rows = await query((tx, ctx) => workorders.listWorkOrders(tx, ctx, { filter: 'all' }));
+  const { rows, qcOn } = await query(async (tx, ctx) => ({ rows: await workorders.listWorkOrders(tx, ctx, { filter: 'all' }), qcOn: await qualityOn(tx, ctx.companyId) }));
+  // No Quality portal: finished work goes straight to "Ready to dispatch".
+  const BOARD = ALL_COLUMNS.filter((c) => qcOn || c.id !== 'final_qc' || rows.some((r) => r.status === 'final_qc'));
   return (
     <>
       <TopBar crumbs={['Production', 'Shop-floor board']} />

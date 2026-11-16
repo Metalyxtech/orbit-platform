@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { audit } from '@orbit/core';
 import { getDb } from '@orbit/core/next';
 import { withTenant } from '@orbit/db';
-import { markPaymentsSeen, saveBillingSettings } from '@/billing/admin';
+import { extendFreePeriod, markPaymentsSeen, saveBillingSettings } from '@/billing/admin';
 import { billingSettings } from '@/billing/state';
 import { requireSuperAdmin } from './guard';
 import { createCompany, readNewCompanyForm } from './new-company';
@@ -67,5 +67,25 @@ export async function markPaymentsSeenAction(companyIds: string[]) {
   const ids = z.array(z.uuid()).max(500).parse(companyIds);
   const db = await getDb();
   for (const id of ids) await withTenant(db, { companyId: id, userId }, (tx) => markPaymentsSeen(tx, id));
+  revalidatePath('/super-admin', 'layout');
+}
+
+/** Gives a company more free days (from today if its free period has already ended). */
+export async function extendFreePeriodAction(companyId: string, days: number | FormData) {
+  const userId = await requireSuperAdmin();
+  const id = z.uuid().parse(companyId);
+  const n = z.coerce.number().int().min(1).max(365).parse(days instanceof FormData ? days.get('days') : days);
+  const db = await getDb();
+  await withTenant(db, { companyId: id, userId }, async (tx) => {
+    const end = await extendFreePeriod(tx, id, n);
+    await audit(tx, {
+      companyId: id,
+      actorId: null,
+      action: 'billing.free_period',
+      entity: 'company_billing',
+      entityId: id,
+      data: { summary: [`Free period extended by ${n} days by Orbit, now until ${end.toISOString().slice(0, 10)}`] },
+    });
+  });
   revalidatePath('/super-admin', 'layout');
 }

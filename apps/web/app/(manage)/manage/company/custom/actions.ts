@@ -7,18 +7,18 @@ import { confirmFileUpload, createRequest, startFileUpload } from '@/custom/requ
 type In<F> = F extends (tx: never, ctx: never, input: infer I) => unknown ? I : never;
 
 export async function createCustomRequestAction(input: In<typeof createRequest>) {
-  return runAction((tx, ctx) => createRequest(tx, ctx, input));
+  return runAction((tx, ctx) => createRequest(tx, ctx, input), { always: true });
 }
 export async function startCustomUploadAction(input: In<typeof startFileUpload>) {
-  return runAction((tx, ctx) => startFileUpload(tx, ctx, input));
+  return runAction((tx, ctx) => startFileUpload(tx, ctx, input), { always: true });
 }
 export async function confirmCustomUploadAction(input: { fileId: string }) {
-  const res = await runAction((tx, ctx) => confirmFileUpload(tx, ctx, input));
+  const res = await runAction((tx, ctx) => confirmFileUpload(tx, ctx, input), { always: true });
   revalidatePath('/manage/company/custom');
   return res;
 }
 export async function decideQuoteAction(input: { id: string; approve: boolean }) {
-  const res = await runAction((tx, ctx) => decideQuote(tx, ctx, input));
+  const res = await runAction((tx, ctx) => decideQuote(tx, ctx, input), { always: true });
   revalidatePath('/manage/company/custom');
   return res;
 }

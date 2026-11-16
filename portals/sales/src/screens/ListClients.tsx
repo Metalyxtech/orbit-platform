@@ -17,6 +17,9 @@ import { useRun } from './useRun';
 
 // Client parts of the list pages: orders, invoices, customers, targets and settings.
 
+/** Work-order stages as Sales reads them (the order follows its work orders when Production is on). */
+const WO_LABEL: Record<string, string> = { draft: 'Being planned', pending_release: 'Waiting release', released: 'Released to the floor', in_progress: 'In production', final_qc: 'With QC', completed: 'Ready to dispatch', dispatched: 'Dispatched' };
+
 export function OrdersTable({ rows, currency, can }: { rows: OrderRow[]; currency: string; can: { confirm: boolean; advance: boolean; invoice: boolean } }) {
   const { busy, run } = useRun();
   return (
@@ -29,15 +32,28 @@ export function OrdersTable({ rows, currency, can }: { rows: OrderRow[]; currenc
         { key: 'd', header: 'Date', render: (r) => fmtDate(r.createdAt) },
         { key: 'v', header: 'Value (before GST)', num: true, render: (r) => fmtMoney(currency, r.value) },
         { key: 'a', header: 'Advance', num: true, render: (r) => `${r.advancePct}%` },
-        { key: 's', header: 'Status', render: (r) => <Chip tone={r.status === 'awaiting' ? 'hivis' : r.status === 'invoiced' ? 'ok' : 'steel'}>{r.statusLabel}</Chip> },
+        {
+          key: 's',
+          header: 'Status',
+          render: (r) => (
+            <>
+              <Chip tone={r.status === 'awaiting' ? 'hivis' : r.status === 'invoiced' ? 'ok' : 'steel'}>{r.statusLabel}</Chip>
+              {r.workOrders.map((w) => (
+                <div key={w.number} className="sub">
+                  {w.number} · {WO_LABEL[w.status] ?? w.status}
+                </div>
+              ))}
+            </>
+          ),
+        },
         {
           key: 'x',
           header: '',
           render: (r) => (
             <span className="o-row" style={{ gap: 6 }}>
               {can.confirm && r.status === 'awaiting' && <Button size="small" variant="ok" disabled={busy} onClick={() => run(() => confirmOrderAction({ id: r.id }), 'Order confirmed.')}>Confirm</Button>}
-              {can.advance && r.status === 'confirmed' && <Button size="small" disabled={busy} onClick={() => run(() => advanceOrderAction({ id: r.id }), 'In production.')}>Start production</Button>}
-              {can.advance && r.status === 'production' && <Button size="small" disabled={busy} onClick={() => run(() => advanceOrderAction({ id: r.id }), 'Dispatched.')}>Dispatched</Button>}
+              {can.advance && r.status === 'confirmed' && !r.workOrders.length && <Button size="small" disabled={busy} onClick={() => run(() => advanceOrderAction({ id: r.id }), 'In production.')}>Start production</Button>}
+              {can.advance && r.status === 'production' && !r.workOrders.length && <Button size="small" disabled={busy} onClick={() => run(() => advanceOrderAction({ id: r.id }), 'Dispatched.')}>Dispatched</Button>}
               {can.invoice && ['confirmed', 'production', 'dispatched'].includes(r.status) && <Button size="small" variant="primary" disabled={busy} onClick={() => run(() => raiseInvoiceAction({ id: r.id }), 'Invoice raised.')}>Raise invoice</Button>}
             </span>
           ),

@@ -1,5 +1,6 @@
 import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 import type { SessionContext } from '@orbit/core';
+import { qualityOn } from '@orbit/core/quality';
 import { prodEvents, prodReports, prodWorkOrders, type Tx } from '@orbit/db';
 import { MR_FLOW, MR_STATUS, WO_FLOW, WO_STATUS } from '../config';
 import { openMrCounts } from './mr';
@@ -44,7 +45,10 @@ export async function dashboard(tx: Tx, ctx: SessionContext) {
   const days = Array.from({ length: 14 }, (_, i) => new Date(Date.now() - (13 - i) * 86_400_000).toISOString().slice(0, 10));
   const mrs = await tx.transaction((sp) => openMrCounts(sp, ctx)).catch((): { status: keyof typeof MR_STATUS; workOrderId: string }[] => []);
   const mrOf = (id: string) => mrs.filter((m) => m.workOrderId === id);
+  const qcOn = await qualityOn(tx, ctx.companyId);
   return {
+    /** Without the Quality portal there is no "With QC" stage: finished work is ready to dispatch. */
+    qcOn,
     me,
     kpi: {
       open: open.length,
@@ -56,7 +60,7 @@ export async function dashboard(tx: Tx, ctx: SessionContext) {
       hoursToday: todayRep[0]?.hours ?? 0,
       reportsToday: todayRep[0]?.lines ?? 0,
     },
-    pipeline: WO_FLOW.filter((s) => s !== 'dispatched').map((s) => ({ id: s, label: WO_STATUS[s].label, count: s === 'completed' ? ready.length : open.filter((w) => w.status === s).length })),
+    pipeline: WO_FLOW.filter((s) => s !== 'dispatched' && (qcOn || s !== 'final_qc' || open.some((w) => w.status === 'final_qc'))).map((s) => ({ id: s, label: WO_STATUS[s].label, count: s === 'completed' ? ready.length : open.filter((w) => w.status === s).length })),
     attention: open.filter((w) => w.late || w.rework || w.priority === 'urgent').slice(0, 10),
     hoursByTrade: week.map((w) => ({ trade: tradeOf(w.trade).name, hours: w.hours })).sort((a, b) => b.hours - a.hours),
     hoursByDay: days.map((d) => ({ day: d, hours: perDay.find((p) => p.day === d)?.hours ?? 0 })),

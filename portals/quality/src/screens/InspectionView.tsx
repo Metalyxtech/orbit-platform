@@ -42,7 +42,7 @@ export function InspectionView({ d }: { d: QcDetail }) {
         <ol className="p-track" aria-label="Stages">
           <li className={i.status === 'pending' ? 'now' : 'done'}>QC engineer inspects</li>
           <li className={i.status === 'submitted' ? 'now' : i.status === 'approved' ? 'done' : ''}>QC manager approves</li>
-          <li className={i.status === 'approved' ? 'done' : ''}>Final report to {SOURCE_PORTAL[i.source]}</li>
+          <li className={i.status === 'approved' ? 'done' : ''}>{i.source === 'direct' ? 'Final report' : `Final report to ${SOURCE_PORTAL[i.source]}`}</li>
         </ol>
 
         {i.status === 'pending' && i.returnNote && (
@@ -90,7 +90,7 @@ export function InspectionView({ d }: { d: QcDetail }) {
               <h2>Documents and drawings</h2>
               {i.documents.length === 0 ? (
                 <p className="faint" style={{ margin: 0, fontSize: 12 }}>
-                  No files were attached by {SOURCE_PORTAL[i.source]} yet.
+                  {i.source === 'direct' ? 'No files were attached.' : `No files were attached by ${SOURCE_PORTAL[i.source]} yet.`}
                 </p>
               ) : (
                 <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -149,7 +149,7 @@ function NextStep({ d }: { d: QcDetail }) {
   const text: Record<string, string> = {
     pending: 'Waiting for the QC engineer to inspect.',
     submitted: 'Inspected. Waiting for the QC manager’s final approval.',
-    approved: `Final. ${SOURCE_PORTAL[i.source]} has the result.`,
+    approved: i.source === 'direct' ? 'Final. The report is ready to print.' : `Final. ${SOURCE_PORTAL[i.source]} has the result.`,
     cancelled: 'Cancelled.',
   };
   return (
@@ -324,7 +324,7 @@ function ApprovePanel({ d }: { d: QcDetail }) {
       <h2>Final approval</h2>
       <p className="muted" style={{ fontSize: 12, margin: '-6px 0 10px' }}>
         {i.inspector} inspected this: <strong>{i.result === 'pass' ? 'PASS' : 'FAIL'}</strong>. Approving sends the result to {SOURCE_PORTAL[i.source]}
-        {i.result === 'pass' ? (i.source === 'production' ? ' and the work is ready to dispatch.' : ' and the material is accepted into stock.') : ' for the non-conformance to be corrected.'}
+        {i.source === 'direct' ? '.' : i.result === 'pass' ? (i.source === 'production' ? ' and the work is ready to dispatch.' : ' and the material is accepted into stock.') : ' for the non-conformance to be corrected.'}
       </p>
       <label className="o-field">
         Note (required to send back)

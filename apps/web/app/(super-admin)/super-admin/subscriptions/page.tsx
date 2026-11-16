@@ -3,7 +3,7 @@ import { KpiStrip } from '@orbit/ui';
 import { eventCurrency } from '@/billing/admin';
 import { cycleOf, money } from '@/billing/plans';
 import { customCycleLabel } from '@/custom/plan';
-import { markPaymentsSeenAction, setPlansShownAction } from '../billing-actions';
+import { markPaymentsSeenAction, setPlansShownAction, extendFreePeriodAction } from '../billing-actions';
 import { loadSubscriptions } from '../billing-data';
 import { EVENT_LABEL, STATUS_LABEL } from '../billing-labels';
 import { fmtDate, requireSuperAdminPage } from '../data';
@@ -90,6 +90,13 @@ export default async function Subscriptions() {
                       <td>
                         <span className={`o-chip ${st.tone}`}>{st.label}</span>
                         {r.state.status === 'trial' && <div className="faint" style={{ fontSize: 11 }}>{r.state.trialDaysLeft} days left</div>}
+                        {(r.state.status === 'trial' || r.state.status === 'trial_ended' || r.state.status === 'pending_payment') && (
+                          <form action={extendFreePeriodAction.bind(null, r.company.id, 7)} style={{ marginTop: 4 }}>
+                            <button className="o-btn small" type="submit" title="Give 7 more free days">
+                              + 7 free days
+                            </button>
+                          </form>
+                        )}
                       </td>
                       <td>
                         {r.state.planName ?? '-'}

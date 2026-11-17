@@ -1,7 +1,17 @@
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { audit, settingsValidator, upsertWeeklyReminder, type ActionContext, type SessionContext } from '@orbit/core';
 import {
+  activateRequestedPortals,
+  audit,
+  readMemberPortals,
+  setMemberPortal,
+  settingsValidator,
+  upsertWeeklyReminder,
+  type ActionContext,
+  type SessionContext,
+} from '@orbit/core';
+import {
+  companyPortals,
   correctionRequests,
   costCodes,
   memberships,
@@ -10,10 +20,13 @@ import {
   timesheets,
   tsSettings,
   users,
+  workflowDefinitionColumns,
+  workflowDefinitions,
   type Tx,
 } from '@orbit/db';
 import { addDays, weekNumber, weekStartFor } from '../calc';
 import { timesheetManifest } from '../manifest';
+import type { WorkflowDefinition } from '@orbit/core/workflow';
 import { assertRole, boundWorkflow, loadSettings, membersById } from './shared';
 
 // ---------- Timesheet settings (form generated from manifest.settingsSchema) ----------
@@ -23,9 +36,48 @@ export async function getSettings(tx: Tx, ctx: SessionContext) {
   const [settings, wf] = await Promise.all([loadSettings(tx, ctx.companyId), boundWorkflow(tx, ctx.companyId)]);
   return {
     values: settings,
-    workflow: { name: wf.name, version: wf.version, description: wf.description },
+    workflow: { id: wf.id, name: wf.name, version: wf.version, description: wf.description },
     timezone: ctx.timezone,
   };
+}
+
+// ---------- Approval workflow (chosen from the Orbit library) ----------
+
+/** Latest version of every Timesheet workflow in the library. */
+export async function listWorkflows(tx: Tx) {
+  const rows = await tx
+    .select({ id: workflowDefinitions.id, key: workflowDefinitions.key, version: workflowDefinitions.version, name: workflowDefinitions.name, description: workflowDefinitions.description, definition: workflowDefinitions.definition })
+    .from(workflowDefinitions)
+    .where(sql`${workflowDefinitions.key} like 'timesheet.%'`)
+    .orderBy(asc(workflowDefinitions.key), desc(workflowDefinitions.version));
+  const latest = rows.filter((r, i) => i === 0 || rows[i - 1].key !== r.key);
+  return latest.map(({ definition, ...r }) => ({
+    ...r,
+    custom: r.key.startsWith('timesheet.custom.'),
+    steps: (definition as { steps: { name: string; reason?: string }[] }).steps.map((st) => (st.reason ? `${st.name} (${st.reason.toLowerCase()})` : st.name)),
+  }));
+}
+
+/** Binds a library workflow to this company's Timesheet portal. Timesheets already in approval keep their route. */
+export async function setWorkflow(tx: Tx, ctx: ActionContext, input: { workflowDefinitionId: string }) {
+  assertRole(ctx, 'company_admin');
+  const id = z.uuid().parse(input.workflowDefinitionId);
+  const [def] = await tx.select(workflowDefinitionColumns).from(workflowDefinitions).where(eq(workflowDefinitions.id, id));
+  if (!def || !def.key.startsWith('timesheet.')) throw new Error('Choose a Timesheet workflow');
+  await tx
+    .insert(companyPortals)
+    .values({ companyId: ctx.companyId, portal: timesheetManifest.id, enabled: true, workflowDefinitionId: id })
+    .onConflictDoUpdate({ target: [companyPortals.companyId, companyPortals.portal], set: { workflowDefinitionId: id } });
+  await audit(tx, {
+    companyId: ctx.companyId,
+    actorId: ctx.membershipId,
+    action: 'workflow.bind',
+    entity: 'company_portals',
+    entityId: ctx.companyId,
+    data: { key: def.key, version: def.version },
+    requestId: ctx.requestId,
+  });
+  return { ok: true as const };
 }
 
 const validator = settingsValidator(timesheetManifest.settingsSchema);
@@ -62,16 +114,248 @@ export async function listProjects(tx: Tx, ctx: SessionContext) {
     .select({ id: projects.id, code: projects.code, name: projects.name, status: projects.status, pmId: projects.pmId })
     .from(projects)
     .orderBy(asc(projects.code));
-  const counts = await tx
-    .select({ projectId: costCodes.projectId, n: sql<number>`count(*)::int` })
+  const codes = await tx
+    .select({ id: costCodes.id, projectId: costCodes.projectId, code: costCodes.code, name: costCodes.name, active: costCodes.active })
     .from(costCodes)
-    .groupBy(costCodes.projectId);
+    .orderBy(asc(costCodes.code));
   const pms = await membersById(tx, rows.map((r) => r.pmId).filter((x): x is string => !!x));
-  return rows.map((r) => ({
-    ...r,
-    costCodes: counts.find((c) => c.projectId === r.id)?.n ?? 0,
-    pm: r.pmId ? (pms.get(r.pmId)?.name ?? '') : 'Company admin',
-  }));
+  return rows.map((r) => {
+    const list = codes.filter((c) => c.projectId === r.id);
+    return {
+      ...r,
+      codes: list,
+      costCodes: list.filter((c) => c.active).length,
+      pm: r.pmId ? (pms.get(r.pmId)?.name ?? '') : 'Company admin',
+    };
+  });
+}
+
+/** People who can manage a project: active project managers and company admins. */
+export async function listManagers(tx: Tx, ctx: SessionContext) {
+  assertRole(ctx, 'company_admin');
+  return tx
+    .select({ membershipId: memberships.id, name: users.name, role: memberships.role })
+    .from(memberships)
+    .innerJoin(users, eq(users.id, memberships.userId))
+    .where(
+      and(
+        eq(memberships.companyId, ctx.companyId),
+        eq(memberships.status, 'active'),
+        inArray(memberships.role, ['project_manager', 'company_admin']),
+      ),
+    )
+    .orderBy(asc(users.name));
+}
+
+const projectInput = z.object({
+  id: z.uuid().optional(),
+  code: z.string().trim().min(1, 'Enter a project code').max(40),
+  name: z.string().trim().min(2, 'Enter a project name').max(160),
+  pmId: z.uuid().nullable().optional(),
+  status: z.enum(['active', 'closed']).optional(),
+});
+
+/** Adds or edits a project. Codes are unique within the company. */
+export async function saveProject(tx: Tx, ctx: ActionContext, raw: z.input<typeof projectInput>) {
+  assertRole(ctx, 'company_admin');
+  const input = projectInput.parse(raw);
+  const [clash] = await tx
+    .select({ id: projects.id })
+    .from(projects)
+    .where(and(eq(projects.companyId, ctx.companyId), sql`lower(${projects.code}) = lower(${input.code})`));
+  if (clash && clash.id !== input.id) throw new Error(`Project code ${input.code} is already used`);
+  const values = { code: input.code, name: input.name, pmId: input.pmId ?? null, ...(input.status ? { status: input.status } : {}) };
+  const [row] = input.id
+    ? await tx
+        .update(projects)
+        .set(values)
+        .where(and(eq(projects.id, input.id), eq(projects.companyId, ctx.companyId)))
+        .returning({ id: projects.id })
+    : await tx.insert(projects).values({ ...values, companyId: ctx.companyId }).returning({ id: projects.id });
+  if (!row) throw new Error('Project not found');
+  await audit(tx, {
+    companyId: ctx.companyId,
+    actorId: ctx.membershipId,
+    action: input.id ? 'project.update' : 'project.create',
+    entity: 'projects',
+    entityId: row.id,
+    data: values,
+    requestId: ctx.requestId,
+  });
+  return { id: row.id };
+}
+
+const costCodeInput = z.object({
+  id: z.uuid().optional(),
+  projectId: z.uuid(),
+  code: z.string().trim().min(1, 'Enter a cost code').max(40),
+  name: z.string().trim().min(2, 'Enter a cost code name').max(160),
+  active: z.boolean().optional(),
+});
+
+/** Adds or edits a cost code under a project. Turning one off hides it from new entries only. */
+export async function saveCostCode(tx: Tx, ctx: ActionContext, raw: z.input<typeof costCodeInput>) {
+  assertRole(ctx, 'company_admin');
+  const input = costCodeInput.parse(raw);
+  const [clash] = await tx
+    .select({ id: costCodes.id })
+    .from(costCodes)
+    .where(and(eq(costCodes.projectId, input.projectId), sql`lower(${costCodes.code}) = lower(${input.code})`));
+  if (clash && clash.id !== input.id) throw new Error(`Cost code ${input.code} already exists on this project`);
+  const values = { code: input.code, name: input.name, ...(input.active === undefined ? {} : { active: input.active }) };
+  const [row] = input.id
+    ? await tx
+        .update(costCodes)
+        .set(values)
+        .where(and(eq(costCodes.id, input.id), eq(costCodes.companyId, ctx.companyId)))
+        .returning({ id: costCodes.id })
+    : await tx
+        .insert(costCodes)
+        .values({ ...values, companyId: ctx.companyId, projectId: input.projectId })
+        .returning({ id: costCodes.id });
+  if (!row) throw new Error('Cost code not found');
+  await audit(tx, {
+    companyId: ctx.companyId,
+    actorId: ctx.membershipId,
+    action: input.id ? 'cost_code.update' : 'cost_code.create',
+    entity: 'cost_codes',
+    entityId: row.id,
+    data: values,
+    requestId: ctx.requestId,
+  });
+  return { id: row.id };
+}
+
+const customKey = (companyId: string) => `timesheet.custom.${companyId}`;
+
+const cellInput = z
+  .discriminatedUnion('type', [
+    z.object({ type: z.literal('supervisor') }),
+    z.object({ type: z.literal('project_managers') }),
+    z.object({ type: z.literal('role'), role: z.enum(['supervisor', 'project_manager', 'company_admin', 'management']) }),
+    z.object({ type: z.literal('person'), membershipId: z.uuid() }),
+  ])
+  .nullable(); // null = this level does not apply to the row
+const matrixInput = z.object({
+  name: z.string().trim().min(2, 'Give the workflow a name').max(80),
+  levels: z
+    .array(
+      z.object({
+        name: z.string().trim().min(2, 'Give every approval level a name').max(60),
+        overtimeAbove: z.number().min(0).max(100).nullable().optional(),
+        slaHours: z.number().int().min(1).max(168),
+      }),
+    )
+    .min(1, 'Add at least one approval level')
+    .max(6, 'Six approval levels at most'),
+  /** First row is everyone else ('*'); then one row per employee with their own approvers. */
+  rows: z
+    .array(z.object({ membershipId: z.union([z.literal('*'), z.uuid()]), cells: z.array(cellInput) }))
+    .min(1)
+    .max(500),
+});
+export type CustomWorkflowInput = z.input<typeof matrixInput>;
+
+/**
+ * Saves the company's approval matrix as a new workflow version and puts it in use. Each level
+ * becomes one step whose approver depends on who submitted; an empty cell skips that level for
+ * that person. Earlier versions stay, so timesheets in approval keep their route.
+ */
+export async function saveCustomWorkflow(tx: Tx, ctx: ActionContext, raw: CustomWorkflowInput) {
+  assertRole(ctx, 'company_admin');
+  const input = matrixInput.parse(raw);
+  const ids = input.rows.map((r) => r.membershipId);
+  if (ids[0] !== '*') throw new Error('The first row must be "Everyone else"');
+  if (new Set(ids).size !== ids.length) throw new Error('Each employee can have only one row');
+  if (input.rows.some((r) => r.cells.length !== input.levels.length)) throw new Error('Every row needs a cell for each level');
+
+  const named = new Set<string>(ids.filter((i) => i !== '*'));
+  for (const r of input.rows) for (const c of r.cells) if (c?.type === 'person') named.add(c.membershipId);
+  if (named.size) {
+    const found = await tx
+      .select({ id: memberships.id })
+      .from(memberships)
+      .where(and(eq(memberships.companyId, ctx.companyId), eq(memberships.status, 'active'), inArray(memberships.id, [...named])));
+    if (found.length !== named.size) throw new Error('Someone in the matrix is no longer active in this company');
+  }
+
+  const steps = input.levels.map((lv, j) => {
+    const cells: Record<string, NonNullable<z.infer<typeof cellInput>>> = {};
+    const skipped: string[] = [];
+    const applies: string[] = [];
+    for (const r of input.rows) {
+      const c = r.cells[j];
+      if (c) cells[r.membershipId] = c;
+      if (r.membershipId === '*') continue;
+      (c ? applies : skipped).push(r.membershipId);
+    }
+    const everyone = !!cells['*'];
+    if (!everyone && applies.length === 0) throw new Error(`Nobody is approved at level "${lv.name}". Fill a cell or remove the level.`);
+    const who = everyone
+      ? skipped.length
+        ? { submitter: 'notIn' as const, ids: skipped }
+        : null
+      : { submitter: 'in' as const, ids: applies };
+    const ot = lv.overtimeAbove != null ? { field: 'overtimeHours', op: 'gt' as const, value: lv.overtimeAbove } : null;
+    const conds = [who, ot].filter((c) => c !== null);
+    return {
+      id: `level${j + 1}`,
+      name: lv.name,
+      approver: { type: 'matrix' as const, cells },
+      ...(conds.length ? { when: conds.length === 1 ? conds[0] : { all: conds } } : {}),
+      ...(ot ? { reason: `Because overtime > ${lv.overtimeAbove!.toFixed(1)} h` } : {}),
+      slaHours: lv.slaHours,
+      remindAfterHours: Math.max(1, Math.round(lv.slaHours * 0.66)),
+    };
+  });
+
+  const key = customKey(ctx.companyId);
+  const [{ v }] = await tx
+    .select({ v: sql<number>`coalesce(max(${workflowDefinitions.version}), 0)::int` })
+    .from(workflowDefinitions)
+    .where(eq(workflowDefinitions.key, key));
+  const [def] = await tx
+    .insert(workflowDefinitions)
+    .values({
+      key,
+      version: v + 1,
+      name: input.name,
+      description: `Approval matrix built by your company admin: ${input.levels.length} level${input.levels.length > 1 ? 's' : ''}, ${input.rows.length - 1} employee-specific row${input.rows.length === 2 ? '' : 's'}.`,
+      definition: { steps },
+      companyId: ctx.companyId,
+    })
+    .returning({ id: workflowDefinitions.id });
+  await setWorkflow(tx, ctx, { workflowDefinitionId: def.id });
+  return { id: def.id };
+}
+
+/** Approval workflow page: the chosen flow, the choices, and who approves whom. */
+export async function workflowOverview(tx: Tx, ctx: SessionContext) {
+  assertRole(ctx, 'company_admin');
+  const [wf, options, people, projs] = await Promise.all([
+    boundWorkflow(tx, ctx.companyId),
+    listWorkflows(tx),
+    listUsers(tx, ctx),
+    listProjects(tx, ctx),
+  ]);
+  const [custom] = await tx
+    .select({ name: workflowDefinitions.name, definition: workflowDefinitions.definition })
+    .from(workflowDefinitions)
+    .where(eq(workflowDefinitions.key, customKey(ctx.companyId)))
+    .orderBy(desc(workflowDefinitions.version))
+    .limit(1);
+  return {
+    current: { id: wf.id, name: wf.name, definition: wf.definition },
+    custom: custom ? { name: custom.name, definition: custom.definition as WorkflowDefinition } : null,
+    members: people
+      .filter((p) => p.status === 'active')
+      .map((p) => ({ membershipId: p.membershipId, name: p.name, role: p.role, title: p.title })),
+    options,
+    people: people
+      .filter((p) => p.status === 'active')
+      .map((p) => ({ name: p.name, role: p.role, supervisor: p.supervisor || null })),
+    projects: projs.filter((p) => p.status === 'active').map((p) => ({ code: p.code, name: p.name, pm: p.pmId ? p.pm : null })),
+  };
 }
 
 export interface CsvPreviewRow {
@@ -196,15 +480,66 @@ export async function listUsers(tx: Tx, ctx: SessionContext) {
     })
     .from(memberships)
     .innerJoin(users, eq(users.id, memberships.userId))
-    .where(eq(memberships.companyId, ctx.companyId))
+    // Removed people stay in the table for history only (text compare works before migration 0007).
+    .where(and(eq(memberships.companyId, ctx.companyId), sql`${memberships.status}::text <> 'removed'`))
     .orderBy(asc(memberships.status), asc(users.name));
   const names = new Map(rows.map((r) => [r.membershipId, r.name]));
   return rows.map((r) => ({ ...r, supervisor: r.supervisorId ? (names.get(r.supervisorId) ?? '') : '' }));
 }
 
+/** Portals of the company (on or requested) and each person's portal rows, for the Users page. */
+export async function portalAccess(tx: Tx, ctx: SessionContext) {
+  assertRole(ctx, 'company_admin');
+  const company = await tx
+    .select({ portal: companyPortals.portal, enabled: companyPortals.enabled })
+    .from(companyPortals)
+    .where(eq(companyPortals.companyId, ctx.companyId));
+  const ids = (await tx.select({ id: memberships.id }).from(memberships).where(eq(memberships.companyId, ctx.companyId))).map((m) => m.id);
+  return { company, rows: await readMemberPortals(tx, ids) };
+}
+
+const portalChange = z.object({
+  membershipId: z.uuid(),
+  portal: z.string().min(1).max(40),
+  action: z.enum(['request', 'remove', 'cancel']),
+});
+
+/**
+ * Company admin changes a person's portals, effective at once. Orbit approves portals per company
+ * (Company portals); inside them the company admin decides who uses what.
+ */
+export async function changeMemberPortal(tx: Tx, ctx: ActionContext, raw: z.input<typeof portalChange>) {
+  assertRole(ctx, 'company_admin');
+  const input = portalChange.parse(raw);
+  const [m] = await tx
+    .select({ id: memberships.id, role: memberships.role })
+    .from(memberships)
+    .where(and(eq(memberships.id, input.membershipId), eq(memberships.companyId, ctx.companyId)));
+  if (!m) throw new Error('Person not found');
+  if (m.role === 'company_admin' || m.role === 'management') throw new Error('Admins and management use every portal the company has');
+  const [cp] = await tx
+    .select({ enabled: companyPortals.enabled })
+    .from(companyPortals)
+    .where(and(eq(companyPortals.companyId, ctx.companyId), eq(companyPortals.portal, input.portal)));
+  if (!cp?.enabled && input.action === 'request') throw new Error('Your company does not have that portal yet. Request it in Company portals first.');
+  // The company has this portal (Orbit approved it), so the admin's choice applies at once.
+  const status = input.action === 'request' ? ('active' as const) : ('off' as const);
+  await setMemberPortal(tx, ctx.companyId, m.id, input.portal, status);
+  await audit(tx, {
+    companyId: ctx.companyId,
+    actorId: ctx.membershipId,
+    action: `member_portal.${input.action}`,
+    entity: 'memberships',
+    entityId: m.id,
+    data: { portal: input.portal },
+    requestId: ctx.requestId,
+  });
+  return { status };
+}
+
 const memberUpdate = z.object({
   membershipId: z.uuid(),
-  role: z.enum(['employee', 'supervisor', 'project_manager', 'company_admin']).optional(),
+  role: z.enum(['employee', 'supervisor', 'project_manager', 'company_admin', 'management']).optional(),
   status: z.enum(['pending', 'active', 'disabled']).optional(),
   title: z.string().max(100).nullable().optional(),
   supervisorId: z.uuid().nullable().optional(),
@@ -217,7 +552,7 @@ export async function updateMember(tx: Tx, ctx: ActionContext, raw: z.input<type
 
   const inCompany = eq(memberships.companyId, ctx.companyId);
   const [target] = await tx.select().from(memberships).where(and(eq(memberships.id, membershipId), inCompany)).for('update');
-  if (!target) throw new Error('User not found');
+  if (!target || target.status === 'removed') throw new Error('User not found');
 
   if (membershipId === ctx.membershipId && set.status && set.status !== 'active') {
     throw new Error('You cannot disable your own account. Ask another company admin.');
@@ -230,7 +565,7 @@ export async function updateMember(tx: Tx, ctx: ActionContext, raw: z.input<type
       .where(and(eq(memberships.id, set.supervisorId), inCompany));
     if (!sup || sup.status !== 'active') throw new Error('Choose an active user as supervisor');
   }
-  // Never leave the company without an active admin (nobody could manage users or approve fallbacks).
+  // Never leave the company without an active admin (nobody could manage people or settings).
   const losesAdmin =
     target.role === 'company_admin' &&
     target.status === 'active' &&
@@ -245,13 +580,60 @@ export async function updateMember(tx: Tx, ctx: ActionContext, raw: z.input<type
     }
   }
   await tx.update(memberships).set(set).where(and(eq(memberships.id, membershipId), eq(memberships.companyId, ctx.companyId)));
+  if (set.status === 'active') await activateRequestedPortals(tx, [membershipId]);
   await audit(tx, {
     companyId: ctx.companyId,
     actorId: ctx.membershipId,
     action: 'membership.update',
     entity: 'memberships',
     entityId: membershipId,
-    data: { before: { role: target.role, status: target.status, title: target.title, supervisorId: target.supervisorId }, after: set },
+    data: set,
+    requestId: ctx.requestId,
+  });
+  return { ok: true as const };
+}
+
+const memberAdd = z.object({
+  email: z.string().trim().toLowerCase().pipe(z.email('Enter a valid email')),
+  name: z.string().trim().min(2).max(120),
+  role: z.enum(['employee', 'supervisor', 'project_manager', 'company_admin', 'management']),
+  title: z.string().trim().max(100).optional(),
+  supervisorId: z.uuid().nullable().optional(),
+});
+
+/** Adds a person to this company. They sign in with that email and land straight in the company. */
+export async function addMember(tx: Tx, ctx: ActionContext, raw: z.input<typeof memberAdd>) {
+  assertRole(ctx, 'company_admin');
+  const input = memberAdd.parse(raw);
+  // users is identity (no RLS). A placeholder WorkOS id is replaced at first sign-in, matched by email.
+  await tx
+    .insert(users)
+    .values({ workosUserId: `invited|${input.email}`, email: input.email, name: input.name })
+    .onConflictDoNothing({ target: users.email });
+  const [user] = await tx.select().from(users).where(eq(users.email, input.email));
+  const [existing] = await tx
+    .select({ id: memberships.id })
+    .from(memberships)
+    .where(and(eq(memberships.companyId, ctx.companyId), eq(memberships.userId, user.id)));
+  if (existing) throw new Error(`${input.email} is already in this company`);
+  const [m] = await tx
+    .insert(memberships)
+    .values({
+      companyId: ctx.companyId,
+      userId: user.id,
+      role: input.role,
+      title: input.title || null,
+      supervisorId: input.supervisorId ?? null,
+      status: 'active',
+    })
+    .returning({ id: memberships.id });
+  await audit(tx, {
+    companyId: ctx.companyId,
+    actorId: ctx.membershipId,
+    action: 'membership.add',
+    entity: 'memberships',
+    entityId: m.id,
+    data: { email: input.email, role: input.role },
     requestId: ctx.requestId,
   });
   return { ok: true as const };
@@ -323,7 +705,7 @@ export async function decideCorrection(tx: Tx, ctx: ActionContext, input: { id: 
 // ---------- Team overview ----------
 
 export async function teamOverview(tx: Tx, ctx: SessionContext, input: { weekStart?: string }) {
-  assertRole(ctx, 'supervisor', 'project_manager');
+  assertRole(ctx, 'supervisor', 'project_manager', 'management');
   const settings = await loadSettings(tx, ctx.companyId);
   const today = new Date().toLocaleDateString('en-CA', { timeZone: ctx.timezone });
   const weekStart = weekStartFor(input.weekStart ?? addDays(today, -7), settings.weekStart);
@@ -335,7 +717,7 @@ export async function teamOverview(tx: Tx, ctx: SessionContext, input: { weekSta
       and(
         eq(memberships.companyId, ctx.companyId),
         eq(memberships.status, 'active'),
-        ctx.role === 'company_admin' ? undefined : eq(memberships.supervisorId, ctx.membershipId),
+        ctx.role === 'company_admin' || ctx.role === 'management' ? undefined : eq(memberships.supervisorId, ctx.membershipId),
       ),
     )
     .orderBy(asc(users.name));

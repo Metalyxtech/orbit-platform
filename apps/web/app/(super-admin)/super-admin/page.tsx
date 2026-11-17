@@ -1,105 +1,99 @@
-import { asc } from 'drizzle-orm';
-import { redirect } from 'next/navigation';
-import { getDb, getSession } from '@orbit/core/next';
-import { companies } from '@orbit/db';
-import { StatusChip } from '@orbit/ui';
-import { approveCompanyAction, resetSandboxAction, setStageAction } from './actions';
-import { ResetButton } from './ResetButton';
+import Link from 'next/link';
+import { KpiStrip, StatusChip } from '@orbit/ui';
+import { approveCompanyAction } from './actions';
+import { companyStatusChip, fmtDate, loadCompanies, loadPeople, loadPortals, requireSuperAdminPage } from './data';
 
-export const dynamic = 'force-dynamic';
-
-/** Super Admin portal (first slice). */
-export default async function SuperAdmin() {
-  const s = await getSession();
-  const isSuper = (s.state === 'ok' && s.ctx.isSuperAdmin) || ((s.state === 'no_company' || s.state === 'pending') && s.isSuperAdmin);
-  if (!isSuper) redirect('/');
-  const rows = await (await getDb()).select().from(companies).orderBy(asc(companies.status), asc(companies.name));
-
-  const waiting = rows.filter((c) => c.status === 'pending').length;
+/** Super Admin > Companies: one compact row per company; details live on the company page. */
+export default async function Companies() {
+  const me = await requireSuperAdminPage();
+  const rows = await loadCompanies();
+  const people = await Promise.all(rows.map((c) => loadPeople(c.id, me.userId)));
+  const portals = await Promise.all(rows.map((c) => loadPortals(c.id, me.userId)));
+  const order = { pending: 0, active: 1, suspended: 2 } as const;
+  const list = rows
+    .map((c, i) => ({ c, people: people[i], portals: portals[i] }))
+    .sort((a, b) => order[a.c.status] - order[b.c.status] || a.c.name.localeCompare(b.c.name));
+  const count = (s: string) => rows.filter((c) => c.status === s).length;
 
   return (
-    <div className="o-main" style={{ minHeight: '100vh' }}>
-      <header className="o-top" style={{ background: 'var(--graphite)', borderColor: 'var(--graphite)', color: '#fff' }}>
-        <div className="o-brand" style={{ padding: 0, flex: 1 }}>
-          <div className="o-brand-mark" aria-hidden />
-          <div className="o-brand-name">Orbit</div>
-          <span className="o-chip hivis">Super Admin</span>
-        </div>
-        <a className="o-btn small ghost" style={{ color: '#cfd5da' }} href="/">
-          Back to portals
-        </a>
-        <form action="/auth/sign-out" method="post">
-          <button className="o-btn small ghost" style={{ color: '#cfd5da' }} type="submit">
-            Sign out
-          </button>
-        </form>
+    <>
+      <header className="o-top">
+        <strong style={{ flex: 1 }}>Companies</strong>
+        <Link className="o-btn small primary" href="/super-admin/companies/new">
+          Add company
+        </Link>
       </header>
-      <div className="o-page" style={{ margin: '0 auto' }}>
-        <div>
-          <h1>Companies</h1>
-          <p className="o-page-sub">
-            {rows.length} {rows.length === 1 ? 'company' : 'companies'}
-            {waiting ? `, ${waiting} waiting for approval` : ''}. Stage controls who receives real email: sandbox companies only reach verified test addresses.
-          </p>
-        </div>
-        <div className="o-panel flush o-scroll">
+      <div className="o-page">
+        <KpiStrip
+          items={[
+            { value: String(rows.length), label: 'Companies' },
+            { value: String(count('pending')), label: 'Waiting for approval', tone: count('pending') ? 'hivis' : undefined },
+            { value: String(count('suspended')), label: 'Blocked' },
+            { value: String(people.reduce((n, p) => n + p.length, 0)), label: 'People' },
+          ]}
+        />
+        <div className="o-panel flush">
+          <div className="o-scroll">
           <table className="o-table">
             <thead>
               <tr>
                 <th>Company</th>
                 <th>Status</th>
                 <th>Stage</th>
-                <th>Time zone</th>
-                <th aria-label="Actions" />
+                <th>Portals</th>
+                <th className="num">People</th>
+                <th className="num">Waiting to join</th>
+                <th>Registered</th>
+                <th />
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={5}>
-                    <div className="o-empty">No companies have registered yet.</div>
-                  </td>
-                </tr>
-              )}
-              {rows.map((c) => (
+              {list.map(({ c, people: p, portals: ps }) => (
                 <tr key={c.id}>
                   <td>
-                    <strong style={{ fontWeight: 500 }}>{c.name}</strong>
-                    <div className="sub">{c.emailDomains.join(', ')}</div>
+                    <Link href={`/super-admin/companies/${c.id}`}>
+                      <strong>{c.name}</strong>
+                    </Link>
+                    <div className="faint" style={{ fontSize: 11 }}>{c.emailDomains.join(', ')}</div>
                   </td>
                   <td>
-                    <StatusChip status={c.status} />
+                    <StatusChip status={companyStatusChip(c.status)} />
                   </td>
+                  <td style={{ textTransform: 'capitalize' }}>{c.stage}</td>
                   <td>
-                    <form className="o-seg" role="group" aria-label={`Stage for ${c.name}`}>
-                      {(['sandbox', 'pilot', 'live'] as const).map((st) => (
-                        <button key={st} aria-pressed={c.stage === st} formAction={setStageAction.bind(null, c.id, st)}>
-                          {st[0].toUpperCase() + st.slice(1)}
-                        </button>
+                    <span className="o-row" style={{ gap: 4, flexWrap: 'wrap' }}>
+                      {ps.filter((x) => x.state !== 'none').map((x) => (
+                        <span key={x.id} className={`o-chip ${x.state === 'on' ? 'ok' : 'warn'}`} title={x.state === 'on' ? 'On' : 'Requested, waiting for you'}>
+                          {x.name}
+                          {x.state === 'requested' ? ' (requested)' : ''}
+                        </span>
                       ))}
-                    </form>
+                      {ps.every((x) => x.state === 'none') && <span className="faint">None</span>}
+                    </span>
                   </td>
-                  <td className="muted">{c.timezone}</td>
+                  <td className="num">{p.filter((m) => m.status === 'active').length}</td>
+                  <td className="num">{p.filter((m) => m.status === 'pending').length || '-'}</td>
+                  <td>{fmtDate(c.createdAt)}</td>
                   <td>
-                    <div className="o-row" style={{ justifyContent: 'flex-end' }}>
+                    <form className="o-row" style={{ justifyContent: 'flex-end' }}>
                       {c.status === 'pending' && (
-                        <form>
-                          <button className="o-btn small ok" formAction={approveCompanyAction.bind(null, c.id)}>
-                            Approve
-                          </button>
-                        </form>
+                        <button className="o-btn small ok" formAction={approveCompanyAction.bind(null, c.id)}>
+                          Approve
+                        </button>
                       )}
-                      {c.stage === 'sandbox' && c.status === 'active' && (
-                        <ResetButton companyName={c.name} action={resetSandboxAction.bind(null, c.id)} />
-                      )}
-                    </div>
+                      <Link className="o-btn small" href={`/super-admin/companies/${c.id}`}>
+                        View
+                      </Link>
+                    </form>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
+          {list.length === 0 && <div className="o-empty">No companies yet.</div>}
         </div>
       </div>
-    </div>
+    </>
   );
 }

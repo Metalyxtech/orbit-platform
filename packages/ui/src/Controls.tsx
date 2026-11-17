@@ -92,7 +92,7 @@ export function EmptyState({ title, children }: { title: string; children?: Reac
   return (
     <div className="o-empty">
       <div style={{ fontWeight: 600, color: 'var(--ink)' }}>{title}</div>
-      {children && <div>{children}</div>}
+      {children}
     </div>
   );
 }
@@ -105,6 +105,8 @@ export function ConfirmDialog({
   variant = 'primary',
   onConfirm,
   onCancel,
+  confirmDisabled = false,
+  cancelLabel = 'Cancel',
 }: {
   open: boolean;
   title: string;
@@ -113,6 +115,9 @@ export function ConfirmDialog({
   variant?: 'primary' | 'ok' | 'danger';
   onConfirm: () => void;
   onCancel: () => void;
+  /** Keeps the confirm button disabled, e.g. until the user types a confirmation word. */
+  confirmDisabled?: boolean;
+  cancelLabel?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -124,10 +129,10 @@ export function ConfirmDialog({
   return (
     <dialog ref={ref} className="o-dialog" onCancel={onCancel}>
       <h2>{title}</h2>
-      <div className="muted" style={{ marginBottom: 20 }}>{children}</div>
+      <div style={{ marginBottom: 16 }}>{children}</div>
       <div className="o-row" style={{ justifyContent: 'flex-end' }}>
-        <Button onClick={onCancel}>Cancel</Button>
-        <Button variant={variant} onClick={onConfirm}>
+        <Button onClick={onCancel}>{cancelLabel}</Button>
+        <Button variant={variant} onClick={onConfirm} disabled={confirmDisabled}>
           {confirmLabel}
         </Button>
       </div>

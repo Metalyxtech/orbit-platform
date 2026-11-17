@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { ActionContext, SessionContext } from '@orbit/core';
-import { decideTask, WorkflowConflictError, type Decision } from '@orbit/core/workflow';
+import { decideTask, nextStepIndex, WorkflowConflictError, type Decision, type WorkflowContext } from '@orbit/core/workflow';
 import {
   costCodes,
   memberships,
@@ -120,9 +120,14 @@ export async function taskDetail(tx: Tx, ctx: SessionContext, input: { taskId: s
   const allTasks = await tx.select().from(workflowTasks).where(eq(workflowTasks.instanceId, instance.id));
   const people = await membersById(tx, allTasks.map((t) => t.assigneeId));
   const settings = await loadSettings(tx, ctx.companyId);
-  const steps = Math.max(...allTasks.map((t) => t.stepIndex)) + 1;
+  // Steps of this instance's own workflow version that apply to this timesheet.
+  const def = await loadDefinition(tx, instance.definitionId);
+  const wfCtx = instance.context as WorkflowContext;
+  const applies: number[] = [];
+  for (let i = nextStepIndex(def, wfCtx, 0); i !== -1; i = nextStepIndex(def, wfCtx, i + 1)) applies.push(i);
+  const position = Math.max(1, applies.indexOf(task.stepIndex) + 1);
+  const next = def.steps[applies[applies.indexOf(task.stepIndex) + 1]];
   const overDay = sheet.maxDayHours > settings.noteOverHours;
-  const willEscalate = task.stepIndex === 0 && (sheet.overtimeHours > 6 || sheet.maxDayHours > 12);
 
   return {
     taskId: task.id,
@@ -131,13 +136,13 @@ export async function taskDetail(tx: Tx, ctx: SessionContext, input: { taskId: s
     initials: initials(employee.name),
     week: weekNumber(sheet.weekStart),
     rangeLabel: weekRangeLabel(sheet.weekStart),
-    stepLabel: `Step ${task.stepIndex + 1} of ${Math.max(steps, willEscalate ? 2 : 1)}`,
+    stepLabel: `Step ${position} of ${Math.max(applies.length, position)}`,
     lines: lines.map((l) => ({ label: `${l.project ?? 'No project'}, ${l.costCode ?? ''} ${l.costName ?? ''}`.trim(), hours: l.hours })),
     total: sheet.totalHours,
     overtime: sheet.overtimeHours,
     note: sheet.note,
-    warning: willEscalate
-      ? `${overDay ? `A day has ${sheet.maxDayHours} h. ` : ''}After you approve, the week goes to the project managers because overtime is above 6.0 h.`
+    warning: next
+      ? `${overDay ? `A day has ${sheet.maxDayHours} h. ` : ''}After you approve, the week goes to ${next.name}${next.reason ? ` (${next.reason.toLowerCase()})` : ''}.`
       : null,
     route: allTasks
       .sort((a, b) => a.stepIndex - b.stepIndex)

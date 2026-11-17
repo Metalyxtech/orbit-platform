@@ -185,3 +185,19 @@ export const exports = pgTable('exports', {
   s3Key: text('s3_key'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Roles a company admin also covers for timesheet approvals (migration 0026). */
+export const tsAdminCovers = pgTable(
+  'ts_admin_covers',
+  {
+    companyId: uuid('company_id')
+      .notNull()
+      .references(() => companies.id),
+    membershipId: uuid('membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    roles: text('roles').array().notNull().default(sql`'{}'::text[]`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.companyId, t.membershipId] })],
+);

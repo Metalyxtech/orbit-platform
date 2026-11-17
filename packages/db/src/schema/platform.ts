@@ -20,8 +20,9 @@ export const memberRole = pgEnum('member_role', [
   'supervisor',
   'project_manager',
   'company_admin',
+  'management',
 ]);
-export const memberStatus = pgEnum('member_status', ['pending', 'active', 'disabled']);
+export const memberStatus = pgEnum('member_status', ['pending', 'active', 'disabled', 'removed']);
 export const workflowStatus = pgEnum('workflow_status', [
   'running',
   'approved',
@@ -91,7 +92,21 @@ export const companyPortals = pgTable(
   (t) => [primaryKey({ columns: [t.companyId, t.portal] })],
 );
 
-/** Global workflow library, versioned. */
+/** Portals a person uses in a company, each requested / active / off. No rows = every portal switched on for the company. */
+export const memberPortals = pgTable(
+  'member_portals',
+  {
+    companyId: uuid('company_id').notNull().references(() => companies.id),
+    membershipId: uuid('membership_id').notNull().references(() => memberships.id),
+    portal: text('portal').notNull(),
+    /** requested (asked for on joining), active, or off. */
+    status: text('status').$type<'requested' | 'active' | 'off'>().notNull().default('active'),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.membershipId, t.portal] })],
+);
+
+/** Workflow library (global) and company-built workflows, versioned. */
 export const workflowDefinitions = pgTable(
   'workflow_definitions',
   {
@@ -101,10 +116,22 @@ export const workflowDefinitions = pgTable(
     name: text('name').notNull(),
     description: text('description'),
     definition: jsonb('definition').notNull(),
+    /** Null for the Orbit library; set for a workflow a company built itself. */
+    companyId: uuid('company_id').references(() => companies.id),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex('workflow_definitions_key_version').on(t.key, t.version)],
 );
+
+/** Columns code reads from workflow_definitions (company_id only matters to RLS). */
+export const workflowDefinitionColumns = {
+  id: workflowDefinitions.id,
+  key: workflowDefinitions.key,
+  version: workflowDefinitions.version,
+  name: workflowDefinitions.name,
+  description: workflowDefinitions.description,
+  definition: workflowDefinitions.definition,
+};
 
 export const workflowInstances = pgTable(
   'workflow_instances',

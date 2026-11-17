@@ -8,6 +8,7 @@ export function StackedBarChart({
   unit = '',
   max = 15,
   keepEmpty = false,
+  format,
 }: {
   rows: { label: string; detail?: string; parts: number[] }[];
   series: { name: string; color: string }[];
@@ -15,6 +16,8 @@ export function StackedBarChart({
   max?: number;
   /** Keep rows whose parts are all 0 (for fixed groups such as age buckets). */
   keepEmpty?: boolean;
+  /** How to write a value (money, for example). Default: the plain number. */
+  format?: (v: number) => string;
 }) {
   const candidates = keepEmpty ? rows : rows.filter((r) => r.parts.some((p) => p > 0));
   const shown = candidates.slice(0, max);
@@ -22,7 +25,7 @@ export function StackedBarChart({
     return <div className="o-empty">Nothing to show for this period.</div>;
   }
   const top = Math.max(1, ...shown.map((r) => r.parts.reduce((a, b) => a + b, 0)));
-  const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+  const fmt = format ?? ((n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1)));
   return (
     <div className="o-stack-chart">
       <div className="o-legend" style={{ marginBottom: 8 }}>
@@ -53,7 +56,7 @@ export function StackedBarChart({
                 ) : null,
               )}
             </span>
-            <span className="num" style={{ fontSize: 12 }}>
+            <span className="num" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
               {fmt(total)}
               {unit ? ` ${unit}` : ''}
             </span>

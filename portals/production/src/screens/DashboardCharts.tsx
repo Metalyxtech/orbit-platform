@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Chip, ColumnChart, PieChart, StackedBarChart } from '@orbit/ui';
+import { Chip, LineChart, PieChart, StackedBarChart } from '@orbit/ui';
 import { fmtDate, fmtQty } from '../config';
 import type { dashboard } from '../server';
 import { PriorityChip, Progress, StatusChip, woHref } from './ui';
@@ -41,12 +41,7 @@ export function ProductionCharts({ d }: { d: Data }) {
       </div>
       <div className="o-panel">
         <h2>Hours reported, last 14 days</h2>
-        <ColumnChart
-          height={190}
-          series={[{ name: 'Hours', color: '#2f5d8a' }]}
-          points={d.hoursByDay.map((p) => ({ label: String(Number(p.day.slice(8))), values: [p.hours] }))}
-          format={(v) => fmtQty(v)}
-        />
+        <LineChart area height={200} label="Hours reported per day" series={[{ name: 'Hours', color: '#2f5d8a' }]} points={d.hoursByDay.map((p) => ({ label: String(Number(p.day.slice(8))), values: [p.hours] }))} format={(v) => fmtQty(v)} empty="No production reported in the last 14 days." />
         <p className="o-chart-note">From the supervisors' daily production reports.</p>
       </div>
       <div className="o-panel">

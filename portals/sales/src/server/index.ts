@@ -3,6 +3,7 @@ export * as customers from './customers';
 export * as docs from './docs';
 export * as orders from './orders';
 export * as dashboard from './dashboard';
+export * as management from './management';
 export * as queue from './queue';
 export * as admin from './admin';
 export { NOT_READY, notReady, myRole, loadConfig } from './shared';

@@ -17,5 +17,6 @@ export * from './menu';
 export * from './NotificationCenter';
 export * from './SaveBar';
 export * from './ColumnChart';
+export * from './LineChart';
 export * from './RoleCovers';
 export * from './ProcessControl';

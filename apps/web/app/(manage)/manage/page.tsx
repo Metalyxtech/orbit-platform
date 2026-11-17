@@ -1,8 +1,10 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSession, query } from '@orbit/core/next';
-import { approvals } from '@orbit/portal-timesheet/server';
 import { DataTable } from '@orbit/ui';
+import { inboxItems } from '@/inbox';
+import { CompanyGlance } from '@/management/CompanyGlance';
+import { companyGlance } from '@/management/glance';
 import { isManager, workspaceFor } from '@/management/workspaces';
 import { listMessages } from '@/messages';
 import { accessiblePortals } from '@/portal-access';
@@ -18,9 +20,11 @@ export default async function Overview() {
     name: ctx.name.split(' ')[0],
     company: ctx.companyName,
     portals: await accessiblePortals(tx, ctx),
-    waiting: await approvals.mine(tx, ctx),
+    // Tasks waiting in any portal the company has (not only Timesheet approvals).
+    tasks: (await inboxItems(tx, ctx)).filter((i) => i.portal !== 'Messages'),
     inbox: await listMessages(tx, ctx, 'inbox'),
   }));
+  const glance = await query(async (tx, ctx) => companyGlance(tx, ctx, d.portals));
   const unread = d.inbox.data.filter((m) => !m.readAt);
   return (
     <>
@@ -34,23 +38,23 @@ export default async function Overview() {
             {d.company} at a glance, across every portal.
           </p>
         </div>
+        <CompanyGlance labels={glance.labels} rows={glance.rows} waiting={d.tasks.length} />
         <div className="o-half">
           <div className="o-panel flush">
             <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
-              <h2>Waiting for your approval</h2>
+              <h2>Waiting for you {d.tasks.length ? <span className="o-badge">{d.tasks.length}</span> : null}</h2>
               <Link className="o-btn small" href="/manage/approvals">
                 Open
               </Link>
             </div>
             <DataTable
-              rows={d.waiting.slice(0, 5)}
-              rowKey={(r) => r.taskId}
+              rows={d.tasks.slice(0, 5)}
+              rowKey={(r) => r.id}
               empty={<span className="faint">Nothing waiting. You are up to date.</span>}
               columns={[
-                { key: 'e', header: 'Employee', render: (r) => r.employee },
-                { key: 'w', header: 'Week', num: true, render: (r) => r.week },
-                { key: 'h', header: 'Hours', num: true, render: (r) => r.total.toFixed(1) },
-                { key: 'o', header: '', render: (r) => (r.overdue ? <span className="o-chip bad">Overdue</span> : <span className="faint">{r.stepLabel}</span>) },
+                { key: 'p', header: 'Portal', render: (r) => <span className="o-chip steel">{r.portal}</span> },
+                { key: 't', header: 'Task', render: (r) => <Link href={r.href}>{r.title}</Link> },
+                { key: 'o', header: '', render: (r) => (r.urgent ? <span className="o-chip hivis">Needs action</span> : null) },
               ]}
             />
           </div>

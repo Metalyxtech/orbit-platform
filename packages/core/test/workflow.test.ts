@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { simulate, type ApproverResolver, type WorkflowDefinition } from '../src/workflow';
+import { effectiveRule, simulate, type ApproverResolver, type WorkflowDefinition } from '../src/workflow';
 import { signBody, verifySignature } from '../src/hmac';
 
 const def: WorkflowDefinition = {
@@ -51,5 +51,45 @@ describe('hmac', () => {
   it('rejects old signatures', () => {
     const sig = signBody('s3cret', 'x', Math.floor(Date.now() / 1000) - 3600);
     expect(verifySignature('s3cret', 'x', sig)).toBe(false);
+  });
+});
+
+describe('approval matrix', () => {
+  const matrix: WorkflowDefinition = {
+    steps: [
+      {
+        id: 'level1',
+        name: '1st approval',
+        approver: { type: 'matrix', cells: { '*': { type: 'supervisor' }, jt: { type: 'person', membershipId: 'vs' } } },
+        when: { submitter: 'notIn', ids: ['bv'] },
+        slaHours: 24,
+      },
+      {
+        id: 'level2',
+        name: 'Manager',
+        approver: { type: 'matrix', cells: { bv: { type: 'role', role: 'company_admin' } } },
+        when: { submitter: 'in', ids: ['bv'] },
+        slaHours: 24,
+      },
+    ],
+  };
+  const byRule: ApproverResolver = {
+    async resolve(rule, ctx) {
+      const cell = effectiveRule(rule, ctx);
+      if (!cell) return [];
+      if (cell.type === 'person') return [{ membershipId: cell.membershipId, name: cell.membershipId }];
+      return [{ membershipId: cell.type, name: cell.type }];
+    },
+  };
+
+  it('uses the employee row and falls back to everyone else', async () => {
+    const jt = await simulate(matrix, { submitterId: 'jt' }, byRule);
+    expect(jt.map((r) => [r.name, r.approvers[0].membershipId])).toEqual([['1st approval', 'vs']]);
+    const other = await simulate(matrix, { submitterId: 'lc' }, byRule);
+    expect(other.map((r) => [r.name, r.approvers[0].membershipId])).toEqual([['1st approval', 'supervisor']]);
+  });
+  it('skips a level for an employee whose cell is empty', async () => {
+    const bv = await simulate(matrix, { submitterId: 'bv' }, byRule);
+    expect(bv.map((r) => r.name)).toEqual(['Manager']);
   });
 });

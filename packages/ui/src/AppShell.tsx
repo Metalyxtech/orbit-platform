@@ -1,53 +1,42 @@
 'use client';
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Fragment, type ReactNode } from 'react';
-import { Avatar, Icon, isIconName } from './Icon';
+import { adminSections, toEntries } from './menu';
+import { NotificationCenter } from './NotificationCenter';
+import { SideFoot } from './SideFoot';
+import { SideMenu } from './SideMenu';
 
 export interface ShellNavItem {
   href: string;
   label: string;
   section: 'main' | 'admin';
-  icon?: string;
   badge?: number;
+  /** Admin section: which portal's settings this page belongs to ('Company' = company-wide). */
+  group?: string;
+  /** Main section: drop-down this page sits in (omitted = a main menu item). */
+  menu?: string;
 }
 
 export interface AppShellProps {
   brand: string;
   companyName: string;
-  /** Shown as a marker in the sidebar when the company is not live yet. */
-  companyStage?: 'sandbox' | 'pilot' | 'live';
   portalName: string;
   portals: { id: string; name: string }[];
   companies: { id: string; name: string }[];
   nav: ShellNavItem[];
   user: { name: string; title: string | null };
   onSwitchCompany?: (companyId: string) => Promise<void>;
-  /** Sign-out is a POST so other sites cannot trigger it. */
-  signOutAction: string;
+  /** Where the sign-out form posts. */
+  signOutHref: string;
   children: ReactNode;
 }
 
-/** Sidebar (graphite) + portal and company switchers + signed-in user. */
+/** Sidebar (graphite) + top bar + portal switcher. */
 export function AppShell(props: AppShellProps) {
-  const pathname = usePathname();
   const router = useRouter();
-  const isActive = (href: string) =>
-    pathname === href || (href.split('/').length > 2 && pathname.startsWith(href + '/'));
   const main = props.nav.filter((n) => n.section === 'main');
   const admin = props.nav.filter((n) => n.section === 'admin');
 
-  const link = (n: ShellNavItem) => (
-    <Link key={n.href} href={n.href} aria-current={isActive(n.href) ? 'page' : undefined}>
-      {isIconName(n.icon) && <Icon name={n.icon} />}
-      <span>{n.label}</span>
-      {n.badge ? (
-        <span className="o-badge" aria-label={`${n.badge} waiting`}>
-          {n.badge > 99 ? '99+' : n.badge}
-        </span>
-      ) : null}
-    </Link>
-  );
 
   return (
     <div className="o-shell">
@@ -60,13 +49,8 @@ export function AppShell(props: AppShellProps) {
               {props.companyName}
             </div>
           </div>
+          <NotificationCenter />
         </div>
-        {props.companyStage === 'sandbox' && (
-          <div className="o-env" role="note">
-            <b>Sandbox</b>
-            <span>Emails only go to verified test addresses.</span>
-          </div>
-        )}
         {props.portals.length > 1 && (
           <div className="o-switch">
             <select
@@ -82,22 +66,13 @@ export function AppShell(props: AppShellProps) {
             </select>
           </div>
         )}
-        <div className="o-navs">
-          {[
-            { title: props.portalName, items: main },
-            { title: 'Company admin', items: admin },
-          ]
-            .filter((g) => g.items.length > 0)
-            .map((g) => (
-              <Fragment key={g.title}>
-                <div className="o-nav-title">{g.title}</div>
-                <nav className="o-nav" aria-label={g.title}>
-                  {g.items.map(link)}
-                </nav>
-              </Fragment>
-            ))}
-        </div>
-        <div className="o-side-foot">
+        <SideMenu
+          sections={[
+            { title: props.portals.length > 1 ? undefined : props.portalName, entries: toEntries(main) },
+            ...adminSections(admin),
+          ]}
+        />
+        <SideFoot name={props.user.name} title={props.user.title} signOutAction={props.signOutHref}>
           {props.companies.length > 1 && props.onSwitchCompany && (
             <select
               aria-label="Switch company"
@@ -114,19 +89,7 @@ export function AppShell(props: AppShellProps) {
               ))}
             </select>
           )}
-          <div className="o-user">
-            <Avatar name={props.user.name} />
-            <div className="o-user-id">
-              <strong title={props.user.name}>{props.user.name}</strong>
-              {props.user.title && <span>{props.user.title}</span>}
-            </div>
-            <form action={props.signOutAction} method="post">
-              <button className="o-iconbtn" type="submit" title="Sign out" aria-label="Sign out">
-                <Icon name="signout" size={18} />
-              </button>
-            </form>
-          </div>
-        </div>
+        </SideFoot>
       </aside>
       <div className="o-main">{props.children}</div>
     </div>

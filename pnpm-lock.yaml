@@ -14,6 +14,15 @@ importers:
 
   .:
     devDependencies:
+      next:
+        specifier: 15.5.28
+        version: 15.5.28(@types/node@22.20.5)(react-dom@19.1.10(react@19.1.10))(react@19.1.10)
+      react:
+        specifier: 19.1.10
+        version: 19.1.10
+      react-dom:
+        specifier: 19.1.10
+        version: 19.1.10(react@19.1.10)
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -26,18 +35,30 @@ importers:
       '@aws-sdk/client-ssm':
         specifier: 3.1158.0
         version: 3.1158.0
-      '@fontsource/ibm-plex-sans':
-        specifier: 5.3.0
-        version: 5.3.0
-      '@fontsource/ibm-plex-sans-condensed':
-        specifier: 5.3.0
-        version: 5.3.0
+      '@fontsource/inter':
+        specifier: 5.2.8
+        version: 5.2.8
       '@orbit/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@orbit/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@orbit/portal-custom-1':
+        specifier: workspace:*
+        version: link:../../portals/custom-1
+      '@orbit/portal-procurement':
+        specifier: workspace:*
+        version: link:../../portals/procurement
+      '@orbit/portal-production':
+        specifier: workspace:*
+        version: link:../../portals/production
+      '@orbit/portal-quality':
+        specifier: workspace:*
+        version: link:../../portals/quality
+      '@orbit/portal-sales':
+        specifier: workspace:*
+        version: link:../../portals/sales
       '@orbit/portal-timesheet':
         specifier: workspace:*
         version: link:../../portals/timesheet
@@ -151,7 +172,7 @@ importers:
         version: 19.1.17
       next:
         specifier: 15.5.28
-        version: 15.5.28(@types/node@22.20.5)(react-dom@19.3.1(react@19.1.10))(react@19.1.10)
+        version: 15.5.28(@types/node@22.20.5)(react-dom@19.1.10(react@19.1.10))(react@19.1.10)
       react:
         specifier: 19.1.10
         version: 19.1.10
@@ -197,13 +218,189 @@ importers:
         version: 19.1.17
       next:
         specifier: 15.5.28
-        version: 15.5.28(@types/node@22.20.5)(react-dom@19.3.1(react@19.1.10))(react@19.1.10)
+        version: 15.5.28(@types/node@22.20.5)(react-dom@19.1.10(react@19.1.10))(react@19.1.10)
       react:
         specifier: 19.1.10
         version: 19.1.10
       typescript:
         specifier: 5.9.3
         version: 5.9.3
+
+  portals/custom-1:
+    dependencies:
+      '@orbit/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@orbit/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@orbit/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+    devDependencies:
+      '@types/node':
+        specifier: 22.20.5
+        version: 22.20.5
+      '@types/react':
+        specifier: 19.1.17
+        version: 19.1.17
+      next:
+        specifier: 15.5.28
+        version: 15.5.28(@types/node@22.20.5)(react-dom@19.1.10(react@19.1.10))(react@19.1.10)
+      react:
+        specifier: 19.1.10
+        version: 19.1.10
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
+  portals/procurement:
+    dependencies:
+      '@orbit/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@orbit/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@orbit/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      drizzle-orm:
+        specifier: 0.45.4
+        version: 0.45.4(@neondatabase/serverless@1.2.0)(@types/pg@8.23.1)(pg@8.23.1)
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@types/node':
+        specifier: 22.20.5
+        version: 22.20.5
+      '@types/react':
+        specifier: 19.1.17
+        version: 19.1.17
+      next:
+        specifier: 15.5.28
+        version: 15.5.28(@types/node@22.20.5)(react-dom@19.1.10(react@19.1.10))(react@19.1.10)
+      react:
+        specifier: 19.1.10
+        version: 19.1.10
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.12
+        version: 4.1.12(@types/node@22.20.5)(vite@8.3.5(@types/node@22.20.5)(esbuild@0.28.2)(tsx@4.23.15))
+
+  portals/production:
+    dependencies:
+      '@orbit/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@orbit/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@orbit/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      drizzle-orm:
+        specifier: 0.45.4
+        version: 0.45.4(@neondatabase/serverless@1.2.0)(@types/pg@8.23.1)(pg@8.23.1)
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@types/node':
+        specifier: 22.20.5
+        version: 22.20.5
+      '@types/react':
+        specifier: 19.1.17
+        version: 19.1.17
+      next:
+        specifier: 15.5.28
+        version: 15.5.28(@types/node@22.20.5)(react-dom@19.1.10(react@19.1.10))(react@19.1.10)
+      react:
+        specifier: 19.1.10
+        version: 19.1.10
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.12
+        version: 4.1.12(@types/node@22.20.5)(vite@8.3.5(@types/node@22.20.5)(esbuild@0.28.2)(tsx@4.23.15))
+
+  portals/quality:
+    dependencies:
+      '@orbit/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@orbit/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@orbit/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      drizzle-orm:
+        specifier: 0.45.4
+        version: 0.45.4(@neondatabase/serverless@1.2.0)(@types/pg@8.23.1)(pg@8.23.1)
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@types/node':
+        specifier: 22.20.5
+        version: 22.20.5
+      '@types/react':
+        specifier: 19.1.17
+        version: 19.1.17
+      next:
+        specifier: 15.5.28
+        version: 15.5.28(@types/node@22.20.5)(react-dom@19.1.10(react@19.1.10))(react@19.1.10)
+      react:
+        specifier: 19.1.10
+        version: 19.1.10
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.12
+        version: 4.1.12(@types/node@22.20.5)(vite@8.3.5(@types/node@22.20.5)(esbuild@0.28.2)(tsx@4.23.15))
+
+  portals/sales:
+    dependencies:
+      '@orbit/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@orbit/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@orbit/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      drizzle-orm:
+        specifier: 0.45.4
+        version: 0.45.4(@neondatabase/serverless@1.2.0)(@types/pg@8.23.1)(pg@8.23.1)
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@types/node':
+        specifier: 22.20.5
+        version: 22.20.5
+      '@types/react':
+        specifier: 19.1.17
+        version: 19.1.17
+      next:
+        specifier: 15.5.28
+        version: 15.5.28(@types/node@22.20.5)(react-dom@19.1.10(react@19.1.10))(react@19.1.10)
+      react:
+        specifier: 19.1.10
+        version: 19.1.10
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.12
+        version: 4.1.12(@types/node@22.20.5)(vite@8.3.5(@types/node@22.20.5)(esbuild@0.28.2)(tsx@4.23.15))
 
   portals/timesheet:
     dependencies:
@@ -234,7 +431,7 @@ importers:
         version: 19.1.17
       next:
         specifier: 15.5.28
-        version: 15.5.28(@types/node@22.20.5)(react-dom@19.3.1(react@19.1.10))(react@19.1.10)
+        version: 15.5.28(@types/node@22.20.5)(react-dom@19.1.10(react@19.1.10))(react@19.1.10)
       react:
         specifier: 19.1.10
         version: 19.1.10
@@ -886,11 +1083,8 @@ packages:
   '@fast-csv/parse@4.3.6':
     resolution: {integrity: sha512-uRsLYksqpbDmWaSmzvJcuApSEe38+6NQZBUsuAyMZKqHxH0g1wcJgsKUvN3WC8tewaqFjBMMGrkHmC+T7k8LvA==}
 
-  '@fontsource/ibm-plex-sans-condensed@5.3.0':
-    resolution: {integrity: sha512-fQyBpwbkguP4azjq7Cw8h/J3C/d8MFAzXOiSoFxyKCUK4x0XKrWEh3tGdTxhDM0HctVRQilQo1zGoyxDHLm5jQ==}
-
-  '@fontsource/ibm-plex-sans@5.3.0':
-    resolution: {integrity: sha512-CbE4CbbEEZJX860XyUiRpsksXIQR8Rp2XDva2VO53NJox9tVNtusrysd2x5YkUEY3ErQ66W1IiiQL8/wihhw5w==}
+  '@fontsource/inter@5.2.8':
+    resolution: {integrity: sha512-P6r5WnJoKiNVV+zvW2xM13gNdFhAEpQ9dQJHt3naLvfg+LkF2ldgSLiF4T41lf1SQCM9QmkqPTn4TH568IRagg==}
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -2468,11 +2662,6 @@ packages:
     peerDependencies:
       react: 19.1.10
 
-  react-dom@19.3.1:
-    resolution: {integrity: sha512-Y0bARz53lhEC1NMCASs0/j+faB/zqt3R8hpvg1e8+61ZVJ4UL0UdC4cBbXfZMcIuhrfgeILTLe+ZeBCavQPtKQ==}
-    peerDependencies:
-      react: 19.1.10
-
   react@19.1.10:
     resolution: {integrity: sha512-xLes4RnWjC02mmkdHO2GPNjO0le6RMBPLYWKMaMf4jUIMFjTqrYBobxWAh8rU0pjfefJ6OLdef9zbYj+7iXH9Q==}
     engines: {node: '>=0.10.0'}
@@ -2532,9 +2721,6 @@ packages:
 
   scheduler@0.26.0:
     resolution: {integrity: sha512-NlHwttCI/l5gCPR3D1nNXtWABUmBwvZpEQiD4IXSbIDq8BzLIK/7Ir5gTFSGZDUu37K5cMNp0hFtzO38sC7gWA==}
-
-  scheduler@0.28.0:
-    resolution: {integrity: sha512-juorfCmIkIw8tT+p5BXSm6PJjQF/ycEYmKyzURCIt/RaZIhL+PulbQ9Yu2z1HdOJDdqDTlxA1+xKBmHXJsczAw==}
 
   selderee@0.11.0:
     resolution: {integrity: sha512-5TF+l7p4+OsnP8BCCvSyZiSPc4x4//p5uPwK8TCnVPJYRmU2aYKMpOXvw8zM5a5JvuuCGN1jmsMwuU2W02ukfA==}
@@ -3404,9 +3590,7 @@ snapshots:
       lodash.isundefined: 3.0.1
       lodash.uniq: 4.5.0
 
-  '@fontsource/ibm-plex-sans-condensed@5.3.0': {}
-
-  '@fontsource/ibm-plex-sans@5.3.0': {}
+  '@fontsource/inter@5.2.8': {}
 
   '@img/colour@1.1.0':
     optional: true
@@ -4763,30 +4947,6 @@ snapshots:
       - '@types/node'
       - babel-plugin-macros
 
-  next@15.5.28(@types/node@22.20.5)(react-dom@19.3.1(react@19.1.10))(react@19.1.10):
-    dependencies:
-      '@next/env': 15.5.28
-      '@swc/helpers': 0.5.15
-      caniuse-lite: 1.0.30001819
-      postcss: 8.4.31
-      react: 19.1.10
-      react-dom: 19.3.1(react@19.1.10)
-      styled-jsx: 5.1.6(react@19.1.10)
-    optionalDependencies:
-      '@next/swc-darwin-arm64': 15.5.28
-      '@next/swc-darwin-x64': 15.5.28
-      '@next/swc-linux-arm64-gnu': 15.5.28
-      '@next/swc-linux-arm64-musl': 15.5.28
-      '@next/swc-linux-x64-gnu': 15.5.28
-      '@next/swc-linux-x64-musl': 15.5.28
-      '@next/swc-win32-arm64-msvc': 15.5.28
-      '@next/swc-win32-x64-msvc': 15.5.28
-      sharp: 0.35.5(@types/node@22.20.5)
-    transitivePeerDependencies:
-      - '@babel/core'
-      - '@types/node'
-      - babel-plugin-macros
-
   normalize-path@3.0.0: {}
 
   npm-run-path@4.0.1:
@@ -4921,11 +5081,6 @@ snapshots:
       react: 19.1.10
       scheduler: 0.26.0
 
-  react-dom@19.3.1(react@19.1.10):
-    dependencies:
-      react: 19.1.10
-      scheduler: 0.28.0
-
   react@19.1.10: {}
 
   readable-stream@2.3.8:
@@ -5023,8 +5178,6 @@ snapshots:
       xmlchars: 2.2.0
 
   scheduler@0.26.0: {}
-
-  scheduler@0.28.0: {}
 
   selderee@0.11.0:
     dependencies:

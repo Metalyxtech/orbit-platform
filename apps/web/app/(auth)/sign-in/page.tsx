@@ -24,7 +24,7 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
         Continue to sign in
       </a>
       <p className="muted" style={{ fontSize: 13, margin: '16px 0 0' }}>
-        New company? <a href="/auth/login?hint=sign-up">Create an account</a> and register your company.
+        New company? <a href="/auth/login?hint=sign-up">Create an account</a> and register your company. <a href="/pricing">See plans and pricing</a>.
       </p>
       <div className="o-auth-note">
         <Icon name="lock" />

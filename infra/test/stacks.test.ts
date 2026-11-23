@@ -34,7 +34,7 @@ describe('IdentityStack', () => {
         Statement: [
           Match.objectLike({
             Condition: Match.objectLike({
-              StringLike: { 'token.actions.githubusercontent.com:sub': 'repo:metalyxtech/orbit-platform:environment:production' },
+              StringLike: { 'token.actions.githubusercontent.com:sub': 'repo:Metalyxtech/orbit-platform:environment:production' },
             }),
           }),
         ],

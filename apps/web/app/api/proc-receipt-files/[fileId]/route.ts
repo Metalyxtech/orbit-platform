@@ -1,0 +1,21 @@
+import { NextResponse, type NextRequest } from 'next/server';
+import { z } from 'zod';
+import { presignDownload } from '@orbit/core/aws';
+import { getSession, query } from '@orbit/core/next';
+import { receiptFiles } from '@orbit/portal-procurement/server';
+import { accessiblePortals } from '@/portal-access';
+
+export const dynamic = 'force-dynamic';
+
+/** Opens an MTC / receipt document: anyone in the company with Purchase, Quality (QC checks it) or Production (the material is theirs). */
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ fileId: string }> }) {
+  const fileId = z.uuid().safeParse((await params).fileId);
+  if (!fileId.success) return new NextResponse('Not found', { status: 404 });
+  const s = await getSession();
+  if (s.state !== 'ok') return new NextResponse('Not found', { status: 404 });
+  const file = await query(async (tx, ctx) =>
+    (await accessiblePortals(tx, ctx)).some((p) => p === 'procurement' || p === 'quality' || p === 'production') ? receiptFiles.receiptFile(tx, ctx.companyId, fileId.data) : null,
+  );
+  if (!file) return new NextResponse('Not found', { status: 404 });
+  return NextResponse.redirect(await presignDownload(file.s3Key, 300));
+}

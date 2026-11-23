@@ -11,7 +11,13 @@
     "./portals": "./src/portals.ts",
     "./hmac": "./src/hmac.ts",
     "./next": "./src/next/index.ts",
-    "./outbox": "./src/outbox.ts"
+    "./outbox": "./src/outbox.ts",
+    "./quality": "./src/quality.ts",
+    "./supply": "./src/supply.ts",
+    "./holds": "./src/holds.ts",
+    "./holds-actions": "./src/holds-actions.ts",
+    "./teams": "./src/teams.ts",
+    "./teams-actions": "./src/teams-actions.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

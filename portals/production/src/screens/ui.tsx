@@ -48,7 +48,7 @@ export function PageHead({ title, lead, children }: { title: string; lead?: Reac
 export function NotReady({ message }: { message: string }) {
   return (
     <div className="o-page">
-      <EmptyState title={message}>Ask the person who runs Orbit for your company to run the database update.</EmptyState>
+      <EmptyState title={message}>Ask the person who runs SteelConnect360 for your company to run the database update.</EmptyState>
     </div>
   );
 }

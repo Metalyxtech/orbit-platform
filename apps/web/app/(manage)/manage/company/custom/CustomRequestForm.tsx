@@ -49,7 +49,7 @@ export function CustomRequestForm({ areas }: { areas: { id: string; label: strin
     setBusy(null);
     form.current?.reset();
     setFiles([]);
-    toast(failed.length ? `Sent to Orbit, but these files did not upload: ${failed.join(', ')}. Send them again in a new request.` : `Sent to Orbit${done ? ` with ${done} file${done > 1 ? 's' : ''}` : ''}.`, failed.length ? 'bad' : undefined);
+    toast(failed.length ? `Sent to SteelConnect360, but these files did not upload: ${failed.join(', ')}. Send them again in a new request.` : `Sent to SteelConnect360${done ? ` with ${done} file${done > 1 ? 's' : ''}` : ''}.`, failed.length ? 'bad' : undefined);
     router.refresh();
   }
 
@@ -99,7 +99,7 @@ export function CustomRequestForm({ areas }: { areas: { id: string; label: strin
       </div>
       <div className="o-row" style={{ gap: 10 }}>
         <Button type="submit" variant="primary" disabled={!!busy}>
-          Send to Orbit
+          Send to SteelConnect360
         </Button>
         {busy && <span className="faint" style={{ fontSize: 12 }}>{busy}</span>}
       </div>

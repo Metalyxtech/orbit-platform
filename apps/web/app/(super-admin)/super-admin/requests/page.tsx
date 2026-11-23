@@ -15,7 +15,7 @@ function Section({ title, count, children }: { title: string; count: number; chi
   );
 }
 
-/** Super Admin > Requests: one queue for everything that needs Orbit's approval. */
+/** Super Admin > Requests: one queue for everything that needs SteelConnect360's approval. */
 export default async function Requests() {
   const me = await requireSuperAdminPage();
   const r = await loadRequests(me.userId);

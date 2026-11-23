@@ -135,7 +135,7 @@ export function EnquiryView({ d }: { d: EnquiryDetail }) {
                   <li key={x.id}>
                     {x.text}
                     <small>
-                      {x.by || 'Orbit'} · {new Date(x.at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
+                      {x.by || 'SteelConnect360'} · {new Date(x.at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
                     </small>
                   </li>
                 ))}

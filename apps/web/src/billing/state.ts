@@ -34,7 +34,7 @@ const PAID = ['active', 'authenticated'];
 
 export type BillingStatus = 'trial' | 'trial_ended' | 'active' | 'past_due' | 'cancelled' | 'pending_payment';
 
-/** Orbit's billing settings for a company: currency, plans released or hidden, trial length. */
+/** SteelConnect360's billing settings for a company: currency, plans released or hidden, trial length. */
 export async function billingSettings(tx: Tx, companyId: string): Promise<{ currency: Currency; showPlans: boolean; trialDays: number }> {
   const [row] = await tx.select().from(companyBilling).where(eq(companyBilling.companyId, companyId));
   return { currency: row?.currency === 'USD' ? 'USD' : 'INR', showPlans: row?.showPlans ?? true, trialDays: row?.trialDays ?? TRIAL_DAYS };
@@ -67,7 +67,7 @@ export async function billingStateFor(tx: Tx, companyId: string) {
     tx.select({ p: companyPortals.portal }).from(companyPortals).where(and(eq(companyPortals.companyId, companyId), eq(companyPortals.enabled, true))),
   ]);
   const portals = enabled.map((p) => p.p);
-  // A custom deal (plan "custom"): its own name and people limit; every portal Orbit switched on.
+  // A custom deal (plan "custom"): its own name and people limit; every portal SteelConnect360 switched on.
   const custom = sub?.plan === 'custom' ? await getCustomPlan(tx, companyId) : null;
   const limits =
     onPlan && plan
@@ -101,7 +101,7 @@ export type BillingState = Awaited<ReturnType<typeof billingState>>;
 /** Throws when adding one more person, or a portal outside the plan, is not allowed. */
 export async function assertWithinPlan(tx: Tx, ctx: SessionContext, what: 'user' | 'portal', portal?: string) {
   const s = await billingState(tx, ctx);
-  if (!s.usable) throw new Error('Your Orbit plan has ended. Choose a plan in Plan and billing to keep adding people and portals.');
+  if (!s.usable) throw new Error('Your SteelConnect360 plan has ended. Choose a plan in Plan and billing to keep adding people and portals.');
   if (what === 'user' && s.usage.users >= s.limits.users) throw new Error(`Your plan includes ${s.limits.users} people. Upgrade in Plan and billing to add more.`);
   if (what === 'portal' && portal && !s.limits.portals.includes(portal)) {
     throw new Error(`Your ${s.planName ?? ''} plan does not include this portal. Switch to a plan with it in Plan and billing.`);
@@ -120,7 +120,7 @@ async function razorpayPlanId(tx: Tx, b: Bundle, t: TierId, cycle: Cycle, curren
   const amount = priceFor(b, t, cycle, currency) * 100; // paise or cents
   const [row] = await tx.select().from(billingPlans).where(eq(billingPlans.key, key));
   if (row && row.amount === amount) return row.razorpayPlanId;
-  const created = await rz.createPlan({ period: c.rz.period, interval: c.rz.interval, name: `Orbit ${p.name} (${c.label})`, amount, currency, description: `Up to ${p.users} people` });
+  const created = await rz.createPlan({ period: c.rz.period, interval: c.rz.interval, name: `SteelConnect360 ${p.name} (${c.label})`, amount, currency, description: `Up to ${p.users} people` });
   await tx
     .insert(billingPlans)
     .values({ key, razorpayPlanId: created.id, amount })
@@ -139,7 +139,7 @@ export async function startCheckout(tx: Tx, ctx: ActionContext, raw: z.input<typ
   requireAdmin(ctx);
   const input = startInput.parse(raw);
   const state = await billingState(tx, ctx);
-  if (!state.showPlans) throw new Error('Your plan is arranged by the Orbit team. Contact Orbit to change it.');
+  if (!state.showPlans) throw new Error('Your plan is arranged by the SteelConnect360 team. Contact SteelConnect360 to change it.');
   const currency = state.currency;
   const id = planId(input.bundle, input.tier);
   const plan = planOf(id)!;
@@ -168,7 +168,7 @@ export async function confirmCheckout(tx: Tx, ctx: ActionContext, raw: z.input<t
   const input = confirmInput.parse(raw);
   const sub = await pendingCheckout(tx, ctx.companyId, input.subscriptionId);
   if (!sub) throw new Error('This payment is not for your company');
-  if (!(await rz.verifyCheckoutSignature(input.paymentId, input.subscriptionId, input.signature))) throw new Error('The payment could not be verified. Nothing was charged twice; contact Orbit if money left your account.');
+  if (!(await rz.verifyCheckoutSignature(input.paymentId, input.subscriptionId, input.signature))) throw new Error('The payment could not be verified. Nothing was charged twice; contact SteelConnect360 if money left your account.');
   const live = await rz.fetchSubscription(input.subscriptionId);
   const state = await billingState(tx, ctx);
   await completeSwitch(tx, ctx, input.subscriptionId, sub, new Date(state.trialEndsAt));
@@ -197,7 +197,7 @@ export async function cancelPlan(tx: Tx, ctx: ActionContext) {
   const [sub] = await tx.select().from(companySubscriptions).where(eq(companySubscriptions.companyId, ctx.companyId));
   if (!sub?.razorpaySubscriptionId || !PAID.includes(sub.status)) throw new Error('There is no active subscription to cancel');
   if (sub.plan === 'custom' && sub.cycle === 'yearly_monthly') {
-    throw new Error('Your plan is a 12-month term paid monthly. It ends by itself after the 12th payment; contact Orbit to end it early.');
+    throw new Error('Your plan is a 12-month term paid monthly. It ends by itself after the 12th payment; contact SteelConnect360 to end it early.');
   }
   const live = await rz.cancelSubscription(sub.razorpaySubscriptionId, true);
   await tx.update(companySubscriptions).set({ cancelAtPeriodEnd: true, status: live.status === 'cancelled' ? 'cancelled' : sub.status, updatedAt: new Date() }).where(eq(companySubscriptions.companyId, ctx.companyId));

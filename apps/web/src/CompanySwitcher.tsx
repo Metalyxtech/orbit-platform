@@ -1,7 +1,7 @@
 'use client';
 import { switchCompanyAction } from './session-actions';
 
-/** "Switch company" for people in several companies; reopens Orbit in the chosen one. */
+/** "Switch company" for people in several companies; reopens SteelConnect360 in the chosen one. */
 export function CompanySwitcher({ companies, current }: { companies: { id: string; name: string }[]; current: string }) {
   if (companies.length < 2) return null;
   return (

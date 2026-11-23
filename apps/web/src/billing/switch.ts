@@ -74,7 +74,7 @@ export async function completeSwitch(tx: Tx, ctx: ActionContext, subId: string, 
       await rz.cancelSubscription(p.replaces, !p.cancelNow);
       await tx.insert(billingEvents).values({ companyId: ctx.companyId, type: 'subscription.replaced', razorpayId: p.replaces, data: { by: subId, immediately: !!p.cancelNow } });
     } catch (err) {
-      // Already cancelled or finished at Razorpay: nothing left to stop. Anything else is kept for Orbit to check.
+      // Already cancelled or finished at Razorpay: nothing left to stop. Anything else is kept for SteelConnect360 to check.
       await tx.insert(billingEvents).values({ companyId: ctx.companyId, type: 'subscription.replace_failed', razorpayId: p.replaces, data: { by: subId, error: String(err).slice(0, 300) } });
     }
   }

@@ -41,7 +41,7 @@ export async function getSettings(tx: Tx, ctx: SessionContext) {
   };
 }
 
-// ---------- Approval workflow (chosen from the Orbit library) ----------
+// ---------- Approval workflow (chosen from the SteelConnect360 library) ----------
 
 /** Latest version of every Timesheet workflow in the library. */
 export async function listWorkflows(tx: Tx) {
@@ -505,7 +505,7 @@ const portalChange = z.object({
 });
 
 /**
- * Company admin changes a person's portals, effective at once. Orbit approves portals per company
+ * Company admin changes a person's portals, effective at once. SteelConnect360 approves portals per company
  * (Company portals); inside them the company admin decides who uses what.
  */
 export async function changeMemberPortal(tx: Tx, ctx: ActionContext, raw: z.input<typeof portalChange>) {
@@ -522,7 +522,7 @@ export async function changeMemberPortal(tx: Tx, ctx: ActionContext, raw: z.inpu
     .from(companyPortals)
     .where(and(eq(companyPortals.companyId, ctx.companyId), eq(companyPortals.portal, input.portal)));
   if (!cp?.enabled && input.action === 'request') throw new Error('Your company does not have that portal yet. Request it in Company portals first.');
-  // The company has this portal (Orbit approved it), so the admin's choice applies at once.
+  // The company has this portal (SteelConnect360 approved it), so the admin's choice applies at once.
   const status = input.action === 'request' ? ('active' as const) : ('off' as const);
   await setMemberPortal(tx, ctx.companyId, m.id, input.portal, status);
   await audit(tx, {

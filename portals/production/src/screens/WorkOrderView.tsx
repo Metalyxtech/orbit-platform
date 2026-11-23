@@ -119,7 +119,7 @@ export function WorkOrderView({ d }: { d: WoDetail }) {
                   <li key={x.id} style={{ fontSize: 13 }}>
                     {x.text}
                     <div className="faint" style={{ fontSize: 11 }}>
-                      {x.by || 'Orbit'} · {new Date(x.at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
+                      {x.by || 'SteelConnect360'} · {new Date(x.at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
                     </div>
                   </li>
                 ))}

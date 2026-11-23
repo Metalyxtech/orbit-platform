@@ -43,7 +43,7 @@ export default async function Register({ searchParams }: { searchParams: Promise
   return (
     <AuthCard title="Join your company">
       <p className="muted" style={{ fontSize: 13 }}>
-        Signed in as {s.email}. If your company already uses Orbit, choose it below. Your company admin approves the request and
+        Signed in as {s.email}. If your company already uses SteelConnect360, choose it below. Your company admin approves the request and
         sets your role.
       </p>
       {error && (
@@ -71,9 +71,9 @@ export default async function Register({ searchParams }: { searchParams: Promise
         </button>
       </form>
 
-      <h2 style={{ fontSize: 15, margin: '24px 0 8px' }}>New to Orbit? Register your company</h2>
+      <h2 style={{ fontSize: 15, margin: '24px 0 8px' }}>New to SteelConnect360? Register your company</h2>
       <p className="muted" style={{ fontSize: 13 }}>
-        You become its company admin once Orbit approves the registration.
+        You become its company admin once SteelConnect360 approves the registration.
       </p>
       <form action={registerCompanyAction} className="o-stack" style={{ gap: 12 }}>
         <label className="o-field">
@@ -92,13 +92,13 @@ export default async function Register({ searchParams }: { searchParams: Promise
             ))}
           </select>
         </label>
-        <PortalPicker hint="The portals your company needs. Orbit reviews and switches them on." />
+        <PortalPicker hint="The portals your company needs. SteelConnect360 reviews and switches them on." />
         <fieldset className="o-field" style={{ border: 0, padding: 0, margin: 0 }}>
           <label className="o-row" style={{ gap: 8, fontSize: 13, color: 'var(--ink)' }}>
             <input type="checkbox" name="custom" />A custom portal built for our company
           </label>
           <textarea className="o-input" name="customDetails" rows={2} maxLength={2000} placeholder="What should it do? (optional; you can send your forms after sign-up)" />
-          <span className="faint" style={{ fontSize: 11 }}>Choose only this if you do not need Timesheet or Purchase. Orbit replies with a price.</span>
+          <span className="faint" style={{ fontSize: 11 }}>Choose only this if you do not need Timesheet or Purchase. SteelConnect360 replies with a price.</span>
         </fieldset>
         <button className="o-btn block" type="submit">
           Register company

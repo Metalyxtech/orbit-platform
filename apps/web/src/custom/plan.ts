@@ -15,7 +15,7 @@ export async function getCustomPlan(tx: Tx, companyId: string): Promise<CustomPl
   return row ?? null;
 }
 
-/** Credit off the first yearly payment, if Orbit gave one and it has not been used yet. */
+/** Credit off the first yearly payment, if SteelConnect360 gave one and it has not been used yet. */
 export const customCredit = (p: Pick<CustomPlan, 'yearlyCredit' | 'creditUsedAt'>, cycle: CustomCycle) => (cycle === 'yearly' && p.yearlyCredit > 0 && !p.creditUsedAt ? p.yearlyCredit : 0);
 
 /** The credit has been used by a confirmed yearly checkout. */

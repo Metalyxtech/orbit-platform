@@ -112,7 +112,7 @@ export function InspectionView({ d }: { d: QcDetail }) {
                   <li key={x.id} style={{ fontSize: 13 }}>
                     {x.text}
                     <div className="faint" style={{ fontSize: 11 }}>
-                      {x.by || 'Orbit'} · {fmtDateTime(x.at)}
+                      {x.by || 'SteelConnect360'} · {fmtDateTime(x.at)}
                     </div>
                   </li>
                 ))}

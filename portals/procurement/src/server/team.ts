@@ -14,7 +14,7 @@ export interface TeamMember {
   purchaseRole: ProcRole;
   /** Extra roles a purchase admin covers. */
   covers: ProcRole[];
-  /** on = can open the Purchase portal; requested = waiting for Orbit; off = no access. */
+  /** on = can open the Purchase portal; requested = waiting for SteelConnect360; off = no access. */
   access: 'on' | 'requested' | 'off';
 }
 

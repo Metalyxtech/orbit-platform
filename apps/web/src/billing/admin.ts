@@ -5,7 +5,7 @@ import { BILLING_LAUNCH, cycleOf, priceFor, type Currency, type Cycle } from './
 import { customPrice, getCustomPlan, type CustomCycle } from '../custom/plan';
 import { billingSettings, billingStateFor, missing } from './state';
 
-// Super Admin side of billing: settings per company and the payments Orbit has received.
+// Super Admin side of billing: settings per company and the payments SteelConnect360 has received.
 // Every function runs inside withTenant for one company (RLS), like the rest of Super Admin.
 
 /** Events that mean a company has paid or confirmed a subscription. */

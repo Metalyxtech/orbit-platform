@@ -9,7 +9,7 @@ import { requireSuperAdminPage } from '../../data';
 
 export const dynamic = 'force-dynamic';
 
-/** Super Admin > Agreements > one signed copy, to print or save as PDF for Orbit's records. */
+/** Super Admin > Agreements > one signed copy, to print or save as PDF for SteelConnect360's records. */
 export default async function SignedCopyPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await requireSuperAdminPage();
   const id = z.uuid().safeParse((await params).id);

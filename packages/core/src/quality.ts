@@ -147,6 +147,6 @@ export async function applyQualityDecision(tx: Tx, ctx: ActionContext, d: Qualit
   // Raised in Quality itself: the final report is the end of the line.
   if (d.source === 'direct') return;
   const handler = registry.get(d.source);
-  if (!handler) throw new Error(`Orbit cannot reach the ${d.source} portal right now. Try again in a moment.`);
+  if (!handler) throw new Error(`SteelConnect360 cannot reach the ${d.source} portal right now. Try again in a moment.`);
   await handler(tx, ctx, d);
 }

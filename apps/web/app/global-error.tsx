@@ -15,7 +15,7 @@ export default function GlobalError({ error }: { error: Error & { digest?: strin
       <body style={{ fontFamily: 'system-ui, sans-serif', background: '#f7f7f5', color: '#1f2328' }}>
         <div style={{ maxWidth: 480, margin: '80px auto', padding: 16 }}>
           <h1 style={{ fontSize: 22 }}>Something went wrong</h1>
-          <p style={{ color: '#59636e' }}>Orbit could not load this page. Reloading usually fixes it.</p>
+          <p style={{ color: '#59636e' }}>SteelConnect360 could not load this page. Reloading usually fixes it.</p>
           <button type="button" onClick={() => window.location.reload()} style={{ padding: '8px 16px', borderRadius: 6, border: 0, background: '#2d5b8a', color: '#fff', cursor: 'pointer' }}>
             Reload page
           </button>

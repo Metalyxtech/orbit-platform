@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@orbit/core/next';
 import { signDocs, signInput } from '@/legal/state';
 
-/** Signs the current Terms and Privacy Policy, then continues into Orbit. */
+/** Signs the current Terms and Privacy Policy, then continues into SteelConnect360. */
 export async function signAgreementsAction(form: FormData) {
   const s = await getSession();
   if (s.state !== 'ok' && s.state !== 'no_company') redirect('/');

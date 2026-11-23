@@ -9,10 +9,10 @@ import { ToastProvider } from '@orbit/ui';
 import { ServiceWorker } from './sw-register';
 
 export const metadata: Metadata = {
-  title: 'Orbit',
-  description: 'Orbit platform: timesheets and project workflows',
+  title: 'SteelConnect360',
+  description: 'SteelConnect360: timesheets and project workflows',
   manifest: '/manifest.webmanifest',
-  icons: { icon: '/icon.svg' },
+  icons: { icon: [{ url: '/favicon.ico' }, { url: '/icon.svg', type: 'image/svg+xml' }], apple: '/apple-touch-icon.png' },
 };
 
 export const viewport: Viewport = { themeColor: '#262C33', width: 'device-width', initialScale: 1 };

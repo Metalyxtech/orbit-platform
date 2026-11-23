@@ -166,7 +166,7 @@ export async function runAsSystem<T>(companyId: string, requestId: string, fn: (
     requestId,
     userId: NO_COMPANY,
     email: 'system',
-    name: 'Orbit',
+    name: 'SteelConnect360',
     isSuperAdmin: false,
     companyId,
     companyName: company.name,

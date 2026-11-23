@@ -7,7 +7,7 @@ import { TRIAL_DAYS } from '@/billing/plans';
 import { portalModules } from '@/portals';
 import { setPortal } from './guard';
 
-// Super Admin > Add company: Orbit's team sets up a client who contacted them.
+// Super Admin > Add company: SteelConnect360's team sets up a client who contacted them.
 // The company starts active, its admin can sign in with the email given, and billing is set per country.
 
 export const TIMEZONES = ['Asia/Kolkata', 'Asia/Dubai', 'Asia/Riyadh', 'Asia/Qatar', 'Asia/Singapore', 'Europe/London', 'America/New_York', 'Australia/Perth', 'UTC'];
@@ -75,7 +75,7 @@ export async function createCompany(db: Db, superUserId: string, raw: NewCompany
       action: 'company.create',
       entity: 'companies',
       entityId: company.id,
-      data: { summary: [`Company set up by Orbit with admin ${input.adminEmail}`], portals, admin: m.id, currency: input.country === 'abroad' ? 'USD' : 'INR' },
+      data: { summary: [`Company set up by SteelConnect360 with admin ${input.adminEmail}`], portals, admin: m.id, currency: input.country === 'abroad' ? 'USD' : 'INR' },
     });
   });
   return company.id;

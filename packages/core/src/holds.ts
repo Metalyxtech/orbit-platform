@@ -146,7 +146,7 @@ export async function processThread(tx: Tx, ctx: SessionContext, entity: Control
 async function target(tx: Tx, companyId: string, entity: string, entityId: string) {
   if (!isControlled(entity)) throw new Error('This page cannot be put on hold');
   const d = describers.get(entity);
-  if (!d) throw new Error('Orbit cannot reach that portal right now. Try again in a moment.');
+  if (!d) throw new Error('SteelConnect360 cannot reach that portal right now. Try again in a moment.');
   const t = await d(tx, companyId, entityId);
   if (!t) throw new Error(`${CONTROLLED[entity].label} not found`);
   return { entity, portal: CONTROLLED[entity].portal, ...t };

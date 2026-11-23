@@ -4,7 +4,7 @@ import { unsignedDocs } from './state';
 
 /**
  * Sends anyone who has not signed the current Terms and Privacy Policy to /agree first.
- * Super Admin (Orbit staff) is not asked. Call from layouts and entry pages.
+ * Super Admin (SteelConnect360 staff) is not asked. Call from layouts and entry pages.
  */
 export async function requireAgreement(s: SessionState) {
   if (s.state === 'ok' && !s.ctx.isSuperAdmin) {

@@ -12,7 +12,7 @@ export function PortalsClient({ portals }: { portals: Portal[] }) {
   async function act(p: Portal, kind: 'request' | 'cancel') {
     const res = kind === 'request' ? await requestCompanyPortalAction({ portal: p.id }) : await cancelCompanyPortalAction({ portal: p.id });
     if (!res.ok) return toast(res.error, 'bad');
-    toast(kind === 'request' ? `${p.name} requested. Orbit will review it.` : `${p.name} request withdrawn.`);
+    toast(kind === 'request' ? `${p.name} requested. SteelConnect360 will review it.` : `${p.name} request withdrawn.`);
     router.refresh();
   }
   return (
@@ -21,7 +21,7 @@ export function PortalsClient({ portals }: { portals: Portal[] }) {
         <article key={p.id} className="o-panel o-form-card">
           <div className="o-row" style={{ justifyContent: 'space-between' }}>
             <h2 style={{ margin: 0 }}>{p.name}</h2>
-            <Chip tone={p.state === 'on' ? 'ok' : p.state === 'requested' ? 'warn' : 'grey'}>{p.state === 'on' ? 'In use' : p.state === 'requested' ? 'Waiting for Orbit' : 'Not added'}</Chip>
+            <Chip tone={p.state === 'on' ? 'ok' : p.state === 'requested' ? 'warn' : 'grey'}>{p.state === 'on' ? 'In use' : p.state === 'requested' ? 'Waiting for SteelConnect360' : 'Not added'}</Chip>
           </div>
           <p className="muted" style={{ fontSize: 12, margin: '8px 0 4px' }}>
             Pages: {p.pages.join(', ')}

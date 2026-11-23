@@ -20,7 +20,7 @@ export function companyAdminItems(
     { href: '/manage/company/billing', label: 'Plan and billing', group: 'Company' },
     { href: '/manage/company/history', label: 'Change history', group: 'Company' },
     { href: '/manage/company/legal', label: 'Terms and privacy', group: 'Company' },
-    // Ask Orbit for a custom portal or changes (open to every company admin).
+    // Ask SteelConnect360 for a custom portal or changes (open to every company admin).
     { href: '/manage/company/custom', label: 'Custom portals', group: 'Company' },
   ];
   for (const p of portals.filter((x) => portalModules[x])) {

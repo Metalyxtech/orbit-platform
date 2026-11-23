@@ -101,4 +101,4 @@ export const isCustomPortal = (id: string) => !!portalModules[id]?.manifest.cust
 /** The normal portals every customer can choose. */
 export const standardPortals = () => Object.values(portalModules).filter((m) => !m.manifest.custom);
 
-export const BRAND = 'Orbit';
+export const BRAND = 'SteelConnect360';

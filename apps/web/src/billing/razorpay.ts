@@ -6,7 +6,7 @@ const base = () => process.env.RAZORPAY_API_BASE ?? 'https://api.razorpay.com/v1
 
 export class PaymentsNotConfigured extends Error {
   constructor() {
-    super('Online payments are not set up yet. Orbit will switch them on shortly.');
+    super('Online payments are not set up yet. SteelConnect360 will switch them on shortly.');
   }
 }
 
@@ -34,7 +34,7 @@ async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown): Pr
   const data = (await res.json().catch(() => ({}))) as T & { error?: { description?: string } };
   if (!res.ok) {
     console.error(JSON.stringify({ razorpay: path, status: res.status, error: data.error }));
-    if (res.status === 401) throw new Error('Razorpay did not accept Orbit’s payment keys. Orbit is fixing this; please try again later.');
+    if (res.status === 401) throw new Error('Razorpay did not accept SteelConnect360’s payment keys. SteelConnect360 is fixing this; please try again later.');
     throw new Error(data.error?.description ? `Payment provider: ${data.error.description}` : 'The payment provider did not respond. Try again in a minute.');
   }
   return data;

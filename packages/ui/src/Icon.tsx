@@ -157,7 +157,7 @@ const PATHS = {
 export type IconName = keyof typeof PATHS;
 export const isIconName = (name: string | undefined): name is IconName => !!name && name in PATHS;
 
-/** 24 px stroke icons drawn for Orbit; decorative unless a label is given. */
+/** 24 px stroke icons drawn for SteelConnect360; decorative unless a label is given. */
 export function Icon({ name, size, label }: { name: IconName; size?: number; label?: string }) {
   return (
     <svg

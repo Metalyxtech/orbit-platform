@@ -24,7 +24,7 @@ export default async function Agree({ searchParams }: { searchParams: Promise<{ 
       <div className="o-panel" style={{ maxWidth: 760, margin: '0 auto', padding: '24px 28px' }}>
         <div className="o-row" style={{ marginBottom: 14 }}>
           <div className="o-brand-mark" style={{ borderColor: 'var(--graphite)' }} aria-hidden />
-          <strong style={{ fontSize: 18 }}>Orbit</strong>
+          <strong style={{ fontSize: 18 }}>SteelConnect360</strong>
         </div>
         <h1 style={{ marginBottom: 6 }}>{updated ? 'We have updated our terms' : 'Before you start'}</h1>
         <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
@@ -56,7 +56,7 @@ export default async function Agree({ searchParams }: { searchParams: Promise<{ 
             <input className="o-input" name="signedName" required minLength={2} maxLength={120} defaultValue={name.includes('@') ? '' : name} autoComplete="name" />
           </label>
           <p className="faint" style={{ fontSize: 12, margin: 0 }}>
-            Your name, the date and time, and the versions you sign are recorded{admin ? ' for your company and for Orbit' : ''}.
+            Your name, the date and time, and the versions you sign are recorded{admin ? ' for your company and for SteelConnect360' : ''}.
           </p>
           <div className="o-row" style={{ gap: 8, justifyContent: 'space-between' }}>
             <button className="o-btn" type="submit" formAction="/auth/sign-out" formMethod="post" formNoValidate>

@@ -36,7 +36,7 @@ export async function saveCustomPlanAction(companyId: string, form: FormData) {
   revalidatePath('/super-admin', 'layout');
 }
 
-/** Custom work > one request: status and Orbit's reply to the customer. */
+/** Custom work > one request: status and SteelConnect360's reply to the customer. */
 export async function updateCustomRequestAction(companyId: string, requestId: string, form: FormData) {
   const userId = await requireSuperAdmin();
   const id = z.uuid().parse(companyId);

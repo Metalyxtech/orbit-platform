@@ -17,9 +17,9 @@ const stamp = (d: Date) =>
 export function SignedCopyView({ c }: { c: SignedCopy }) {
   const rows: [string, string][] = [
     ['Document', `${c.doc?.title ?? 'Document'} · version ${c.version}`],
-    ['Between', `${LEGAL_PROVIDER} (Orbit) and ${c.company ?? 'the person below'}`],
+    ['Between', `${LEGAL_PROVIDER} (SteelConnect360) and ${c.company ?? 'the person below'}`],
     ['Signed by (typed name)', c.signedName],
-    ['Orbit account', `${c.name} <${c.email}>`],
+    ['SteelConnect360 account', `${c.name} <${c.email}>`],
     ['Company', c.company ?? 'Not in a company yet when signed'],
     ['Signed as', c.role ? (ROLE[c.role] ?? c.role) : 'Individual'],
     ['Date and time', stamp(c.at)],
@@ -33,12 +33,12 @@ export function SignedCopyView({ c }: { c: SignedCopy }) {
       <div className="o-row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
         <div className="o-row">
           <div className="o-brand-mark" style={{ borderColor: 'var(--graphite)' }} aria-hidden />
-          <strong style={{ fontSize: 18 }}>Orbit · Signed copy</strong>
+          <strong style={{ fontSize: 18 }}>SteelConnect360 · Signed copy</strong>
         </div>
         <PrintButton />
       </div>
       <p className="faint" style={{ fontSize: 12, marginTop: 0 }}>
-        Electronic acceptance recorded by Orbit. The person read the document, ticked “I have read and agree”, typed their name and pressed “Agree and sign”.
+        Electronic acceptance recorded by SteelConnect360. The person read the document, ticked “I have read and agree”, typed their name and pressed “Agree and sign”.
       </p>
       <table className="o-table" style={{ marginBottom: 16 }}>
         <tbody>

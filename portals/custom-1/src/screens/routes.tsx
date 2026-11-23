@@ -12,7 +12,7 @@ const Home = async () => {
         <div className="o-page-head">
           <div>
             <h1>{custom1Manifest.name}</h1>
-            <p>Built for {company}. Forms and approvals agreed with Orbit appear here as they are delivered.</p>
+            <p>Built for {company}. Forms and approvals agreed with SteelConnect360 appear here as they are delivered.</p>
           </div>
         </div>
         <div className="o-panel">

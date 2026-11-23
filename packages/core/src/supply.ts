@@ -91,7 +91,7 @@ export function onSupplyUpdate(source: SupplySource, listener: Listener) {
   reg.listeners.set(source, listener);
 }
 
-const unreachable = () => new Error('Orbit cannot reach the Purchase portal right now. Try again in a moment.');
+const unreachable = () => new Error('SteelConnect360 cannot reach the Purchase portal right now. Try again in a moment.');
 
 /** Sends approved material to Purchase. Returns the purchase request created there. */
 export async function raisePurchase(tx: Tx, ctx: ActionContext, req: SupplyRequest) {
@@ -119,6 +119,6 @@ export async function purchaseStatus(tx: Tx, companyId: string, purchaseId: stri
 /** Called by Purchase inside its own transaction. */
 export async function notifySupply(tx: Tx, ctx: ActionContext, u: SupplyUpdate) {
   const l = reg.listeners.get(u.source);
-  if (!l) throw new Error(`Orbit cannot reach the ${u.source} portal right now. Try again in a moment.`);
+  if (!l) throw new Error(`SteelConnect360 cannot reach the ${u.source} portal right now. Try again in a moment.`);
   await l(tx, ctx, u);
 }

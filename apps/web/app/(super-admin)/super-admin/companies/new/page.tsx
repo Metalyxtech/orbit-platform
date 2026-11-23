@@ -7,7 +7,7 @@ import { TIMEZONES } from '../../new-company';
 
 export const dynamic = 'force-dynamic';
 
-/** Super Admin > Companies > Add company: set up a client who contacted Orbit. */
+/** Super Admin > Companies > Add company: set up a client who contacted SteelConnect360. */
 export default async function NewCompany({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   await requireSuperAdminPage();
   const error = (await searchParams).error;
@@ -22,7 +22,7 @@ export default async function NewCompany({ searchParams }: { searchParams: Promi
       </header>
       <div className="o-page" style={{ maxWidth: 760 }}>
         <p className="muted" style={{ margin: 0 }}>
-          For a client who contacted the Orbit team. The company is active straight away. Its admin signs in with the email below and lands in the Company admin portal.
+          For a client who contacted the SteelConnect360 team. The company is active straight away. Its admin signs in with the email below and lands in the Company admin portal.
         </p>
         {error && (
           <div className="o-banner bad" role="alert">
@@ -111,7 +111,7 @@ export default async function NewCompany({ searchParams }: { searchParams: Promi
                 Subscription plans
                 <select className="o-select" name="showPlans" defaultValue="show">
                   <option value="show">Released: the admin sees plans and pays online</option>
-                  <option value="hide">Hidden: Orbit arranges the plan</option>
+                  <option value="hide">Hidden: SteelConnect360 arranges the plan</option>
                 </select>
               </label>
             </div>

@@ -83,10 +83,10 @@ const ACTIONS: Record<string, { area: ChangeArea; label: string }> = {
   'member_portal.request': { area: 'People and access', label: 'Portal access given' },
   'member_portal.remove': { area: 'People and access', label: 'Portal access removed' },
   'member_portal.cancel': { area: 'People and access', label: 'Portal request cancelled' },
-  'company_portal.request': { area: 'Company', label: 'Portal requested from Orbit' },
+  'company_portal.request': { area: 'Company', label: 'Portal requested from SteelConnect360' },
   'company_portal.cancel': { area: 'Company', label: 'Portal request withdrawn' },
-  'company.approve': { area: 'Company', label: 'Company approved by Orbit' },
-  'portal.decline': { area: 'Company', label: 'Portal declined by Orbit' },
+  'company.approve': { area: 'Company', label: 'Company approved by SteelConnect360' },
+  'portal.decline': { area: 'Company', label: 'Portal declined by SteelConnect360' },
 };
 
 const describe = (data: unknown): string[] => {
@@ -115,7 +115,7 @@ export async function listChanges(tx: Tx, ctx: SessionContext, opts: { area?: Ch
     .map((r) => {
       const known = ACTIONS[r.action] ?? { area: 'Company' as ChangeArea, label: r.action.replace(/[._]/g, ' ') };
       const who = people.find((p) => p.id === r.actorId);
-      return { id: r.id, at: r.at.toISOString(), area: known.area, label: known.label, who: who?.name ?? (r.actorId ? 'Someone' : 'Orbit'), whoTitle: who?.title ?? null, details: describe(r.data) };
+      return { id: r.id, at: r.at.toISOString(), area: known.area, label: known.label, who: who?.name ?? (r.actorId ? 'Someone' : 'SteelConnect360'), whoTitle: who?.title ?? null, details: describe(r.data) };
     })
     .filter((r) => !opts.area || r.area === opts.area);
 }

@@ -6,7 +6,7 @@ import { PortalsClient } from './PortalsClient';
 
 export const dynamic = 'force-dynamic';
 
-/** Company admin > Company portals: the portals Orbit offers and which ones the company uses. */
+/** Company admin > Company portals: the portals SteelConnect360 offers and which ones the company uses. */
 export default async function CompanyPortals() {
   const s = await getSession();
   if (s.state !== 'ok' || s.ctx.role !== 'company_admin') redirect('/manage');
@@ -20,7 +20,7 @@ export default async function CompanyPortals() {
         <div>
           <h1>Company portals</h1>
           <p className="muted" style={{ fontSize: 12, margin: '4px 0 0' }}>
-            Add a portal for {s.ctx.companyName}. Orbit reviews the request and switches it on; then you give it to people in People and portals.
+            Add a portal for {s.ctx.companyName}. SteelConnect360 reviews the request and switches it on; then you give it to people in People and portals.
           </p>
         </div>
         <PortalsClient portals={portals} />
@@ -28,7 +28,7 @@ export default async function CompanyPortals() {
           <div>
             <h2 style={{ margin: 0 }}>Need a portal we don&apos;t offer?</h2>
             <p className="muted" style={{ fontSize: 13, margin: '4px 0 0' }}>
-              Orbit can build a custom portal for {s.ctx.companyName} from your own forms and workflow, alongside the portals you use now.
+              SteelConnect360 can build a custom portal for {s.ctx.companyName} from your own forms and workflow, alongside the portals you use now.
             </p>
           </div>
           <Link className="o-btn primary" href="/manage/company/custom">

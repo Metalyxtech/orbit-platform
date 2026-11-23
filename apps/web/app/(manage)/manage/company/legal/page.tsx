@@ -29,7 +29,7 @@ export default async function Legal({ searchParams }: { searchParams: Promise<{ 
           <div>
             <h1>Terms and privacy</h1>
             <p>
-              The agreement between {s.ctx.companyName} and Orbit. Everyone signs the current version the first time they open Orbit.
+              The agreement between {s.ctx.companyName} and SteelConnect360. Everyone signs the current version the first time they open SteelConnect360.
               {me?.signedAt && ` You signed on behalf of the company on ${when(me.signedAt)}.`}
             </p>
           </div>

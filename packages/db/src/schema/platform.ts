@@ -116,7 +116,7 @@ export const workflowDefinitions = pgTable(
     name: text('name').notNull(),
     description: text('description'),
     definition: jsonb('definition').notNull(),
-    /** Null for the Orbit library; set for a workflow a company built itself. */
+    /** Null for the SteelConnect360 library; set for a workflow a company built itself. */
     companyId: uuid('company_id').references(() => companies.id),
     createdAt: createdAt(),
   },

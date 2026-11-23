@@ -13,8 +13,8 @@ export const dynamic = 'force-dynamic';
 const when = (d: Date) => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
 /**
- * Company admin > Custom portals: any company can ask Orbit for a portal built for them (or changes),
- * uploading their forms. Orbit replies here and sets the price; the normal portals stay as they are.
+ * Company admin > Custom portals: any company can ask SteelConnect360 for a portal built for them (or changes),
+ * uploading their forms. SteelConnect360 replies here and sets the price; the normal portals stay as they are.
  */
 export default async function CustomRequirements() {
   const s = await getSession();
@@ -33,7 +33,7 @@ export default async function CustomRequirements() {
           <div>
             <h1>Custom portals</h1>
             <p>
-              Need a portal Orbit does not offer, or your own forms in Timesheet or Purchase? Send your forms (photos, scans or PDF) and how the work flows.
+              Need a portal SteelConnect360 does not offer, or your own forms in Timesheet or Purchase? Send your forms (photos, scans or PDF) and how the work flows.
               {d.plan
                 ? ` Our team builds them in your custom portal (${d.plan.label}) and replies here.`
                 : ' Our team reviews them, replies here with a price, and builds your custom portal next to the portals you already use.'}
@@ -95,7 +95,7 @@ export default async function CustomRequirements() {
                   )}
                   {r.orbitNote && (
                     <div className="o-banner ok" style={{ marginTop: 10, whiteSpace: 'pre-wrap' }}>
-                      <strong>Orbit:</strong> {r.orbitNote}
+                      <strong>SteelConnect360:</strong> {r.orbitNote}
                     </div>
                   )}
                 </div>

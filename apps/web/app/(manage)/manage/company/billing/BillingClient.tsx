@@ -100,7 +100,7 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
     const rz = new window.Razorpay({
       key: res.data.keyId,
       subscription_id: res.data.subscriptionId,
-      name: 'Orbit',
+      name: 'SteelConnect360',
       description: `${res.data.planName}, ${res.data.cycle}`,
       prefill: { name: res.data.name, email: res.data.email },
       notes: { company },
@@ -190,11 +190,11 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
         <div className="o-panel">
           <h2 style={{ margin: 0 }}>Your custom plan: {custom.label}</h2>
           <p className="muted" style={{ fontSize: 13, margin: '6px 0 12px' }}>
-            Agreed with Orbit for {company}
+            Agreed with SteelConnect360 for {company}
             {custom.maxUsers ? `, up to ${custom.maxUsers} people` : ''}. Prices in {cur === 'USD' ? 'US dollars' : 'Indian rupees'} · {taxNote(cur)}.
           </p>
           {!custom.monthlyPrice && !custom.yearlyPrice ? (
-            <p style={{ fontSize: 13, margin: 0 }}>Orbit will share your price shortly.</p>
+            <p style={{ fontSize: 13, margin: 0 }}>SteelConnect360 will share your price shortly.</p>
           ) : (
             <div className="o-row" style={{ gap: 12, flexWrap: 'wrap' }}>
               {(['monthly', 'yearly', 'yearly_monthly'] as const).map((c) => {
@@ -230,10 +230,10 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
         </div>
       ) : !state.showPlans ? (
         <div className="o-panel">
-          <h2 style={{ margin: 0 }}>Your plan is arranged by the Orbit team</h2>
+          <h2 style={{ margin: 0 }}>Your plan is arranged by the SteelConnect360 team</h2>
           <p className="muted" style={{ fontSize: 13, margin: '6px 0 0' }}>
-            Orbit has set up your subscription for you. To change your plan or team size, write to{' '}
-            <a href="mailto:sales@metalyxtech.com?subject=Orbit%20plan">sales@metalyxtech.com</a>.
+            SteelConnect360 has set up your subscription for you. To change your plan or team size, write to{' '}
+            <a href="mailto:sales@metalyxtech.com?subject=SteelConnect360%20plan">sales@metalyxtech.com</a>.
           </p>
         </div>
       ) : (
@@ -270,7 +270,7 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
             );
           }}
           enterprise={
-            <a className="o-btn block" href="mailto:sales@metalyxtech.com?subject=Orbit%20Enterprise">
+            <a className="o-btn block" href="mailto:sales@metalyxtech.com?subject=SteelConnect360%20Enterprise">
               Talk to us
             </a>
           }

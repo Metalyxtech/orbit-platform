@@ -11,11 +11,11 @@ const requireAdmin = (ctx: SessionContext) => {
 
 export type CompanyPortalState = 'on' | 'requested' | 'none';
 
-/** Every Orbit portal and where this company stands with it. */
+/** Every SteelConnect360 portal and where this company stands with it. */
 export async function companyPortalList(tx: Tx, ctx: SessionContext) {
   requireAdmin(ctx);
   const rows = await tx.select({ portal: companyPortals.portal, enabled: companyPortals.enabled }).from(companyPortals).where(eq(companyPortals.companyId, ctx.companyId));
-  // A custom portal is listed only once Orbit has switched it on for this company.
+  // A custom portal is listed only once SteelConnect360 has switched it on for this company.
   const shown = Object.values(portalModules).filter((m) => !m.manifest.custom || rows.some((r) => r.portal === m.manifest.id && r.enabled));
   return shown.map((m) => {
     const row = rows.find((r) => r.portal === m.manifest.id);
@@ -31,7 +31,7 @@ export async function companyPortalList(tx: Tx, ctx: SessionContext) {
 
 const portalInput = z.object({ portal: z.string().refine((p) => !!portalModules[p] && !portalModules[p].manifest.custom, 'Unknown portal') });
 
-/** Asks Orbit to add a portal for the company. It switches on when Super Admin approves. */
+/** Asks SteelConnect360 to add a portal for the company. It switches on when Super Admin approves. */
 export async function requestCompanyPortal(tx: Tx, ctx: ActionContext, raw: { portal: string }) {
   requireAdmin(ctx);
   const { portal } = portalInput.parse(raw);
@@ -41,7 +41,7 @@ export async function requestCompanyPortal(tx: Tx, ctx: ActionContext, raw: { po
   return { ok: true as const };
 }
 
-/** Withdraws a request that Orbit has not approved yet. */
+/** Withdraws a request that SteelConnect360 has not approved yet. */
 export async function cancelCompanyPortal(tx: Tx, ctx: ActionContext, raw: { portal: string }) {
   requireAdmin(ctx);
   const { portal } = portalInput.parse(raw);

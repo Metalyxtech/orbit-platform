@@ -36,7 +36,7 @@ export async function superAdminBadges(superUserId: string) {
         .select({ n: sql<number>`count(*)::int` })
         .from(billingEvents)
         .where(and(eq(billingEvents.companyId, c.id), inArray(billingEvents.type, CONFIRMATIONS), b?.seenAt ? gt(billingEvents.createdAt, b.seenAt) : undefined));
-      // Custom requests waiting for Orbit: new ones, and prices the customer approved (skipped before migration 0015).
+      // Custom requests waiting for SteelConnect360: new ones, and prices the customer approved (skipped before migration 0015).
       let fresh = 0;
       try {
         [{ n: fresh }] = await tx.transaction((sp) =>

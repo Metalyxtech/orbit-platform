@@ -180,7 +180,7 @@ export async function requestDetail(tx: Tx, ctx: SessionContext, id: string) {
     /** GM hold and comments. */
     control: await processThread(tx, ctx, 'proc_request', r.id),
     canUploadReceiptDocs: ['receiving', 'inspection'].includes(r.stage) && (roles.includes('store') || roles.includes('buyer') || roles.includes('manager')),
-    events: events.map((e) => ({ id: e.id, kind: e.kind, text: e.text, note: e.note, by: e.byId ? (people.get(e.byId)?.name ?? '') : 'Orbit', at: e.createdAt.toISOString() })),
+    events: events.map((e) => ({ id: e.id, kind: e.kind, text: e.text, note: e.note, by: e.byId ? (people.get(e.byId)?.name ?? '') : 'SteelConnect360', at: e.createdAt.toISOString() })),
     money: {
       estimate: estValue(lines),
       value,

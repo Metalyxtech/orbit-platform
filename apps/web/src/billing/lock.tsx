@@ -47,11 +47,11 @@ export async function SubscriptionGate({ role, children }: { role: SessionContex
             </div>
             <h1 id="o-lock-title">{trial ? 'Your free subscription period has ended' : 'Your subscription period has ended'}</h1>
             <p id="o-lock-text">
-              {trial ? `The free period for your company ended${on ? ` on ${on}` : ''}.` : `Your Orbit plan ended${on ? ` on ${on}` : ''}.`} Your data is safe and nothing has been deleted.{' '}
+              {trial ? `The free period for your company ended${on ? ` on ${on}` : ''}.` : `Your SteelConnect360 plan ended${on ? ` on ${on}` : ''}.`} Your data is safe and nothing has been deleted.{' '}
               {admin
                 ? lock.showPlans
-                  ? 'Choose a plan to open every portal again, or ask Orbit to extend your free period.'
-                  : 'Contact the Orbit team to arrange your plan or to extend your free period.'
+                  ? 'Choose a plan to open every portal again, or ask SteelConnect360 to extend your free period.'
+                  : 'Contact the SteelConnect360 team to arrange your plan or to extend your free period.'
                 : 'Ask your company admin to renew it. Everything opens again as soon as the plan is active.'}
             </p>
             <div className="o-lock-actions">

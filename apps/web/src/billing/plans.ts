@@ -1,4 +1,4 @@
-// Orbit subscription plans: which portals (bundle) x team size (tier) x how often to pay (cycle).
+// SteelConnect360 subscription plans: which portals (bundle) x team size (tier) x how often to pay (cycle).
 // Prices in rupees (India, GST extra) or US dollars at USD_RATE (foreign clients). Change prices here only.
 // Safe to import from client components.
 

@@ -16,7 +16,7 @@ export default async function SuperAdminLayout({ children }: { children: ReactNo
         <div className="o-brand">
           <div className="o-brand-mark" aria-hidden />
           <div>
-            <div className="o-brand-name">Orbit</div>
+            <div className="o-brand-name">SteelConnect360</div>
             <div className="o-brand-co">Super Admin</div>
           </div>
         </div>

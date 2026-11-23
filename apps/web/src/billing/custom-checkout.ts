@@ -21,7 +21,7 @@ async function razorpayCustomPlan(tx: Tx, companyId: string, cycle: CustomCycle,
   const key = `custom_${companyId}_${cycle}_${currency}`;
   const [row] = await tx.select().from(billingPlans).where(eq(billingPlans.key, key));
   if (row && row.amount === amount) return row.razorpayPlanId;
-  const created = await rz.createPlan({ period: RZ[cycle].period, interval: 1, name: `Orbit ${label} (${RZ[cycle].label})`, amount, currency, description: 'Custom plan' });
+  const created = await rz.createPlan({ period: RZ[cycle].period, interval: 1, name: `SteelConnect360 ${label} (${RZ[cycle].label})`, amount, currency, description: 'Custom plan' });
   await tx.insert(billingPlans).values({ key, razorpayPlanId: created.id, amount }).onConflictDoUpdate({ target: billingPlans.key, set: { razorpayPlanId: created.id, amount } });
   return created.id;
 }
@@ -32,12 +32,12 @@ export async function startCustomCheckout(tx: Tx, ctx: ActionContext, raw: z.inp
   if (ctx.role !== 'company_admin') throw new Error('Only the company admin can manage the subscription');
   const { cycle } = input.parse(raw);
   const plan = await getCustomPlan(tx, ctx.companyId);
-  if (!plan?.enabled) throw new Error('Your company does not have a custom plan. Contact Orbit.');
+  if (!plan?.enabled) throw new Error('Your company does not have a custom plan. Contact SteelConnect360.');
   const price = customPrice(plan, cycle);
-  if (!price) throw new Error(`Orbit has not offered ${RZ[cycle].label.toLowerCase()} payment for your plan.`);
+  if (!price) throw new Error(`SteelConnect360 has not offered ${RZ[cycle].label.toLowerCase()} payment for your plan.`);
   const state = await billingState(tx, ctx);
   if (state.status === 'active' && !state.cancelAtPeriodEnd && state.plan === 'custom' && state.cycle === cycle) throw new Error('You are already on this plan.');
-  if (plan.maxUsers && state.usage.users > plan.maxUsers) throw new Error(`Your plan includes ${plan.maxUsers} people and you have ${state.usage.users}. Contact Orbit.`);
+  if (plan.maxUsers && state.usage.users > plan.maxUsers) throw new Error(`Your plan includes ${plan.maxUsers} people and you have ${state.usage.users}. Contact SteelConnect360.`);
   const amount = price * 100; // paise or cents
   const rzPlan = await razorpayCustomPlan(tx, ctx.companyId, cycle, state.currency, amount, plan.label);
   const timing = await switchTiming(tx, ctx.companyId, state);

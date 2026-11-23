@@ -184,7 +184,7 @@ export async function createDirect(tx: Tx, ctx: ActionContext, raw: z.input<type
     return { id: row.id, number: row.number };
   } catch (err) {
     if (/qc_inspections_source_check/.test(String(err) + String((err as { cause?: unknown })?.cause ?? ''))) {
-      throw new Error('Direct inspections switch on after the latest database update. Ask the person who runs Orbit for your company.');
+      throw new Error('Direct inspections switch on after the latest database update. Ask the person who runs SteelConnect360 for your company.');
     }
     throw err;
   }

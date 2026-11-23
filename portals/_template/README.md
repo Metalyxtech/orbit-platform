@@ -1,6 +1,6 @@
 # Portal template
 
-Starting point for a new Orbit portal (QC, Construction, ...). A portal is a package with:
+Starting point for a new SteelConnect360 portal (QC, Construction, ...). A portal is a package with:
 
 | File | What it is |
 | --- | --- |

@@ -92,7 +92,7 @@ export function RolesClient({ team, needed }: { team: TeamMember[]; needed: Proc
                       </div>
                     </td>
                     <td>
-                      <Chip tone={m.access === 'on' ? 'ok' : m.access === 'requested' ? 'warn' : 'grey'}>{m.access === 'on' ? 'On' : m.access === 'requested' ? 'Waiting for Orbit' : 'No access'}</Chip>
+                      <Chip tone={m.access === 'on' ? 'ok' : m.access === 'requested' ? 'warn' : 'grey'}>{m.access === 'on' ? 'On' : m.access === 'requested' ? 'Waiting for SteelConnect360' : 'No access'}</Chip>
                     </td>
                     <td style={{ minWidth: 190 }}>
                       {m.companyRole === 'company_admin' ? (

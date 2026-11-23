@@ -8,7 +8,7 @@ import { decideQuoteAction } from './actions';
 type Quote = { label: string; monthly: number | null; yearly: number | null; credit: number; installments: boolean; note: string | null; approved: boolean | null; decidedAt: string | null };
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '');
 
-/** Orbit's price for a custom request, with Approve / Decline for the company admin. */
+/** SteelConnect360's price for a custom request, with Approve / Decline for the company admin. */
 export function QuoteBox({ requestId, quote, currency, waiting }: { requestId: string; quote: Quote; currency: Currency; waiting: boolean }) {
   const router = useRouter();
   const toast = useToast();
@@ -24,13 +24,13 @@ export function QuoteBox({ requestId, quote, currency, waiting }: { requestId: s
     const res = await decideQuoteAction({ id: requestId, approve });
     setBusy(false);
     if (!res.ok) return toast(res.error, 'bad');
-    toast(approve ? 'Approved. Orbit starts the work and lets you know when it is ready.' : 'Declined. Orbit will get back to you.');
+    toast(approve ? 'Approved. SteelConnect360 starts the work and lets you know when it is ready.' : 'Declined. SteelConnect360 will get back to you.');
     router.refresh();
   }
 
   return (
     <div className="o-panel" style={{ margin: '10px 0 0', background: 'var(--steel-tint)' }}>
-      <strong style={{ fontSize: 13 }}>Price from Orbit: {quote.label}</strong>
+      <strong style={{ fontSize: 13 }}>Price from SteelConnect360: {quote.label}</strong>
       <ul style={{ margin: '6px 0', paddingLeft: 18, fontSize: 13 }}>
         {quote.yearly && (
           <li>
@@ -58,7 +58,7 @@ export function QuoteBox({ requestId, quote, currency, waiting }: { requestId: s
         )}
       </ul>
       <p className="faint" style={{ fontSize: 12, margin: 0 }}>
-        Covers your current portals plus the custom portal. You subscribe in Plan and billing once Orbit has built it; until then your current plan carries on.
+        Covers your current portals plus the custom portal. You subscribe in Plan and billing once SteelConnect360 has built it; until then your current plan carries on.
       </p>
       {quote.note && <p style={{ fontSize: 13, whiteSpace: 'pre-wrap', margin: '6px 0 0' }}>{quote.note}</p>}
       {waiting ? (
@@ -86,8 +86,8 @@ export function QuoteBox({ requestId, quote, currency, waiting }: { requestId: s
         onConfirm={() => void decide(ask === 'approve')}
       >
         {ask === 'approve'
-          ? 'Orbit starts building your custom portal. Nothing is charged now: you subscribe in Plan and billing when it is ready.'
-          : 'Orbit will be told you did not accept this price, and can send a new one.'}
+          ? 'SteelConnect360 starts building your custom portal. Nothing is charged now: you subscribe in Plan and billing when it is ready.'
+          : 'SteelConnect360 will be told you did not accept this price, and can send a new one.'}
       </ConfirmDialog>
     </div>
   );

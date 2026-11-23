@@ -1,6 +1,6 @@
-# Orbit platform
+# SteelConnect360 platform
 
-Orbit is a multi-company portal platform. The first portal is **Timesheet**. This repository holds
+SteelConnect360 is a multi-company portal platform. The first portal is **Timesheet**. This repository holds
 everything: the Next.js app (front end and back end), the Super Admin portal, the AWS workers and
 the infrastructure as code (AWS backend + Timesheet UI).
 

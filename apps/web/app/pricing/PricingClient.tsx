@@ -16,7 +16,7 @@ export function PricingClient() {
       <header className="b-public-head">
         <div className="o-row" style={{ gap: 10 }}>
           <div className="o-brand-mark" aria-hidden />
-          <strong style={{ color: '#fff', fontSize: 18 }}>Orbit</strong>
+          <strong style={{ color: '#fff', fontSize: 18 }}>SteelConnect360</strong>
         </div>
         <div className="o-row" style={{ gap: 8 }}>
           <Link className="o-btn" href="/sign-in">
@@ -62,7 +62,7 @@ export function PricingClient() {
             </Link>
           )}
           enterprise={
-            <a className="o-btn block" href="mailto:sales@metalyxtech.com?subject=Orbit%20Enterprise">
+            <a className="o-btn block" href="mailto:sales@metalyxtech.com?subject=SteelConnect360%20Enterprise">
               Talk to us
             </a>
           }

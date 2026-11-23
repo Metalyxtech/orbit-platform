@@ -19,8 +19,8 @@ export const AREAS = [
   { id: 'other', label: 'Something else (report, workflow, integration)' },
 ] as const;
 export const STATUSES = [
-  { id: 'new', label: 'Sent to Orbit', tone: 'steel' },
-  { id: 'reviewing', label: 'Orbit is reviewing', tone: 'warn' },
+  { id: 'new', label: 'Sent to SteelConnect360', tone: 'steel' },
+  { id: 'reviewing', label: 'SteelConnect360 is reviewing', tone: 'warn' },
   { id: 'quoted', label: 'Price sent: waiting for approval', tone: 'hivis' },
   { id: 'approved', label: 'Approved: work starting', tone: 'ok' },
   { id: 'in_progress', label: 'Being built', tone: 'warn' },
@@ -31,7 +31,7 @@ export type RequestStatus = (typeof STATUSES)[number]['id'];
 export const statusOf = (s: string) => STATUSES.find((x) => x.id === s) ?? STATUSES[0];
 export const areaLabel = (a: string) => AREAS.find((x) => x.id === a)?.label ?? a;
 
-/** Any company admin can ask for a custom portal or changes; Orbit then sets the price. */
+/** Any company admin can ask for a custom portal or changes; SteelConnect360 then sets the price. */
 const requireCustomAdmin = async (_tx: Tx, ctx: SessionContext) => {
   if (ctx.role !== 'company_admin') throw new Error('Only the company admin can send custom requirements');
 };
@@ -131,7 +131,7 @@ export async function requestFile(tx: Tx, companyId: string, fileId: string) {
   return f ?? null;
 }
 
-/** Sign-up with "a custom portal built for us": the company's first request, waiting for Orbit. */
+/** Sign-up with "a custom portal built for us": the company's first request, waiting for SteelConnect360. */
 export async function requestFromSignUp(tx: Tx, v: { companyId: string; membershipId: string; name: string; details: string }) {
   await tx.insert(customRequests).values({
     companyId: v.companyId,

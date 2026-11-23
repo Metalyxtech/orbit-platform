@@ -67,7 +67,7 @@ export function BillingPanel({ companyId, b }: { companyId: string; b: CompanyBi
           Subscription plans
           <select className="o-select" name="showPlans" defaultValue={b.settings.showPlans ? 'show' : 'hide'}>
             <option value="show">Released: the admin sees plans and pays online</option>
-            <option value="hide">Hidden: Orbit arranges the plan</option>
+            <option value="hide">Hidden: SteelConnect360 arranges the plan</option>
           </select>
         </label>
         <label className="o-field">

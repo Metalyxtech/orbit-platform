@@ -42,7 +42,7 @@ export async function setCompanyBillingAction(companyId: string, form: FormData)
       action: 'billing.settings',
       entity: 'company_billing',
       entityId: id,
-      data: { summary: [`Billing set by Orbit: ${s.currency}, plans ${s.showPlans ? 'released' : 'hidden'}, ${s.trialDays}-day trial`] },
+      data: { summary: [`Billing set by SteelConnect360: ${s.currency}, plans ${s.showPlans ? 'released' : 'hidden'}, ${s.trialDays}-day trial`] },
     });
   });
   revalidatePath('/super-admin', 'layout');
@@ -56,7 +56,7 @@ export async function setPlansShownAction(companyId: string, showPlans: boolean)
   await withTenant(db, { companyId: id, userId }, async (tx) => {
     const cur = await billingSettings(tx, id);
     await saveBillingSettings(tx, id, { ...cur, showPlans });
-    await audit(tx, { companyId: id, actorId: null, action: 'billing.settings', entity: 'company_billing', entityId: id, data: { summary: [`Plans ${showPlans ? 'released' : 'hidden'} by Orbit`] } });
+    await audit(tx, { companyId: id, actorId: null, action: 'billing.settings', entity: 'company_billing', entityId: id, data: { summary: [`Plans ${showPlans ? 'released' : 'hidden'} by SteelConnect360`] } });
   });
   revalidatePath('/super-admin', 'layout');
 }
@@ -84,7 +84,7 @@ export async function extendFreePeriodAction(companyId: string, days: number | F
       action: 'billing.free_period',
       entity: 'company_billing',
       entityId: id,
-      data: { summary: [`Free period extended by ${n} days by Orbit, now until ${end.toISOString().slice(0, 10)}`] },
+      data: { summary: [`Free period extended by ${n} days by SteelConnect360, now until ${end.toISOString().slice(0, 10)}`] },
     });
   });
   revalidatePath('/super-admin', 'layout');

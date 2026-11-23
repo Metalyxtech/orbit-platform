@@ -21,7 +21,7 @@ export const customPlans = pgTable('custom_plans', {
   yearlyPrice: integer('yearly_price'),
   /** People allowed on the custom plan; null = no limit. */
   maxUsers: integer('max_users'),
-  /** Internal note for Orbit (what is included). */
+  /** Internal note for SteelConnect360 (what is included). */
   note: text('note'),
   /** Unused value of their old plan, taken off the first yearly payment of this plan (migration 0017). */
   yearlyCredit: integer('yearly_credit').notNull().default(0),
@@ -47,9 +47,9 @@ export const customRequests = pgTable(
     area: text('area').notNull(),
     /** new | reviewing | quoted | approved | in_progress | ready | declined */
     status: text('status').notNull().default('new'),
-    /** Orbit's reply to the customer. */
+    /** SteelConnect360's reply to the customer. */
     orbitNote: text('orbit_note'),
-    /** The price Orbit sent (migration 0017): the combined custom plan, monthly and/or yearly. */
+    /** The price SteelConnect360 sent (migration 0017): the combined custom plan, monthly and/or yearly. */
     quoteLabel: text('quote_label'),
     quoteMonthly: integer('quote_monthly'),
     quoteYearly: integer('quote_yearly'),

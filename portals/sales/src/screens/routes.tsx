@@ -84,7 +84,7 @@ const Dashboard: Screen = async () => {
                 <li key={x.id} style={{ fontSize: 13 }}>
                   <Link href={enquiryHref(x.enquiryId)}>{x.number}</Link> {x.text}
                   <div className="faint" style={{ fontSize: 11 }}>
-                    {x.by || 'Orbit'} · {new Date(x.at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
+                    {x.by || 'SteelConnect360'} · {new Date(x.at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
                   </div>
                 </li>
               ))}

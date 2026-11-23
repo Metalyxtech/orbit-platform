@@ -20,7 +20,7 @@ const ROLES = [
 
 const portalName = (id: string) => id.charAt(0).toUpperCase() + id.slice(1).replace(/[-_]/g, ' ');
 
-/** A person's portals with the company admin's controls: adding needs Orbit approval, removing is immediate. */
+/** A person's portals with the company admin's controls: adding needs SteelConnect360 approval, removing is immediate. */
 
 function PortalCell({ user, access }: { user: UserRow; access: PortalAccess }) {
   const toast = useToast();
@@ -287,7 +287,7 @@ function AddPerson({ supervisors, onDone }: { supervisors: UserRow[]; onDone: ()
           Add person
         </Button>
         <span className="faint" style={{ fontSize: 12 }}>
-          They sign in at the Orbit address with this email. No invite email is sent yet.
+          They sign in at the SteelConnect360 address with this email. No invite email is sent yet.
         </span>
       </div>
     </form>

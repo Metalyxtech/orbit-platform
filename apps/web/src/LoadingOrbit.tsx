@@ -1,8 +1,8 @@
 /**
- * Full-page "Loading Orbit…" shown at once while the server prepares a page (sign-in, company
+ * Full-page "Loading SteelConnect360…" shown at once while the server prepares a page (sign-in, company
  * choice, first load after a quiet spell). Without it the browser shows an empty page meanwhile.
  */
-export function LoadingOrbit({ label = 'Loading Orbit…' }: { label?: string }) {
+export function LoadingOrbit({ label = 'Loading SteelConnect360…' }: { label?: string }) {
   return (
     <div className="o-state" aria-busy="true">
       <div>

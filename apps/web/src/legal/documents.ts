@@ -1,6 +1,6 @@
-// Orbit's Terms and Conditions and Privacy Policy. Edit the text here only.
+// SteelConnect360's Terms and Conditions and Privacy Policy. Edit the text here only.
 // When you change a document in a way people must agree to again, change its `version`:
-// everyone is asked to sign the new version the next time they open Orbit.
+// everyone is asked to sign the new version the next time they open SteelConnect360.
 // Safe to import from client components. Have a lawyer review before relying on this text.
 
 export type LegalDoc = 'terms' | 'privacy';
@@ -33,12 +33,12 @@ export const TERMS: LegalDocument = {
   title: 'Terms and Conditions',
   version: '2026-11-06',
   effective: '6 November 2026',
-  intro: `These Terms and Conditions ("Terms") govern the use of Orbit, the timesheet and purchase platform provided by ${LEGAL_PROVIDER} ("Orbit", "we", "us"). By signing below you agree to these Terms. A company admin who signs also accepts them on behalf of their company ("Customer").`,
+  intro: `These Terms and Conditions ("Terms") govern the use of SteelConnect360, the timesheet and purchase platform provided by ${LEGAL_PROVIDER} ("SteelConnect360", "we", "us"). By signing below you agree to these Terms. A company admin who signs also accepts them on behalf of their company ("Customer").`,
   sections: [
     {
       heading: '1. The service',
       body: [
-        'Orbit provides online portals for timesheets, purchasing and related approvals, reports and notifications, together with the Management workspace and Company admin tools (the "Service").',
+        'SteelConnect360 provides online portals for timesheets, purchasing and related approvals, reports and notifications, together with the Management workspace and Company admin tools (the "Service").',
         'We may improve or change features from time to time. We will not remove a core feature of a paid plan during a paid period without notice.',
       ],
     },
@@ -53,7 +53,7 @@ export const TERMS: LegalDocument = {
     {
       heading: '3. Customer data',
       body: [
-        'Timesheets, purchase records, documents and other information entered into Orbit belong to the Customer ("Customer Data"). We use Customer Data only to provide, secure and support the Service, as described in the Privacy Policy.',
+        'Timesheets, purchase records, documents and other information entered into SteelConnect360 belong to the Customer ("Customer Data"). We use Customer Data only to provide, secure and support the Service, as described in the Privacy Policy.',
         'The Customer is responsible for the accuracy and lawfulness of Customer Data and for having the right to enter personal information about its staff, suppliers and contacts.',
         'Each company\'s data is kept separate from every other company\'s data.',
       ],
@@ -68,10 +68,10 @@ export const TERMS: LegalDocument = {
     {
       heading: '5. Free trial, plans and payment',
       body: [
-        'New companies get a free trial for the period shown in Plan and billing. After the trial, continued use needs a paid plan, unless Orbit has arranged the plan directly with the Customer.',
+        'New companies get a free trial for the period shown in Plan and billing. After the trial, continued use needs a paid plan, unless SteelConnect360 has arranged the plan directly with the Customer.',
         'Plans are billed in advance for the chosen cycle (monthly, quarterly, half-yearly or yearly) through our payment provider, Razorpay. Indian customers are billed in Indian rupees plus GST; customers outside India are billed in US dollars. Prices are shown before payment.',
         'When a plan starts after a trial, the payment provider may take a small refundable amount to confirm the payment method.',
-        'Subscriptions renew automatically until cancelled. The company admin can cancel at any time in Plan and billing; the plan then stays active until the end of the paid period and does not renew. Fees already paid are not refundable, except where the law requires or Orbit agrees in writing.',
+        'Subscriptions renew automatically until cancelled. The company admin can cancel at any time in Plan and billing; the plan then stays active until the end of the paid period and does not renew. Fees already paid are not refundable, except where the law requires or SteelConnect360 agrees in writing.',
         'If a payment fails and is not resolved, we may limit the Service to read-only access until it is paid.',
       ],
     },
@@ -85,7 +85,7 @@ export const TERMS: LegalDocument = {
     {
       heading: '7. Intellectual property',
       body: [
-        'Orbit, its software, design and documentation belong to ' + LEGAL_PROVIDER + '. The Customer receives a non-exclusive, non-transferable right to use the Service during its subscription.',
+        'SteelConnect360, its software, design and documentation belong to ' + LEGAL_PROVIDER + '. The Customer receives a non-exclusive, non-transferable right to use the Service during its subscription.',
         'Suggestions you send us may be used to improve the Service without any obligation to you.',
       ],
     },
@@ -109,12 +109,12 @@ export const TERMS: LegalDocument = {
     },
     {
       heading: '11. Changes to these Terms',
-      body: ['We may update these Terms. When the change matters, everyone is asked to read and sign the new version the next time they open Orbit.'],
+      body: ['We may update these Terms. When the change matters, everyone is asked to read and sign the new version the next time they open SteelConnect360.'],
     },
     {
       heading: '12. Law and contact',
       body: [
-        `These Terms are governed by the laws of India, and the courts ${LEGAL_CITY ? `at ${LEGAL_CITY} have exclusive` : 'of India have'} jurisdiction, unless the Customer and Orbit agree otherwise in writing.`,
+        `These Terms are governed by the laws of India, and the courts ${LEGAL_CITY ? `at ${LEGAL_CITY} have exclusive` : 'of India have'} jurisdiction, unless the Customer and SteelConnect360 agree otherwise in writing.`,
         `Questions about these Terms: ${LEGAL_CONTACT}.${office ? ` ${office}` : ''}`,
       ],
     },
@@ -126,15 +126,15 @@ export const PRIVACY: LegalDocument = {
   title: 'Privacy Policy',
   version: '2026-11-06',
   effective: '6 November 2026',
-  intro: `This Privacy Policy explains what personal information Orbit (${LEGAL_PROVIDER}) collects, why, and how it is protected. For Customer Data, the Customer (your company) decides what is collected and Orbit processes it on the Customer's behalf.`,
+  intro: `This Privacy Policy explains what personal information SteelConnect360 (${LEGAL_PROVIDER}) collects, why, and how it is protected. For Customer Data, the Customer (your company) decides what is collected and SteelConnect360 processes it on the Customer's behalf.`,
   sections: [
     {
       heading: '1. Information we collect',
       body: [
         'Account details: your name, work email, job title, role, and the company and portals you belong to.',
         'Work records your company enters: timesheets and hours, projects, approvals, purchase requests, quotes, orders, receipts, invoices, suppliers and attached documents.',
-        'Usage and security information: sign-in times, IP address, browser type, and a history of changes made in Orbit (who changed what and when).',
-        'Billing information: the company\'s plan and payment history. Card, UPI and bank details are entered directly with Razorpay and are not stored by Orbit.',
+        'Usage and security information: sign-in times, IP address, browser type, and a history of changes made in SteelConnect360 (who changed what and when).',
+        'Billing information: the company\'s plan and payment history. Card, UPI and bank details are entered directly with Razorpay and are not stored by SteelConnect360.',
       ],
     },
     {
@@ -150,7 +150,7 @@ export const PRIVACY: LegalDocument = {
       heading: '3. Who can see it',
       body: [
         'People in your company see information according to the roles and portals your company admin gives them.',
-        'Orbit staff access Customer Data only when needed to run, secure or support the Service.',
+        'SteelConnect360 staff access Customer Data only when needed to run, secure or support the Service.',
         'We use trusted service providers: Amazon Web Services (hosting, email, file storage), Neon (database), WorkOS (sign-in) and Razorpay (payments). They process information only to provide their service to us.',
         'We may disclose information when the law requires it.',
       ],
@@ -165,7 +165,7 @@ export const PRIVACY: LegalDocument = {
     {
       heading: '5. How long we keep it',
       body: [
-        'We keep Customer Data while the Customer uses Orbit. After the Service ends, it is deleted after 30 days unless the Customer asks for an export first or the law requires us to keep it longer.',
+        'We keep Customer Data while the Customer uses SteelConnect360. After the Service ends, it is deleted after 30 days unless the Customer asks for an export first or the law requires us to keep it longer.',
         'Records of acceptance of these documents, billing records and security logs are kept as long as needed for legal and accounting purposes.',
       ],
     },
@@ -178,11 +178,11 @@ export const PRIVACY: LegalDocument = {
     },
     {
       heading: '7. Cookies',
-      body: ['Orbit uses only the cookies needed to keep you signed in and remember the company you chose. We do not use advertising or tracking cookies.'],
+      body: ['SteelConnect360 uses only the cookies needed to keep you signed in and remember the company you chose. We do not use advertising or tracking cookies.'],
     },
     {
       heading: '8. Changes',
-      body: ['When this policy changes in a way that matters, you will be asked to read and accept the new version the next time you open Orbit.'],
+      body: ['When this policy changes in a way that matters, you will be asked to read and accept the new version the next time you open SteelConnect360.'],
     },
   ],
 };

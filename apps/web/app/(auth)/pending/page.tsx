@@ -13,7 +13,7 @@ export default async function Pending({ searchParams }: { searchParams: Promise<
     return (
       <AuthCard title="Portals waiting for approval">
         <p className="muted">
-          {s.ctx.companyName} is set up, but none of its portals are switched on for you yet. Orbit switches on the portals your
+          {s.ctx.companyName} is set up, but none of its portals are switched on for you yet. SteelConnect360 switches on the portals your
           company asked for after review. Sign in again later, or ask your company admin.
         </p>
         <SignOutButton />
@@ -26,7 +26,7 @@ export default async function Pending({ searchParams }: { searchParams: Promise<
         {s.state !== 'pending'
           ? 'Your account is not linked to a company yet.'
           : s.blocked
-            ? `Your access to ${s.companyName} has been blocked. Contact your company admin or Orbit support.`
+            ? `Your access to ${s.companyName} has been blocked. Contact your company admin or SteelConnect360 support.`
             : `Your request to join ${s.companyName} is waiting for approval. Sign in again once your admin has approved it.`}
       </p>
       <SignOutButton />

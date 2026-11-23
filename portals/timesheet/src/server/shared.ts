@@ -179,7 +179,7 @@ export async function boundWorkflow(tx: Tx, companyId: string) {
     ? eq(workflowDefinitions.id, binding.id)
     : eq(workflowDefinitions.key, timesheetManifest.defaultWorkflowKey);
   const [def] = await tx.select(workflowDefinitionColumns).from(workflowDefinitions).where(where).orderBy(desc(workflowDefinitions.version)).limit(1);
-  if (!def) throw new Error('No approval workflow is set for the Timesheet portal. Ask Orbit support.');
+  if (!def) throw new Error('No approval workflow is set for the Timesheet portal. Ask SteelConnect360 support.');
   return { ...def, definition: def.definition as WorkflowDefinition };
 }
 

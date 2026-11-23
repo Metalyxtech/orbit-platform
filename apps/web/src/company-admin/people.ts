@@ -55,7 +55,7 @@ export type PeopleData = Awaited<ReturnType<typeof peopleAndPortals>>;
 const changeInput = z.object({ membershipId: z.uuid(), portal: z.string().min(1).max(40), action: z.enum(['grant', 'remove']) });
 
 /**
- * Gives or removes a portal for one person. Orbit approves each portal once for the company
+ * Gives or removes a portal for one person. SteelConnect360 approves each portal once for the company
  * (Company portals); inside those, the company admin decides who uses what, effective at once.
  */
 export async function changePersonPortal(tx: Tx, ctx: ActionContext, raw: z.input<typeof changeInput>) {

@@ -10,12 +10,12 @@ export function PublicLegal({ doc }: { doc: LegalDocument }) {
         <div className="o-row" style={{ marginBottom: 16, justifyContent: 'space-between' }}>
           <div className="o-row">
             <div className="o-brand-mark" style={{ borderColor: 'var(--graphite)' }} aria-hidden />
-            <strong style={{ fontSize: 18 }}>Orbit</strong>
+            <strong style={{ fontSize: 18 }}>SteelConnect360</strong>
           </div>
           <span className="o-row" style={{ gap: 12, fontSize: 13 }}>
             <Link href="/legal/terms">Terms</Link>
             <Link href="/legal/privacy">Privacy</Link>
-            <Link href="/">Back to Orbit</Link>
+            <Link href="/">Back to SteelConnect360</Link>
           </span>
         </div>
         <LegalText doc={doc} />

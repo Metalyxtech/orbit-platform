@@ -130,13 +130,13 @@ export function SettingsClient({
             <div className="o-panel">
               <div className="o-panel-head">
                 <h2>Approval workflow</h2>
-                <span className="o-chip">Set by Orbit</span>
+                <span className="o-chip">Set by SteelConnect360</span>
               </div>
               <strong>
                 {workflow.name} (v{workflow.version})
               </strong>
               <p className="muted" style={{ fontSize: 12 }}>
-                {workflow.description} Ask Orbit support to change it.
+                {workflow.description} Ask SteelConnect360 support to change it.
               </p>
             </div>
             <div className="o-panel flush">

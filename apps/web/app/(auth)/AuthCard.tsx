@@ -8,7 +8,7 @@ export function AuthCard({ title, children }: { title: string; children: ReactNo
         <div className="o-brand" style={{ padding: 0 }}>
           <div className="o-brand-mark" aria-hidden />
           <div className="o-brand-name" style={{ fontSize: 17 }}>
-            Orbit
+            SteelConnect360
           </div>
         </div>
         <h2>Timesheets and approvals for project teams.</h2>
@@ -23,7 +23,7 @@ export function AuthCard({ title, children }: { title: string; children: ReactNo
         <div className="o-auth-card">
           <div className="o-brand">
             <div className="o-brand-mark dark" aria-hidden />
-            <div className="o-brand-name">Orbit</div>
+            <div className="o-brand-name">SteelConnect360</div>
           </div>
           <h1>{title}</h1>
           {children}

@@ -12,7 +12,7 @@ export default async function Register() {
   return (
     <AuthCard title="Register your company">
       <p className="muted" style={{ marginBottom: 20 }}>
-        Signed in as {s.email}. If your company already uses Orbit, ask your company admin to invite you instead.
+        Signed in as {s.email}. If your company already uses SteelConnect360, ask your company admin to invite you instead.
       </p>
       <form action={registerCompanyAction} className="o-stack" style={{ gap: 14 }}>
         <label className="o-field">
@@ -35,7 +35,7 @@ export default async function Register() {
           Register company
         </button>
         <span className="faint" style={{ fontSize: 12 }}>
-          Orbit reviews new companies before they go live. You will get an email when yours is approved.
+          SteelConnect360 reviews new companies before they go live. You will get an email when yours is approved.
         </span>
       </form>
     </AuthCard>

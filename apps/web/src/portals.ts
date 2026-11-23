@@ -10,4 +10,4 @@ export const portalModules: Record<string, { manifest: PortalManifest; routes: R
   timesheet: { manifest: timesheetManifest, routes: timesheetRoutes },
 };
 
-export const BRAND = 'Orbit';
+export const BRAND = 'SteelConnect360';

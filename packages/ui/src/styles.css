@@ -1,4 +1,4 @@
-/* Orbit design system: drawing-office feel.
+/* SteelConnect360 design system: drawing-office feel.
    Graphite navigation, paper-white work area, steel blue for actions,
    safety orange (hivis) only for overtime and items needing attention. */
 :root {
@@ -71,9 +71,8 @@ p { margin: 0 0 12px; }
 .o-side :focus-visible { outline-color: #9cc0e2; }
 .o-brand { display: flex; gap: 12px; align-items: center; padding: 20px 18px 16px; }
 .o-brand > div:last-child { min-width: 0; }
-.o-brand-mark { width: 30px; height: 30px; flex: none; border: 1.5px solid #fff; border-radius: 50%; display: grid; place-items: center; position: relative; }
-.o-brand-mark::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--hivis); position: absolute; top: -3px; right: 2px; }
-.o-brand-mark.dark { border-color: var(--graphite); }
+.o-brand-mark { width: 34px; height: 34px; flex: none; border-radius: 8px; background: #fff url('/logo-mark.png') center / 26px 26px no-repeat; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); }
+.o-brand-mark.dark { background-color: transparent; background-size: contain; box-shadow: none; }
 .o-brand-name { color: #fff; font-weight: 600; font-size: 15px; line-height: 1.2; letter-spacing: 0.01em; }
 .o-brand-co { font-size: 12px; color: #97a1aa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .o-env { margin: 0 14px 10px; padding: 7px 10px; border: 1px solid rgba(217, 95, 20, 0.45); background: rgba(217, 95, 20, 0.1); border-radius: var(--radius); font-size: 11px; line-height: 1.35; color: #c9cfd5; }

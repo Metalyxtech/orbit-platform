@@ -11,7 +11,7 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
   const dev = devAuthEnabled();
   const people = dev ? await (await getDb()).select().from(users).orderBy(asc(users.name)) : [];
   return (
-    <AuthCard title="Sign in to Orbit">
+    <AuthCard title="Sign in to SteelConnect360">
       <p className="muted" style={{ marginBottom: 20 }}>
         Use your company Microsoft or Google account, or a one-time code sent to your work email.
       </p>
@@ -28,7 +28,7 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
       </p>
       <div className="o-auth-note">
         <Icon name="lock" />
-        <span>Orbit never sees your password. Sign-in is handled by your identity provider over an encrypted connection.</span>
+        <span>SteelConnect360 never sees your password. Sign-in is handled by your identity provider over an encrypted connection.</span>
       </div>
       {dev && (
         <div className="o-devlist">

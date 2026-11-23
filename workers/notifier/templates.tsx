@@ -1,4 +1,4 @@
-import { Body, Button, Container, Head, Heading, Hr, Html, Preview, Section, Text } from '@react-email/components';
+import { Body, Button, Container, Head, Heading, Hr, Html, Img, Preview, Section, Text } from '@react-email/components';
 import type { EmailTemplate } from '@orbit/core/events';
 
 type Props = Record<string, unknown> & { baseUrl?: string; path?: string };
@@ -76,7 +76,12 @@ export function Email({ template, props }: { template: EmailTemplate; props: Pro
       <Preview>{c.subject}</Preview>
       <Body style={{ background: '#F7F8F6', fontFamily: 'IBM Plex Sans, Arial, sans-serif', color: '#1D2328' }}>
         <Container style={{ background: '#FFFFFF', border: '1px solid #DDE1E4', borderRadius: 3, padding: 24, maxWidth: 520 }}>
-          <Text style={{ fontWeight: 700, letterSpacing: '0.02em', margin: 0 }}>Orbit</Text>
+          <Section>
+            {props.baseUrl ? (
+              <Img src={`${props.baseUrl}/logo-mark.png`} width="32" height="32" alt="" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 10 }} />
+            ) : null}
+            <Text style={{ display: 'inline-block', verticalAlign: 'middle', fontWeight: 700, letterSpacing: '0.02em', margin: 0 }}>SteelConnect360</Text>
+          </Section>
           <Hr style={{ borderColor: '#DDE1E4' }} />
           <Heading as="h2" style={{ fontSize: 18 }}>
             {c.heading}
@@ -94,7 +99,7 @@ export function Email({ template, props }: { template: EmailTemplate; props: Pro
             </Section>
           )}
           <Hr style={{ borderColor: '#DDE1E4', marginTop: 24 }} />
-          <Text style={{ fontSize: 11, color: '#8A949C' }}>You get this email because you use Orbit at your company.</Text>
+          <Text style={{ fontSize: 11, color: '#8A949C' }}>You get this email because you use SteelConnect360 at your company.</Text>
         </Container>
       </Body>
     </Html>

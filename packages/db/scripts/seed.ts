@@ -47,7 +47,7 @@ console.log('Workflow library ready');
 const superEmail = process.env.SEED_SUPER_ADMIN_EMAIL ?? 'superadmin@orbit.local';
 await db
   .insert(s.users)
-  .values({ workosUserId: `seed|${superEmail}`, email: superEmail, name: 'Orbit Super Admin', isSuperAdmin: true })
+  .values({ workosUserId: `seed|${superEmail}`, email: superEmail, name: 'SteelConnect360 Super Admin', isSuperAdmin: true })
   .onConflictDoUpdate({ target: s.users.email, set: { isSuperAdmin: true } });
 
 if (process.env.SEED_DEMO === '0') {

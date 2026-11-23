@@ -65,7 +65,7 @@ export async function buildWorkbook(event: ExportEvent) {
     : [];
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'Orbit';
+  wb.creator = 'SteelConnect360';
   const summary = wb.addWorksheet('Hours by project');
   summary.columns = [
     { header: 'Project', key: 'label', width: 40 },

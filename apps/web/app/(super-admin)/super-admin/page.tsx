@@ -22,7 +22,7 @@ export default async function SuperAdmin() {
       <header className="o-top" style={{ background: 'var(--graphite)', borderColor: 'var(--graphite)', color: '#fff' }}>
         <div className="o-brand" style={{ padding: 0, flex: 1 }}>
           <div className="o-brand-mark" aria-hidden />
-          <div className="o-brand-name">Orbit</div>
+          <div className="o-brand-name">SteelConnect360</div>
           <span className="o-chip hivis">Super Admin</span>
         </div>
         <a className="o-btn small ghost" style={{ color: '#cfd5da' }} href="/">

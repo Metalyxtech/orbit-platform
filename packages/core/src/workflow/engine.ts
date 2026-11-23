@@ -2,6 +2,7 @@ import { and, eq, ne, sql } from 'drizzle-orm';
 import { workflowInstances, workflowTasks, type Tx } from '@orbit/db';
 import { nextStepIndex } from './simulate';
 import {
+  effectiveRule,
   WorkflowConflictError,
   type Approver,
   type ApproverResolver,
@@ -45,7 +46,8 @@ async function createStepTasks(
   const approvers = await resolver.resolve(step.approver, instance.context as WorkflowContext);
   if (approvers.length === 0) throw new Error(`No approver found for step "${step.name}"`);
   // A role step needs only one of the role holders; supervisor / PM steps need every approver.
-  const assignees = step.approver.type === 'role' ? approvers.slice(0, 1) : approvers;
+  const rule = effectiveRule(step.approver, instance.context as WorkflowContext);
+  const assignees = rule?.type === 'role' ? approvers.slice(0, 1) : approvers;
 
   const created: EngineResult['createdTasks'] = [];
   for (const approver of assignees) {

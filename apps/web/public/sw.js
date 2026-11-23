@@ -1,6 +1,6 @@
 // SteelConnect360 service worker: offline shell. Timesheet drafts are kept in IndexedDB by the page
 // and synced when the browser is back online, so this worker only caches static files.
-const CACHE = 'orbit-v2';
+const CACHE = 'orbit-v3';
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/icon.svg', '/logo-mark.png', '/manifest.webmanifest'])));
   self.skipWaiting();

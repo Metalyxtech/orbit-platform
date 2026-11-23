@@ -36,13 +36,14 @@ async function visibleProjects(tx: Tx, ctx: SessionContext, requested?: string[]
     .from(projects)
     .where(eq(projects.companyId, ctx.companyId))
     .orderBy(asc(projects.code));
-  const allowed = ctx.role === 'company_admin' ? rows : rows.filter((p) => p.pmId === ctx.membershipId);
+  const companyWide = ctx.role === 'company_admin' || ctx.role === 'management';
+  const allowed = companyWide ? rows : rows.filter((p) => p.pmId === ctx.membershipId);
   return requested?.length ? allowed.filter((p) => requested.includes(p.id)) : allowed;
 }
 
 /** Hours by project: approved + locked data only, overtime allocated in proportion to each week's hours. */
 export async function hoursByProject(tx: Tx, ctx: SessionContext, raw: ReportFilter) {
-  assertRole(ctx, 'project_manager');
+  assertRole(ctx, 'project_manager', 'management');
   const f = filterSchema.parse(raw);
   const { start, end } = monthRange(f.month);
   const projs = await visibleProjects(tx, ctx, f.projectIds);
@@ -110,7 +111,7 @@ export async function kpis(tx: Tx, ctx: SessionContext, raw: ReportFilter) {
 
 /** Waiting by approver: pending tasks per person with the oldest age in hours. */
 export async function waitingByApprover(tx: Tx, ctx: SessionContext) {
-  assertRole(ctx, 'project_manager', 'supervisor');
+  assertRole(ctx, 'project_manager', 'supervisor', 'management');
   const rows = await tx
     .select({
       name: users.name,
@@ -134,7 +135,7 @@ export async function waitingByApprover(tx: Tx, ctx: SessionContext) {
 }
 
 export async function topOvertime(tx: Tx, ctx: SessionContext, raw: ReportFilter) {
-  assertRole(ctx, 'project_manager');
+  assertRole(ctx, 'project_manager', 'management');
   const { start, end } = monthRange(filterSchema.parse(raw).month);
   return tx
     .select({ name: users.name, overtime: sql<number>`sum(${timesheets.overtimeHours})::float` })
@@ -150,7 +151,7 @@ export async function topOvertime(tx: Tx, ctx: SessionContext, raw: ReportFilter
 
 /** reports.export: outbox event report.export_requested -> exporter Lambda -> email with a 24 h link. */
 export async function requestExport(tx: Tx, ctx: ActionContext, raw: ReportFilter & { report?: string }) {
-  assertRole(ctx, 'project_manager');
+  assertRole(ctx, 'project_manager', 'management');
   const f = filterSchema.parse(raw);
   const projs = await visibleProjects(tx, ctx, f.projectIds);
   const report = raw.report ?? 'hoursByProject';
@@ -169,4 +170,53 @@ export async function requestExport(tx: Tx, ctx: ActionContext, raw: ReportFilte
 
 export async function reportProjects(tx: Tx, ctx: SessionContext) {
   return (await visibleProjects(tx, ctx)).map((p) => ({ id: p.id, label: `${p.code} ${p.name}` }));
+}
+
+/** Approvals waiting at each workflow level, company-wide: where the queue is stuck. */
+export async function approvalsByLevel(tx: Tx, ctx: SessionContext) {
+  assertRole(ctx, 'management');
+  const rows = await tx
+    .select({
+      level: workflowTasks.stepName,
+      waiting: sql<number>`count(*)::int`,
+      overdue: sql<number>`count(*) filter (where ${workflowTasks.dueAt} < now())::int`,
+      oldest: sql<string>`min(${workflowTasks.createdAt})`,
+    })
+    .from(workflowTasks)
+    .where(eq(workflowTasks.status, 'pending'))
+    .groupBy(workflowTasks.stepName)
+    .orderBy(desc(sql`count(*)`));
+  return rows.map((r) => ({ ...r, oldestHours: Math.round((Date.now() - new Date(r.oldest).getTime()) / 3_600_000) }));
+}
+
+/** Hours per person on the projects the caller can see (PM: their own), submitted or approved this month. */
+export async function hoursByPerson(tx: Tx, ctx: SessionContext, raw: ReportFilter) {
+  assertRole(ctx, 'project_manager', 'management');
+  const f = filterSchema.parse(raw);
+  const { start, end } = monthRange(f.month);
+  const projs = await visibleProjects(tx, ctx, f.projectIds);
+  if (projs.length === 0) return [];
+  const rows = await tx
+    .select({
+      name: users.name,
+      title: memberships.title,
+      hours: sql<number>`sum(${timesheetEntries.hours})::float`,
+      approved: sql<number>`coalesce(sum(${timesheetEntries.hours}) filter (where ${timesheets.status} = 'locked'), 0)::float`,
+      projects: sql<number>`count(distinct ${timesheetEntries.projectId})::int`,
+    })
+    .from(timesheetEntries)
+    .innerJoin(timesheets, eq(timesheets.id, timesheetEntries.timesheetId))
+    .innerJoin(memberships, eq(memberships.id, timesheets.membershipId))
+    .innerJoin(users, eq(users.id, memberships.userId))
+    .where(
+      and(
+        inArray(timesheets.status, ['in_approval', 'locked']),
+        gte(timesheetEntries.workDate, start),
+        lt(timesheetEntries.workDate, end),
+        inArray(timesheetEntries.projectId, projs.map((p) => p.id)),
+      ),
+    )
+    .groupBy(users.name, memberships.title)
+    .orderBy(desc(sql`sum(${timesheetEntries.hours})`));
+  return rows.map((r) => ({ ...r, hours: Math.round(r.hours * 10) / 10, approved: Math.round(r.approved * 10) / 10 }));
 }

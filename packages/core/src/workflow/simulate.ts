@@ -4,6 +4,7 @@ export function evaluate(cond: Condition | undefined, ctx: WorkflowContext): boo
   if (!cond) return true;
   if ('all' in cond) return cond.all.every((c) => evaluate(c, ctx));
   if ('any' in cond) return cond.any.some((c) => evaluate(c, ctx));
+  if ('submitter' in cond) return cond.ids.includes(ctx.submitterId) === (cond.submitter === 'in');
   const v = Number(ctx[cond.field] ?? 0);
   switch (cond.op) {
     case 'gt':

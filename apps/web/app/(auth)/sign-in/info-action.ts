@@ -88,7 +88,7 @@ export async function requestPortalInfoAction(_prev: InfoState, form: FormData):
 }
 
 const STEELCONNECT_CONTACT_API =
-  (process.env.STEELCONNECT_API_URL ?? 'https://api.steelconnectapp.com').replace(/\/$/, '') + '/api/tool-leads/contact';
+  (process.env.APP_STEELCONNECT_API_URL ?? 'https://api.steelconnectapp.com').replace(/\/$/, '') + '/api/tool-leads/contact';
 
 /** Best effort: a failure here must not stop the visitor getting their email. */
 async function forwardToSteelConnectAdmin(d: z.infer<typeof input>, page: string) {

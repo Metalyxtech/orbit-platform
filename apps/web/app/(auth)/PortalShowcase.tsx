@@ -104,8 +104,16 @@ export function PortalShowcase() {
           </div>
           <div className="o-showcase-row">
             <input name="company" placeholder="Company" autoComplete="organization" aria-label="Company" />
-            <input name="phone" type="tel" placeholder="Phone (optional)" autoComplete="tel" aria-label="Phone" />
+            <input name="phone" type="tel" required minLength={6} placeholder="Phone *" autoComplete="tel" aria-label="Phone" />
           </div>
+          <textarea
+            name="message"
+            rows={3}
+            maxLength={600}
+            placeholder="Tell us about your process (optional): what you make, team size, what you want to fix first"
+            aria-label="Description"
+            className="o-showcase-desc"
+          />
           {state.status === 'error' && (
             <div className="o-showcase-err" role="alert">
               {state.message}

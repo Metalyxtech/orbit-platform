@@ -87,8 +87,16 @@ export async function requestPortalInfoAction(_prev: InfoState, form: FormData):
   return { status: 'sent', email: d.email };
 }
 
-const STEELCONNECT_CONTACT_API =
-  (process.env.APP_STEELCONNECT_API_URL ?? 'https://api.steelconnectapp.com').replace(/\/$/, '') + '/api/tool-leads/contact';
+// Same backend the Metalyx website posts to. The Cloud Run URL is tried first
+// (proven path from serverless hosts), then the custom domain.
+const STEELCONNECT_CONTACT_APIS = [
+  process.env.APP_STEELCONNECT_API_URL,
+  'https://steelconnect-api-453964978221.asia-south1.run.app',
+  'https://api.steelconnectapp.com',
+]
+  .filter((u): u is string => !!u)
+  .map((u) => u.replace(/\/$/, '') + '/api/tool-leads/contact')
+  .filter((u, i, all) => all.indexOf(u) === i);
 
 /** Best effort: a failure here must not stop the visitor getting their email. */
 async function forwardToSteelConnectAdmin(d: z.infer<typeof input>, page: string) {
@@ -105,25 +113,34 @@ async function forwardToSteelConnectAdmin(d: z.infer<typeof input>, page: string
     'Description:',
     d.message ?? '(none given)',
   ].join('\n');
-  try {
-    const res = await fetch(STEELCONNECT_CONTACT_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: d.name ?? d.email,
-        email: d.email,
-        company: d.company ?? '',
-        phone: d.phone,
-        interest: `Orbit portals — ${portals}`,
-        message,
-        botField: '',
-        page,
-        source: 'orbit-portal-info',
-      }),
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) console.error('[portal-info] steelconnect admin forward failed', res.status);
-  } catch (err) {
-    console.error('[portal-info] steelconnect admin forward failed', err);
+  const body = JSON.stringify({
+    name: d.name ?? d.email,
+    email: d.email,
+    company: d.company ?? '',
+    phone: d.phone,
+    interest: `Orbit portals — ${portals}`,
+    message,
+    botField: '',
+    page,
+    source: 'orbit-portal-info',
+  });
+  for (const url of STEELCONNECT_CONTACT_APIS) {
+    try {
+      // Cloud Run scales to zero, so allow for a cold start (two tries fit the ~30s request limit).
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': 'orbit-portal-info/1.0' },
+        body,
+        signal: AbortSignal.timeout(12000),
+      });
+      if (res.ok) {
+        console.info('[portal-info] enquiry sent to SteelConnect admin via', url);
+        return true;
+      }
+      console.error('[portal-info] steelconnect admin forward failed', url, res.status, (await res.text().catch(() => '')).slice(0, 300));
+    } catch (err) {
+      console.error('[portal-info] steelconnect admin forward failed', url, err);
+    }
   }
+  return false;
 }

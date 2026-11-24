@@ -301,6 +301,52 @@ p { margin: 0 0 12px; }
 .o-auth-brand li::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--hivis); flex: none; }
 .o-auth-brand small { font-size: 12px; color: #77818a; position: relative; z-index: 1; }
 .o-auth-main { display: grid; place-items: center; padding: 32px 20px; }
+
+/* Sign-in: manufacturing portal showcase on the brand panel */
+.o-auth.with-brand .o-auth-brand { position: sticky; top: 0; height: 100vh; overflow-y: auto; gap: 0; }
+.o-showcase { position: relative; z-index: 1; margin: auto 0; padding: 28px 0 20px; display: flex; flex-direction: column; gap: 14px; max-width: 560px; }
+.o-showcase-kicker { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--hivis); }
+.o-auth-brand .o-showcase h2 { margin: 0; font-size: 26px; }
+.o-showcase-lead { margin: 0; font-size: 14px; color: #a9b2ba; }
+.o-showcase-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 4px; }
+.o-ptile { position: relative; border: 1px solid rgba(255, 255, 255, 0.09); border-radius: 10px; background: rgba(255, 255, 255, 0.03); transition: border-color 0.15s, background 0.15s, transform 0.15s; }
+.o-ptile::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; border-radius: 10px 0 0 10px; background: var(--accent); opacity: 0.35; transition: opacity 0.15s; }
+.o-ptile:hover, .o-ptile.open { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); transform: translateY(-1px); }
+.o-ptile.open::before, .o-ptile.on::before { opacity: 1; }
+.o-ptile-main { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 12px 12px 12px 14px; cursor: pointer; }
+.o-ptile-main:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 10px; }
+.o-ptile-ico { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); margin-bottom: 4px; }
+.o-ptile-name { color: #fff; font-weight: 600; font-size: 14px; }
+.o-ptile-tag { font-size: 11.5px; line-height: 1.35; color: #8f99a2; }
+.o-ptile-pick { position: absolute; top: 10px; right: 10px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: #8f99a2; border: 1px solid rgba(255, 255, 255, 0.18); transition: all 0.15s; }
+.o-ptile-pick input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.o-ptile-pick:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.o-ptile.on .o-ptile-pick { background: var(--accent); border-color: var(--accent); color: #11161a; }
+.o-showcase-detail { border-radius: 10px; padding: 12px 14px; background: rgba(0, 0, 0, 0.22); border: 1px solid rgba(255, 255, 255, 0.06); border-left: 3px solid var(--accent); }
+.o-showcase-detail-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--accent); }
+.o-showcase-detail-head strong { color: #fff; font-size: 14px; }
+.o-showcase-detail-head span { font-size: 12px; color: #8f99a2; }
+.o-auth-brand .o-showcase-detail ul { margin: 8px 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size: 13px; }
+.o-auth-brand .o-showcase-detail li::before { background: var(--accent); }
+.o-showcase-cta { font: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 18px; border: 0; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; color: #fff; background: linear-gradient(135deg, var(--hivis), #f08a3c); box-shadow: 0 6px 20px rgba(217, 95, 20, 0.28); transition: transform 0.15s, box-shadow 0.15s; align-self: flex-start; }
+.o-showcase-cta:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(217, 95, 20, 0.38); }
+.o-showcase-cta:disabled { opacity: 0.55; cursor: default; box-shadow: none; }
+.o-showcase-cta:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.o-showcase-form { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.09); }
+.o-showcase-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.o-showcase-form input { font: inherit; font-size: 13px; padding: 9px 11px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(0, 0, 0, 0.25); color: #fff; min-width: 0; }
+.o-showcase-form input::placeholder { color: #7d878f; }
+.o-showcase-form input:focus { outline: none; border-color: var(--hivis); box-shadow: 0 0 0 2px rgba(217, 95, 20, 0.25); }
+.o-showcase-form .o-hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.o-showcase-actions { display: flex; gap: 10px; align-items: center; margin-top: 2px; }
+.o-showcase-cancel { font: inherit; font-size: 13px; background: none; border: 0; color: #a9b2ba; cursor: pointer; }
+.o-showcase-cancel:hover { color: #fff; }
+.o-showcase-err { font-size: 12.5px; color: #ffb4a0; }
+.o-showcase-sent { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border-radius: 10px; background: rgba(63, 182, 139, 0.12); border: 1px solid rgba(63, 182, 139, 0.4); color: #3fb68b; }
+.o-showcase-sent div { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: #cfd5da; }
+.o-showcase-sent strong { color: #fff; font-size: 14px; }
+@media (max-width: 1200px) { .o-showcase-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (prefers-reduced-motion: reduce) { .o-ptile, .o-showcase-cta { transition: none; transform: none !important; } }
 .o-auth-card { width: 100%; max-width: 420px; }
 .o-auth-card h1 { font-size: 24px; margin-bottom: 8px; }
 .o-auth-card .o-brand { padding: 0 0 28px; display: none; }
@@ -354,6 +400,9 @@ p { margin: 0 0 12px; }
   .o-toast { max-width: none; }
   .o-auth { grid-template-columns: 1fr; }
   .o-auth-brand { display: none; }
+  .o-auth.with-brand .o-auth-brand { display: flex; order: 2; position: relative; height: auto; padding: 24px 16px; }
+  .o-auth.with-brand .o-auth-brand > .o-brand, .o-auth.with-brand .o-auth-brand > small { display: none; }
+  .o-showcase-row, .o-auth-brand .o-showcase-detail ul { grid-template-columns: 1fr; }
   .o-auth-card .o-brand { display: flex; }
 }
 

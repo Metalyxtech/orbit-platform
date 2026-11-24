@@ -8,7 +8,15 @@ interface Content {
   heading: string;
   lines: string[];
   cta?: string;
+  /** Titled blocks with bullet points (portal guide). */
+  sections?: { title: string; body?: string; items: string[]; accent?: string }[];
+  /** Replaces the default "you use SteelConnect360 at your company" footer. */
+  footer?: string;
 }
+
+type Section = NonNullable<Content['sections']>[number];
+const sectionsOf = (p: Props): Section[] => (Array.isArray(p.sections) ? (p.sections as Section[]) : []);
+const names = (p: Props) => sectionsOf(p).map((x) => x.title).join(', ');
 
 const h = (n: unknown) => (typeof n === 'number' ? n.toFixed(1) : String(n ?? ''));
 
@@ -61,6 +69,29 @@ const content: Record<EmailTemplate, (p: Props) => Content> = {
     lines: ['The download link works for 24 hours.'],
     cta: 'Download',
   }),
+  portal_info: (p) => ({
+    subject: `Your SteelConnect360 guide: ${names(p) || 'portals'}`,
+    heading: p.name ? `Hi ${p.name}, here is how each portal works` : 'Here is how each portal works',
+    lines: [
+      'Every portal runs in one login, with approval routes, dashboards and email notifications built in. Your company data is kept separate from every other company.',
+    ],
+    sections: sectionsOf(p),
+    cta: 'See plans and start a 7-day trial',
+    footer: 'You get this email because you asked for portal details on the SteelConnect360 sign-in page. Reply to this email to talk to our team.',
+  }),
+  portal_info_lead: (p) => ({
+    subject: `New portal enquiry: ${p.company || p.email} (${names(p)})`,
+    heading: 'Someone asked for portal details',
+    lines: [
+      `Name: ${p.name || '-'}`,
+      `Email: ${p.email}`,
+      `Company: ${p.company || '-'}`,
+      `Phone: ${p.phone || '-'}`,
+      `Portals: ${names(p)}`,
+      ...(p.message ? [`Message: ${p.message}`] : []),
+    ],
+    footer: 'Sent from the SteelConnect360 sign-in page.',
+  }),
 };
 
 export function renderContent(template: EmailTemplate, props: Props) {
@@ -91,6 +122,17 @@ export function Email({ template, props }: { template: EmailTemplate; props: Pro
               {l}
             </Text>
           ))}
+          {c.sections?.map((sec, i) => (
+            <Section key={`s${i}`} style={{ borderLeft: `3px solid ${sec.accent ?? '#2F5D8A'}`, paddingLeft: 12, margin: '14px 0' }}>
+              <Text style={{ fontSize: 15, fontWeight: 700, margin: '0 0 2px' }}>{sec.title}</Text>
+              {sec.body ? <Text style={{ fontSize: 13, color: '#4A545C', margin: '0 0 6px' }}>{sec.body}</Text> : null}
+              {sec.items.map((it, j) => (
+                <Text key={j} style={{ fontSize: 13, margin: '2px 0' }}>
+                  • {it}
+                </Text>
+              ))}
+            </Section>
+          ))}
           {c.cta && (
             <Section style={{ marginTop: 16 }}>
               <Button href={href} style={{ background: '#2F5D8A', color: '#FFFFFF', padding: '10px 18px', borderRadius: 3, fontSize: 14 }}>
@@ -99,7 +141,7 @@ export function Email({ template, props }: { template: EmailTemplate; props: Pro
             </Section>
           )}
           <Hr style={{ borderColor: '#DDE1E4', marginTop: 24 }} />
-          <Text style={{ fontSize: 11, color: '#8A949C' }}>You get this email because you use SteelConnect360 at your company.</Text>
+          <Text style={{ fontSize: 11, color: '#8A949C' }}>{c.footer ?? 'You get this email because you use SteelConnect360 at your company.'}</Text>
         </Container>
       </Body>
     </Html>

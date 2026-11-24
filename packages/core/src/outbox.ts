@@ -61,3 +61,20 @@ export async function publishNow(db: Db, scope: TenantScope, events: PlatformEve
   }
 }
 
+
+/**
+ * Sends events straight to SQS, without an outbox row. Only for events that belong to no company
+ * (e.g. a sign-in page enquiry), where there is no tenant transaction to write into. Throws on failure.
+ */
+export async function sendWithoutOutbox(events: PlatformEvent[]) {
+  const eventsUrl = process.env.APP_SQS_EVENTS_URL;
+  if (!eventsUrl) return false;
+  const res = await sqsClient().send(
+    new SendMessageBatchCommand({
+      QueueUrl: queueUrlFor(events[0]!.type, eventsUrl),
+      Entries: events.map((e) => ({ Id: e.id, MessageBody: JSON.stringify(e) })),
+    }),
+  );
+  if (res.Failed?.length) throw new Error(`SQS rejected ${res.Failed.length} message(s): ${res.Failed[0]!.Message}`);
+  return true;
+}

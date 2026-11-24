@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
 
 /** Sign-in, registration and waiting screens: brand panel on the left, the task on the right. */
-export function AuthCard({ title, children }: { title: string; children: ReactNode }) {
+export function AuthCard({ title, children, brand }: { title: string; children: ReactNode; brand?: ReactNode }) {
   return (
-    <main className="o-auth">
+    <main className={`o-auth${brand ? ' with-brand' : ''}`}>
       <aside className="o-auth-brand">
         <div className="o-brand" style={{ padding: 0 }}>
           <div className="o-brand-mark" aria-hidden />
@@ -11,12 +11,16 @@ export function AuthCard({ title, children }: { title: string; children: ReactNo
             SteelConnect360
           </div>
         </div>
-        <h2>One place for your company's timesheets, purchasing and sales.</h2>
-        <ul>
-          <li>Weekly timesheets with approval routes</li>
-          <li>Purchase requests from requisition to invoice</li>
-          <li>Enquiries, quotations and orders in one pipeline</li>
-        </ul>
+        {brand ?? (
+          <>
+            <h2>One place for your company's timesheets, purchasing and sales.</h2>
+            <ul>
+              <li>Weekly timesheets with approval routes</li>
+              <li>Purchase requests from requisition to invoice</li>
+              <li>Enquiries, quotations and orders in one pipeline</li>
+            </ul>
+          </>
+        )}
         <small>Your company's data is kept separate from every other company.</small>
       </aside>
       <div className="o-auth-main">

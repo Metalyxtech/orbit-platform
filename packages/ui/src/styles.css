@@ -334,9 +334,10 @@ p { margin: 0 0 12px; }
 .o-showcase-cta:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .o-showcase-form { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.09); }
 .o-showcase-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.o-showcase-form input { font: inherit; font-size: 13px; padding: 9px 11px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(0, 0, 0, 0.25); color: #fff; min-width: 0; }
-.o-showcase-form input::placeholder { color: #7d878f; }
-.o-showcase-form input:focus { outline: none; border-color: var(--hivis); box-shadow: 0 0 0 2px rgba(217, 95, 20, 0.25); }
+.o-showcase-form input, .o-showcase-form textarea { font: inherit; font-size: 13px; padding: 9px 11px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(0, 0, 0, 0.25); color: #fff; min-width: 0; }
+.o-showcase-form textarea { resize: vertical; min-height: 64px; line-height: 1.45; }
+.o-showcase-form input::placeholder, .o-showcase-form textarea::placeholder { color: #7d878f; }
+.o-showcase-form input:focus, .o-showcase-form textarea:focus { outline: none; border-color: var(--hivis); box-shadow: 0 0 0 2px rgba(217, 95, 20, 0.25); }
 .o-showcase-form .o-hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
 .o-showcase-actions { display: flex; gap: 10px; align-items: center; margin-top: 2px; }
 .o-showcase-cancel { font: inherit; font-size: 13px; background: none; border: 0; color: #a9b2ba; cursor: pointer; }

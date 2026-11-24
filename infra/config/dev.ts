@@ -6,8 +6,13 @@ export const dev: StageConfig = {
   region: 'ap-southeast-1',
   githubOwner: 'Metalyxtech',
   githubRepo: 'orbit-platform',
-  appBaseUrl: 'https://main.d2bmw6xnh0jekq.amplifyapp.com',
-  corsOrigins: ['https://main.d2bmw6xnh0jekq.amplifyapp.com', 'http://localhost:3000'],
+  appBaseUrl: 'https://www.steelconnect360.com',
+  corsOrigins: [
+    'https://www.steelconnect360.com',
+    'https://steelconnect360.com',
+    'https://main.d2bmw6xnh0jekq.amplifyapp.com',
+    'http://localhost:3000',
+  ],
   mailDomain: undefined, // e.g. 'mail.example.com' once you can add DNS records
   alarmEmail: 'info@example.com',
   budgetUsd: 5,

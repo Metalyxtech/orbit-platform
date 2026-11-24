@@ -29,7 +29,9 @@ export type EmailTemplate =
   | 'timesheet_approved'
   | 'correction_requested'
   | 'ts_deadline_reminder'
-  | 'export_ready';
+  | 'export_ready'
+  | 'portal_info'
+  | 'portal_info_lead';
 
 /** Typed payloads per event type. */
 export interface EventMap {
@@ -48,6 +50,8 @@ export interface EventMap {
     notifyEmail: string;
   };
   'report.export_ready': { exportId: string; email?: EmailIntent };
+  /** Someone on the sign-in page asked for portal details (no company yet: companyId is 'platform'). */
+  'lead.portal_info': { email?: EmailIntent };
   'company.purge_requested': { reason: 'sandbox_reset' | 'promote' | 'delete' };
 }
 

@@ -3,6 +3,7 @@ import { devAuthEnabled, getDb } from '@orbit/core/next';
 import { users } from '@orbit/db';
 import { Icon } from '@orbit/ui';
 import { AuthCard } from '../AuthCard';
+import { PortalShowcase } from '../PortalShowcase';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +12,7 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
   const dev = devAuthEnabled();
   const people = dev ? await (await getDb()).select().from(users).orderBy(asc(users.name)) : [];
   return (
-    <AuthCard title="Sign in to SteelConnect360">
+    <AuthCard title="Sign in to SteelConnect360" brand={<PortalShowcase />}>
       <p className="muted" style={{ marginBottom: 20 }}>
         Use your company Microsoft or Google account, or a one-time code sent to your work email.
       </p>

@@ -1,7 +1,7 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { audit } from '@orbit/core';
-import { companies, memberships, users, withTenant, type Db } from '@orbit/db';
+import { companies, memberships, users, withTenant, type Db, type Tx } from '@orbit/db';
 import { saveBillingSettings } from '@/billing/admin';
 import { TRIAL_DAYS } from '@/billing/plans';
 import { portalModules } from '@/portals';
@@ -20,6 +20,10 @@ export const newCompanyInput = z.object({
   adminName: z.string().trim().min(2, 'Enter the admin’s name').max(120),
   adminEmail: z.email('Enter a valid admin email').transform((e) => e.trim().toLowerCase()),
   adminTitle: z.string().trim().max(100).optional(),
+  /** Optional second company admin, with exactly the same access as the first. */
+  admin2Name: z.string().trim().max(120).optional(),
+  admin2Email: z.string().trim().toLowerCase().optional(),
+  admin2Title: z.string().trim().max(100).optional(),
   portals: z.array(z.string()),
   /** Only a custom portal: no Timesheet or Purchase. */
   customOnly: z.boolean().default(false),
@@ -39,6 +43,9 @@ export function readNewCompanyForm(form: FormData): NewCompanyInput {
     adminName: v('adminName'),
     adminEmail: v('adminEmail'),
     adminTitle: v('adminTitle') || undefined,
+    admin2Name: v('admin2Name') || undefined,
+    admin2Email: v('admin2Email') || undefined,
+    admin2Title: v('admin2Title') || undefined,
     portals: form.getAll('portals').map(String),
     customOnly: form.get('customOnly') === 'on',
     trialDays: v('trialDays') || TRIAL_DAYS,
@@ -49,6 +56,8 @@ export function readNewCompanyForm(form: FormData): NewCompanyInput {
 /** Creates the company, its admin (signs in with that email), its portals and billing settings. Returns the company id. */
 export async function createCompany(db: Db, superUserId: string, raw: NewCompanyInput) {
   const input = newCompanyInput.parse(raw);
+  const second = input.admin2Name || input.admin2Email ? adminInput.parse({ name: input.admin2Name ?? '', email: input.admin2Email ?? '', title: input.admin2Title }) : null;
+  if (second && second.email === input.adminEmail) throw new Error('The second admin needs a different email from the first');
   const portals = input.customOnly ? [] : [...new Set(input.portals)].filter((p) => portalModules[p] && !portalModules[p].manifest.custom);
   if (!portals.length && !input.customOnly) throw new Error('Choose at least one portal, or Custom portal only');
   const [dupe] = await db.select({ id: companies.id }).from(companies).where(sql`lower(btrim(${companies.name})) = lower(${input.name})`).limit(1);
@@ -67,6 +76,7 @@ export async function createCompany(db: Db, superUserId: string, raw: NewCompany
       .insert(memberships)
       .values({ companyId: company.id, userId: user.id, role: 'company_admin', title: input.adminTitle || 'Company admin', status: 'active' })
       .returning({ id: memberships.id });
+    const m2 = second ? await addCompanyAdmin(tx, company.id, second) : null;
     for (const p of portals) await setPortal(tx, company.id, p, true);
     await saveBillingSettings(tx, company.id, { currency: input.country === 'abroad' ? 'USD' : 'INR', showPlans: input.showPlans, trialDays: input.trialDays });
     await audit(tx, {
@@ -75,8 +85,51 @@ export async function createCompany(db: Db, superUserId: string, raw: NewCompany
       action: 'company.create',
       entity: 'companies',
       entityId: company.id,
-      data: { summary: [`Company set up by SteelConnect360 with admin ${input.adminEmail}`], portals, admin: m.id, currency: input.country === 'abroad' ? 'USD' : 'INR' },
+      data: {
+        summary: [`Company set up by SteelConnect360 with admin ${second ? `${input.adminEmail} and ${second.email}` : input.adminEmail}`],
+        portals,
+        admin: m.id,
+        ...(m2 ? { admin2: m2 } : {}), currency: input.country === 'abroad' ? 'USD' : 'INR' },
     });
   });
   return company.id;
+}
+
+/** A company can have at most this many company admins; each has the same, full access. */
+export const MAX_COMPANY_ADMINS = 2;
+
+export const adminInput = z.object({
+  name: z.string().trim().min(2, 'Enter the admin’s name').max(120),
+  email: z.email('Enter a valid admin email').transform((e) => e.trim().toLowerCase()),
+  title: z.string().trim().max(100).optional(),
+});
+export type AdminInput = z.input<typeof adminInput>;
+
+/**
+ * Makes someone a company admin (same access as every other company admin). A new email gets an
+ * account that is linked when they first sign in; someone already in the company is promoted.
+ * Refuses when the company already has MAX_COMPANY_ADMINS. Runs inside the company's RLS scope.
+ * Returns the membership id.
+ */
+export async function addCompanyAdmin(tx: Tx, companyId: string, raw: AdminInput) {
+  const input = adminInput.parse(raw);
+  await tx.insert(users).values({ workosUserId: `invited|${input.email}`, email: input.email, name: input.name }).onConflictDoNothing({ target: users.email });
+  const [user] = await tx.select({ id: users.id }).from(users).where(eq(users.email, input.email));
+  const [existing] = await tx
+    .select({ id: memberships.id, role: memberships.role, status: memberships.status })
+    .from(memberships)
+    .where(and(eq(memberships.companyId, companyId), eq(memberships.userId, user.id)));
+  if (existing?.role === 'company_admin' && existing.status === 'active') throw new Error(`${input.email} is already a company admin`);
+  const others = await tx
+    .select({ id: memberships.id })
+    .from(memberships)
+    .where(and(eq(memberships.companyId, companyId), eq(memberships.role, 'company_admin'), ne(memberships.status, 'removed'), ...(existing ? [ne(memberships.id, existing.id)] : [])));
+  if (others.length >= MAX_COMPANY_ADMINS) throw new Error(`A company can have at most ${MAX_COMPANY_ADMINS} company admins. Remove one first.`);
+  const title = input.title || 'Company admin';
+  if (existing) {
+    await tx.update(memberships).set({ role: 'company_admin', status: 'active', title }).where(eq(memberships.id, existing.id));
+    return existing.id;
+  }
+  const [m] = await tx.insert(memberships).values({ companyId, userId: user.id, role: 'company_admin', title, status: 'active' }).returning({ id: memberships.id });
+  return m.id;
 }

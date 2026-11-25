@@ -22,9 +22,11 @@ import { loadCompanyBilling } from '../../billing-data';
 import { BillingPanel } from './BillingPanel';
 import { CustomPanel } from './CustomPanel';
 import { companyCustomWork } from '../../custom-data';
+import { addCompanyAdminAction } from '../../billing-actions';
+import { MAX_COMPANY_ADMINS } from '../../new-company';
 
 /** Super Admin > Companies > one company: profile, portals and people. */
-export default async function CompanyPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ added?: string }> }) {
+export default async function CompanyPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ added?: string; adminAdded?: string; adminError?: string }> }) {
   const me = await requireSuperAdminPage();
   const id = z.uuid().safeParse((await params).id);
   if (!id.success) notFound();
@@ -47,7 +49,9 @@ export default async function CompanyPage({ params, searchParams }: { params: Pr
   const billing = await loadCompanyBilling(c.id, me.userId);
   // Before migration 0015 the custom tables are missing: the panel is simply left out.
   const custom = await companyCustomWork(c.id, me.userId).catch(() => null);
-  const added = (await searchParams).added === '1';
+  const sp = await searchParams;
+  const added = sp.added === '1';
+  const currentAdmins = admins; // loadPeople already leaves out removed people
 
   const details: [string, React.ReactNode][] = [
     ['Company name', c.name],
@@ -94,7 +98,8 @@ export default async function CompanyPage({ params, searchParams }: { params: Pr
       <div className="o-page">
         {added && (
           <div className="o-banner ok">
-            {c.name} is set up. {admins[0] ? `${admins[0].name} can now sign in with ${admins[0].email} and will open the Company admin portal.` : ''}
+            {c.name} is set up.{' '}
+            {admins.length ? `${admins.map((a) => `${a.name} (${a.email})`).join(' and ')} can now sign in and will open the Company admin portal.` : ''}
           </div>
         )}
         {c.status === 'suspended' && <div className="o-banner bad">This company is blocked. Its people see "Access blocked" when they sign in.</div>}
@@ -116,6 +121,60 @@ export default async function CompanyPage({ params, searchParams }: { params: Pr
           </div>
 
           <div className="o-stack" style={{ gap: 16 }}>
+            <div className="o-panel">
+              <div className="o-panel-head">
+                <h2>
+                  Company admins{' '}
+                  <span className="faint" style={{ fontSize: 12, fontWeight: 400 }}>
+                    {currentAdmins.length} of {MAX_COMPANY_ADMINS}
+                  </span>
+                </h2>
+              </div>
+              {sp.adminAdded === '1' && <div className="o-banner ok">Admin added. They can sign in with their email and have the same access as the other admin.</div>}
+              {sp.adminError && (
+                <div className="o-banner bad" role="alert">
+                  {sp.adminError}
+                </div>
+              )}
+              <ul style={{ margin: '0 0 8px', paddingLeft: 18 }}>
+                {currentAdmins.map((a) => (
+                  <li key={a.id}>
+                    {a.name} <span className="faint">({a.email})</span>
+                  </li>
+                ))}
+                {currentAdmins.length === 0 && <li className="faint">No company admin yet</li>}
+              </ul>
+              {currentAdmins.length < MAX_COMPANY_ADMINS ? (
+                <form action={addCompanyAdminAction.bind(null, c.id)} className="o-stack" style={{ gap: 8 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
+                    <label className="o-field">
+                      Name
+                      <input className="o-input" name="name" required minLength={2} maxLength={120} />
+                    </label>
+                    <label className="o-field">
+                      Email
+                      <input className="o-input" name="email" type="email" required maxLength={200} />
+                    </label>
+                    <label className="o-field">
+                      Job title
+                      <input className="o-input" name="title" maxLength={100} placeholder="Company admin" />
+                    </label>
+                  </div>
+                  <div className="o-row" style={{ justifyContent: 'flex-end' }}>
+                    <button className="o-btn small primary" type="submit">
+                      Add admin
+                    </button>
+                  </div>
+                  <p className="faint" style={{ fontSize: 12, margin: 0 }}>
+                    Both admins have the same access. Someone already in the company is promoted to admin.
+                  </p>
+                </form>
+              ) : (
+                <p className="faint" style={{ fontSize: 12, margin: 0 }}>
+                  This company has the maximum of {MAX_COMPANY_ADMINS} admins. Remove one to add another.
+                </p>
+              )}
+            </div>
             <BillingPanel companyId={c.id} b={billing} />
             {custom && <CustomPanel companyId={c.id} plan={custom.plan} requests={custom.requests} currency={billing.settings.currency} />}
             <div className="o-panel">

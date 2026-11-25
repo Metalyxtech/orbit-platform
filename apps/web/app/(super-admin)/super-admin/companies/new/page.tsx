@@ -67,7 +67,7 @@ export default async function NewCompany({ searchParams }: { searchParams: Promi
 
           <div className="o-panel">
             <div className="o-panel-head">
-              <h2>Company admin</h2>
+              <h2>Company admins</h2>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
               <label className="o-field">
@@ -81,6 +81,24 @@ export default async function NewCompany({ searchParams }: { searchParams: Promi
               <label className="o-field">
                 Job title
                 <input className="o-input" name="adminTitle" maxLength={100} placeholder="Company admin" />
+              </label>
+            </div>
+            <h3 style={{ fontSize: 13, margin: '16px 0 4px' }}>Second admin (optional)</h3>
+            <p className="faint" style={{ fontSize: 12, margin: '0 0 8px' }}>
+              Same access as the first admin. Leave blank for one admin; you can add one later on the company page.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+              <label className="o-field">
+                Name
+                <input className="o-input" name="admin2Name" minLength={2} maxLength={120} />
+              </label>
+              <label className="o-field">
+                Email (they sign in with this)
+                <input className="o-input" name="admin2Email" type="email" maxLength={200} />
+              </label>
+              <label className="o-field">
+                Job title
+                <input className="o-input" name="admin2Title" maxLength={100} placeholder="Company admin" />
               </label>
             </div>
           </div>

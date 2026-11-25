@@ -8,7 +8,7 @@ import { withTenant } from '@orbit/db';
 import { extendFreePeriod, markPaymentsSeen, saveBillingSettings } from '@/billing/admin';
 import { billingSettings } from '@/billing/state';
 import { requireSuperAdmin } from './guard';
-import { createCompany, readNewCompanyForm } from './new-company';
+import { addCompanyAdmin, createCompany, readNewCompanyForm } from './new-company';
 
 /** Super Admin > Add company. Errors come back on the form's URL. */
 export async function createCompanyAction(form: FormData) {
@@ -23,6 +23,32 @@ export async function createCompanyAction(form: FormData) {
   }
   revalidatePath('/super-admin', 'layout');
   redirect(`/super-admin/companies/${id}?added=1`);
+}
+
+/** Company page > Company admins: adds a second admin with the same access as the first (max 2). */
+export async function addCompanyAdminAction(companyId: string, form: FormData) {
+  const userId = await requireSuperAdmin();
+  const id = z.uuid().parse(companyId);
+  const db = await getDb();
+  const v = (k: string) => String(form.get(k) ?? '');
+  try {
+    await withTenant(db, { companyId: id, userId }, async (tx) => {
+      const m = await addCompanyAdmin(tx, id, { name: v('name'), email: v('email'), title: v('title') || undefined });
+      await audit(tx, {
+        companyId: id,
+        actorId: null,
+        action: 'membership.add_admin',
+        entity: 'memberships',
+        entityId: m,
+        data: { summary: [`${v('email').trim().toLowerCase()} made company admin by SteelConnect360`] },
+      });
+    });
+  } catch (err) {
+    const msg = err instanceof z.ZodError ? (err.issues[0]?.message ?? 'Check the form') : err instanceof Error && !('code' in err) ? err.message : 'Could not add the admin. Try again.';
+    redirect(`/super-admin/companies/${id}?adminError=${encodeURIComponent(msg)}`);
+  }
+  revalidatePath('/super-admin', 'layout');
+  redirect(`/super-admin/companies/${id}?adminAdded=1`);
 }
 
 /** Company page > Billing: currency (India ₹ / abroad $), plans released or hidden, trial days. */

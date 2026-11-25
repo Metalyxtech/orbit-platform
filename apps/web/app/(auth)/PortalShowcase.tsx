@@ -97,7 +97,7 @@ export function PortalShowcase() {
           {picked.map((id) => (
             <input key={id} type="hidden" name="portals" value={id} />
           ))}
-          <input type="text" name="website" tabIndex={-1} autoComplete="off" className="o-hp" aria-hidden />
+          <input type="text" name="hp_trap_9x" tabIndex={-1} autoComplete="new-password" className="o-hp" aria-hidden defaultValue="" />
           <div className="o-showcase-row">
             <input name="email" type="email" required placeholder="Work email *" autoComplete="email" autoFocus aria-label="Work email" />
             <input name="name" placeholder="Your name" autoComplete="name" aria-label="Your name" />

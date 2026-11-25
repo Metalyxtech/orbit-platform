@@ -36,8 +36,13 @@ const text = (v: FormDataEntryValue | null) => (typeof v === 'string' && v.trim(
 
 /** Sign-in page: "Email me the details". Sends the portal guide to the visitor and a copy to the sales inbox. */
 export async function requestPortalInfoAction(_prev: InfoState, form: FormData): Promise<InfoState> {
+  console.info('[portal-info] request received', JSON.stringify({ portals: form.getAll('portals'), hasPhone: !!text(form.get('phone')) }));
   // Honeypot: people never see this field, bots fill it in. Pretend it worked.
-  if (text(form.get('website'))) return { status: 'sent' };
+  // (Named so browser autofill and password managers leave it alone.)
+  if (text(form.get('hp_trap_9x'))) {
+    console.warn('[portal-info] honeypot filled; treated as bot, nothing sent');
+    return { status: 'sent' };
+  }
 
   const parsed = input.safeParse({
     email: form.get('email'),
@@ -47,12 +52,16 @@ export async function requestPortalInfoAction(_prev: InfoState, form: FormData):
     message: text(form.get('message')),
     portals: form.getAll('portals'),
   });
-  if (!parsed.success) return { status: 'error', message: parsed.error.issues[0]?.message ?? 'Check the form.' };
+  if (!parsed.success) {
+    console.info('[portal-info] rejected:', parsed.error.issues[0]?.message);
+    return { status: 'error', message: parsed.error.issues[0]?.message ?? 'Check the form.' };
+  }
   const d = parsed.data;
 
   const h = await headers();
   const ip = (h.get('x-forwarded-for') ?? '').split(',')[0].trim() || 'unknown';
   if (tooMany(`ip:${ip}`, 5, 60 * 60 * 1000) || tooMany(`to:${d.email}`, 3, 24 * 60 * 60 * 1000)) {
+    console.info('[portal-info] rate limited');
     return { status: 'error', message: 'We already sent a few emails from here. Please check your inbox, or try again later.' };
   }
 

@@ -10,11 +10,14 @@ import { setPortal } from './guard';
 // Super Admin > Add company: SteelConnect360's team sets up a client who contacted them.
 // The company starts active, its admin can sign in with the email given, and billing is set per country.
 
+/** Which currency a company pays in, by country. */
+const COUNTRY_CURRENCY = { india: 'INR', uk: 'GBP', abroad: 'USD' } as const;
+
 export const TIMEZONES = ['Asia/Kolkata', 'Asia/Dubai', 'Asia/Riyadh', 'Asia/Qatar', 'Asia/Singapore', 'Europe/London', 'America/New_York', 'Australia/Perth', 'UTC'];
 
 export const newCompanyInput = z.object({
   name: z.string().trim().min(2, 'Company name is too short').max(120),
-  country: z.enum(['india', 'abroad']),
+  country: z.enum(['india', 'uk', 'abroad']),
   timezone: z.enum(TIMEZONES as [string, ...string[]]),
   stage: z.enum(['sandbox', 'pilot', 'live']),
   adminName: z.string().trim().min(2, 'Enter the admin’s name').max(120),
@@ -37,7 +40,7 @@ export function readNewCompanyForm(form: FormData): NewCompanyInput {
   const v = (k: string) => String(form.get(k) ?? '');
   return {
     name: v('name'),
-    country: v('country') === 'abroad' ? 'abroad' : 'india',
+    country: v('country') === 'abroad' ? 'abroad' : v('country') === 'uk' ? 'uk' : 'india',
     timezone: v('timezone'),
     stage: (v('stage') || 'live') as 'live',
     adminName: v('adminName'),
@@ -78,7 +81,7 @@ export async function createCompany(db: Db, superUserId: string, raw: NewCompany
       .returning({ id: memberships.id });
     const m2 = second ? await addCompanyAdmin(tx, company.id, second) : null;
     for (const p of portals) await setPortal(tx, company.id, p, true);
-    await saveBillingSettings(tx, company.id, { currency: input.country === 'abroad' ? 'USD' : 'INR', showPlans: input.showPlans, trialDays: input.trialDays });
+    await saveBillingSettings(tx, company.id, { currency: COUNTRY_CURRENCY[input.country], showPlans: input.showPlans, trialDays: input.trialDays });
     await audit(tx, {
       companyId: company.id,
       actorId: null,
@@ -89,7 +92,7 @@ export async function createCompany(db: Db, superUserId: string, raw: NewCompany
         summary: [`Company set up by SteelConnect360 with admin ${second ? `${input.adminEmail} and ${second.email}` : input.adminEmail}`],
         portals,
         admin: m.id,
-        ...(m2 ? { admin2: m2 } : {}), currency: input.country === 'abroad' ? 'USD' : 'INR' },
+        ...(m2 ? { admin2: m2 } : {}), currency: COUNTRY_CURRENCY[input.country] },
     });
   });
   return company.id;

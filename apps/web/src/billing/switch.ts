@@ -42,6 +42,8 @@ export interface PendingCheckout {
   cancelNow?: boolean;
   /** Credit taken off the first payment (custom plans). */
   credit?: number;
+  /** People billed (per-user plans). */
+  seats?: number;
 }
 
 /** Notes a started checkout; nothing about the current subscription changes yet. */

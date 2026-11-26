@@ -2,7 +2,8 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { activateRequestedPortals, audit, legacyPortal, portalRoleFor, readMemberPortals, readPortalRoles, requestMemberPortals, setMemberPortal, writePortalRole, type ActionContext, type SessionContext } from '@orbit/core';
 import { companyPortals, memberships, users, type Tx } from '@orbit/db';
-import { assertWithinPlan } from '../billing/state';
+import { assertWithinPlan, seatNote } from '../billing/state';
+import { confirmed, removeMembership, REMOVE_WORD } from './remove-member';
 import { portalModules } from '../portals';
 
 const requireAdmin = (ctx: SessionContext) => {
@@ -104,7 +105,7 @@ const addInput = z.object({
 export async function addPerson(tx: Tx, ctx: ActionContext, raw: z.input<typeof addInput>) {
   requireAdmin(ctx);
   const input = addInput.parse(raw);
-  await assertWithinPlan(tx, ctx, 'user');
+  await assertWithinPlan(tx, ctx, 'user', undefined, input.role);
   const cps = await tx.select({ portal: companyPortals.portal }).from(companyPortals).where(and(eq(companyPortals.companyId, ctx.companyId), eq(companyPortals.enabled, true)));
   const allowed = cps.map((c) => c.portal);
   const bad = input.portals.find((p) => !allowed.includes(p));
@@ -131,4 +132,20 @@ export async function addPerson(tx: Tx, ctx: ActionContext, raw: z.input<typeof 
   }
   await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'membership.add', entity: 'memberships', entityId: m.id, data: { email: input.email, role: input.role, portals: input.portals }, requestId: ctx.requestId });
   return { ok: true as const };
+}
+
+const removeInput = z.object({ membershipId: z.uuid(), typed: z.string().max(40) });
+
+/**
+ * Removes a person from the company (the company admin typed REMOVE). Their history stays; on a
+ * per-user plan their seat stays paid for and free to fill.
+ */
+export async function removePerson(tx: Tx, ctx: ActionContext, raw: z.input<typeof removeInput>) {
+  requireAdmin(ctx);
+  const input = removeInput.parse(raw);
+  if (!confirmed(input.typed)) throw new Error(`Type ${REMOVE_WORD} to confirm.`);
+  if (input.membershipId === ctx.membershipId) throw new Error('You cannot remove yourself. Ask another company admin.');
+  const summary = await removeMembership(tx, ctx.companyId, input.membershipId);
+  await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'membership.remove', entity: 'memberships', entityId: input.membershipId, data: summary, requestId: ctx.requestId });
+  return { summary, billing: await seatNote(tx, ctx.companyId) };
 }

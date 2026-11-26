@@ -60,7 +60,8 @@ export function BillingPanel({ companyId, b }: { companyId: string; b: CompanyBi
           Client pays in
           <select className="o-select" name="currency" defaultValue={cur}>
             <option value="INR">Indian rupees (₹), India</option>
-            <option value="USD">US dollars ($), outside India</option>
+            <option value="GBP">Pounds sterling (£), United Kingdom</option>
+            <option value="USD">US dollars ($), USA and the rest of the world</option>
           </select>
         </label>
         <label className="o-field">

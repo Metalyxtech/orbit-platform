@@ -22,4 +22,6 @@ export const EVENT_LABEL: Record<string, string> = {
   'subscription.cancel_requested': 'Cancel requested',
   'subscription.completed': 'Completed',
   'payment.failed': 'Payment failed',
+  'seats.checkout_started': 'Extra seats: checkout started',
+  'seats.added': 'Extra seats bought',
 };

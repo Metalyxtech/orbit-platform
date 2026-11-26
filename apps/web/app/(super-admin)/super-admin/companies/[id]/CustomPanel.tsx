@@ -1,11 +1,12 @@
 import Link from 'next/link';
+import { currencySymbol, type Currency } from '@/billing/plans';
 import type { CustomPlan } from '@/custom/plan';
 import { statusOf, type CustomRequest } from '@/custom/requests';
 import { saveCustomPlanAction } from '../../custom-actions';
 
 /** Company page > Custom work: make this a custom customer, set its own price, see its requests. */
-export function CustomPanel({ companyId, plan, requests, currency }: { companyId: string; plan: CustomPlan | null; requests: CustomRequest[]; currency: 'INR' | 'USD' }) {
-  const unit = currency === 'USD' ? '$' : '₹';
+export function CustomPanel({ companyId, plan, requests, currency }: { companyId: string; plan: CustomPlan | null; requests: CustomRequest[]; currency: Currency }) {
+  const unit = currencySymbol(currency);
   const open = requests.filter((r) => r.status !== 'ready' && r.status !== 'declined');
   return (
     <div className="o-panel">

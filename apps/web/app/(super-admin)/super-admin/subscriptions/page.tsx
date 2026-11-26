@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { KpiStrip } from '@orbit/ui';
 import { eventCurrency } from '@/billing/admin';
-import { cycleOf, money } from '@/billing/plans';
+import { CURRENCIES, cycleOf, money, type Currency } from '@/billing/plans';
 import { customCycleLabel } from '@/custom/plan';
 import { markPaymentsSeenAction, setPlansShownAction, extendFreePeriodAction } from '../billing-actions';
 import { loadSubscriptions } from '../billing-data';
@@ -16,7 +16,7 @@ export default async function Subscriptions() {
   const rows = await loadSubscriptions(me.userId);
   const fresh = rows.filter((r) => r.newCount > 0);
   const paid = rows.filter((r) => r.state.status === 'active' || r.state.status === 'past_due');
-  const monthly = (cur: 'INR' | 'USD') =>
+  const monthly = (cur: Currency) =>
     paid.filter((r) => r.settings.currency === cur && r.price != null && r.state.cycle).reduce((n, r) => n + r.price! / cycleOf(r.state.cycle!).months, 0);
 
   return (
@@ -42,7 +42,8 @@ export default async function Subscriptions() {
             { value: String(paid.length), label: 'Paying companies' },
             { value: String(rows.filter((r) => r.state.status === 'trial').length), label: 'On free trial' },
             { value: money(Math.round(monthly('INR')), 'INR'), label: 'Monthly revenue (India)' },
-            { value: money(Math.round(monthly('USD')), 'USD'), label: 'Monthly revenue (abroad)' },
+            { value: money(Math.round(monthly('GBP')), 'GBP'), label: 'Monthly revenue (UK)' },
+            { value: money(Math.round(monthly('USD')), 'USD'), label: 'Monthly revenue (USA and others)' },
           ]}
         />
         <div className="o-panel flush">

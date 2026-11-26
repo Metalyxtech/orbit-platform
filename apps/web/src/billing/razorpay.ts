@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { getSecret } from '@orbit/core/aws';
+import type { Currency } from './plans';
 
 // Small Razorpay REST client (subscriptions). RAZORPAY_API_BASE lets tests point at a mock server.
 const base = () => process.env.RAZORPAY_API_BASE ?? 'https://api.razorpay.com/v1';
@@ -51,7 +52,7 @@ export interface RzSubscription {
   notes?: Record<string, string>;
 }
 
-export const createPlan = (input: { period: 'monthly' | 'yearly'; interval: number; name: string; amount: number; currency: 'INR' | 'USD'; description: string }) =>
+export const createPlan = (input: { period: 'monthly' | 'yearly'; interval: number; name: string; amount: number; currency: Currency; description: string }) =>
   call<{ id: string }>('POST', '/plans', {
     period: input.period,
     interval: input.interval,
@@ -67,7 +68,7 @@ export const createSubscription = (input: {
   totalCount: number;
   notes: Record<string, string>;
   startAt?: number;
-  addons?: { name: string; amount: number; currency: 'INR' | 'USD' }[];
+  addons?: { name: string; amount: number; currency: Currency }[];
 }) =>
   call<RzSubscription>('POST', '/subscriptions', {
     plan_id: input.planId,

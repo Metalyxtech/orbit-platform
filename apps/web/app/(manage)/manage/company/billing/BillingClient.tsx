@@ -2,10 +2,10 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button, Chip, ConfirmDialog, DataTable, EmptyState, useToast } from '@orbit/ui';
-import { BundlePicker, CycleSwitch, PlanCards, trustFor } from '@/billing/PlanCards';
-import { bundleFor, cycleOf, money, planOf, portalName, portalsOutside, priceFor, taxNote, tierOf, type Bundle, type Cycle, type TierId } from '@/billing/plans';
+import { BundlePicker, CycleSwitch, SeatCalculator, seatRules, trustFor } from '@/billing/PlanCards';
+import { FREE_VIEWERS, bundleFor, currencyWords, cycleOf, extraSeatsQuote, money, planOf, portalName, portalsOutside, seatQuote, taxNote, type Bundle, type Cycle } from '@/billing/plans';
 import type { BillingState } from '@/billing/state';
-import { cancelPlanAction, confirmCheckoutAction, startCheckoutAction, startCustomCheckoutAction } from './actions';
+import { cancelPlanAction, confirmCheckoutAction, confirmSeatsCheckoutAction, startCheckoutAction, startCustomCheckoutAction, startSeatsCheckoutAction } from './actions';
 
 type CustomDeal = { label: string; monthlyPrice: number | null; yearlyPrice: number | null; maxUsers: number | null; credit: number; installment: number | null };
 type CustomCycle = 'monthly' | 'yearly' | 'yearly_monthly';
@@ -35,6 +35,8 @@ const EVENT: Record<string, string> = {
   'subscription.cancel_requested': 'Cancellation requested',
   'subscription.completed': 'Subscription completed',
   'payment.failed': 'Payment failed',
+  'seats.checkout_started': 'Extra seats: checkout started',
+  'seats.added': 'Extra seats bought',
 };
 
 function loadCheckout(): Promise<boolean> {
@@ -57,15 +59,16 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
   const [bundle, setBundle] = useState<Bundle>(
     (state.bundle as Bundle | null) ?? bundleFor(used),
   );
-  const [pick, setPick] = useState<TierId | null>(null);
+  const [pick, setPick] = useState(false);
   const [cancel, setCancel] = useState(false);
   const [busy, setBusy] = useState(false);
   const current = state.plan ? planOf(state.plan) : undefined;
   // Name and price of the plan the company is on (standard or its custom plan).
   const planLabel = state.planName ?? current?.name ?? null;
-  const planPrice = current
-    ? priceFor(current.bundle, current.tier, (state.cycle as Cycle) ?? 'monthly', state.currency)
-    : state.plan === 'custom' && custom
+  const planPrice =
+    state.price !== null
+      ? state.price
+      : state.plan === 'custom' && custom
       ? state.cycle === 'yearly'
         ? custom.yearlyPrice
         : (state.cycle as string) === 'yearly_monthly'
@@ -78,15 +81,51 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
   const paid = state.status === 'active' || state.status === 'past_due';
   const cur = state.currency;
   const m = (v: number) => money(v, cur);
-  const tax = cur === 'USD' ? '' : ' + GST';
+  const tax = cur === 'INR' ? ' + GST' : cur === 'GBP' ? ' + VAT' : '';
+  // Seats to buy: at least everyone who needs one today; more leaves room to add people later.
+  const [seats, setSeats] = useState(Math.max(state.billable, state.seats ?? state.billable));
+  const quote = seatQuote(bundle, seats, cycle, cur);
+  const bundleName = planOf(`${bundle}_users`)?.name ?? bundle;
+  const onThisPlan = paid && !state.cancelAtPeriodEnd && state.plan === `${bundle}_users` && state.cycle === cycle && state.seats === quote.seats;
+  const freeViewers = Math.min(FREE_VIEWERS, state.managementPeople);
+  const peopleNote = (
+    <>
+      {state.seatsUsed} {state.seatsUsed === 1 ? 'person needs' : 'people need'} a seat today
+      {freeViewers ? ` (${freeViewers} management ${freeViewers === 1 ? 'viewer' : 'viewers'} free)` : ''}. Buy more to leave room for new people. When someone leaves, their seat
+      stays yours to give to someone else.
+    </>
+  );
+  // More seats on the current plan: charged now for the rest of the period, then with each renewal.
+  const [addSeats, setAddSeats] = useState(1);
+  const freeSeats = state.seats !== null ? Math.max(0, state.seats - state.seatsUsed) : 0;
+  const canBuySeats = paid && state.perUser && state.seats !== null && !state.cancelAtPeriodEnd && !!state.bundle && !!state.cycle && !!state.currentPeriodEnd;
+  const extra = canBuySeats
+    ? extraSeatsQuote(state.bundle as Bundle, state.seats!, addSeats, state.cycle as Cycle, cur, new Date(state.currentPeriodEnd!))
+    : null;
 
-  function pay(tier: TierId) {
-    setPick(null);
-    return run(() => startCheckoutAction({ bundle, tier, cycle }));
+  function pay(b: Bundle = bundle, c: Cycle = cycle) {
+    setPick(false);
+    return run(() => startCheckoutAction({ bundle: b, cycle: c, seats: quote.seats }), async (r) => {
+      const done = await confirmCheckoutAction(r);
+      if (!done.ok) return done;
+      const paused = done.data.paused.length ? ` ${done.data.paused.join(' and ')} is paused; your data is kept.` : '';
+      const resumed = done.data.resumed.length ? ` ${done.data.resumed.join(' and ')} is back on.` : '';
+      return { ok: true as const, text: `${paused}${resumed}` };
+    });
   }
 
-  /** Starts a subscription (standard or custom) and opens Razorpay Checkout. */
-  async function run(start: () => ReturnType<typeof startCheckoutAction>) {
+  function buySeats() {
+    return run(() => startSeatsCheckoutAction({ add: addSeats }), async (r) => {
+      const done = await confirmSeatsCheckoutAction(r);
+      return done.ok ? { ok: true as const, text: ` You now have ${(state.seats ?? 0) + done.data.seats} seats.` } : done;
+    });
+  }
+
+  type Confirmed = { ok: true; text: string } | { ok: false; error: string };
+  type Paid = { paymentId: string; subscriptionId: string; signature: string };
+
+  /** Starts a subscription (plan, custom plan or extra seats), opens Razorpay Checkout, then confirms it. */
+  async function run(start: () => ReturnType<typeof startCheckoutAction>, confirm: (r: Paid) => Promise<Confirmed> = defaultConfirm) {
     setBusy(true);
     const res = await start();
     if (!res.ok) {
@@ -107,14 +146,12 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
       theme: { color: '#2f5d8a' },
       modal: { ondismiss: () => setBusy(false) },
       handler: async (r: RzResponse) => {
-        const done = await confirmCheckoutAction({ paymentId: r.razorpay_payment_id, subscriptionId: r.razorpay_subscription_id, signature: r.razorpay_signature });
+        const done = await confirm({ paymentId: r.razorpay_payment_id, subscriptionId: r.razorpay_subscription_id, signature: r.razorpay_signature });
         setBusy(false);
         if (!done.ok) return toast(done.error, 'bad');
-        const paused = done.data.paused.length ? ` ${done.data.paused.join(' and ')} is paused; your data is kept.` : '';
-        const resumed = done.data.resumed.length ? ` ${done.data.resumed.join(' and ')} is back on.` : '';
         // Switching from a plan already paid for: the new one starts when that period ends (no double payment).
         const starts = res.data.paidUntil ? ` It starts on ${date(res.data.paidUntil)}, when your current paid period ends.` : '';
-        toast(`You are on ${res.data.planName}. Thank you!${starts}${paused}${resumed}`);
+        toast(`Paid: ${res.data.planName}. Thank you!${starts}${done.text}`);
         router.refresh();
       },
     });
@@ -123,6 +160,11 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
       toast(e.error?.description ?? 'The payment failed. Nothing was charged.', 'bad');
     });
     rz.open();
+  }
+
+  async function defaultConfirm(r: Paid): Promise<Confirmed> {
+    const done = await confirmCheckoutAction(r);
+    return done.ok ? { ok: true, text: '' } : done;
   }
 
   async function doCancel() {
@@ -168,7 +210,7 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
             {state.status === 'active' &&
               (state.cancelAtPeriodEnd
                 ? `${planLabel}, ${cycleText}. Ends on ${date(state.currentPeriodEnd)}; it will not renew.`
-                : `${planLabel}, ${cycleText}${planPrice ? `, ${m(planPrice)}${tax}` : ''}. Renews on ${date(state.currentPeriodEnd)}.`)}
+                : `${planLabel}, ${cycleText}${state.perUser && state.seats ? `, ${state.seats} seats` : ''}${planPrice ? `, ${m(planPrice)}${tax}` : ''}. Renews on ${date(state.currentPeriodEnd)}.`)}
             {state.status === 'past_due' && 'Razorpay could not take the last payment and is retrying. Update your payment method from the link Razorpay emailed you.'}
             {state.status === 'cancelled' && 'Your subscription has ended. Choose a plan to continue.'}
           </p>
@@ -176,9 +218,17 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
         <div className="b-usage">
           <div>
             <span>People</span>
-            <strong>{bar(state.usage.users, state.limits.users)}</strong>
+            <strong>{state.perUser ? state.usage.users : bar(state.usage.users, state.limits.users)}</strong>
             {state.limits.users < 99 && <i style={{ width: `${Math.min(100, (state.usage.users / state.limits.users) * 100)}%` }} />}
           </div>
+          {state.perUser && state.seats !== null && (
+            <div>
+              <span>Seats</span>
+              <strong>
+                {state.seatsUsed} of {state.seats}
+              </strong>
+            </div>
+          )}
           <div>
             <span>Portals</span>
             <strong>{state.limits.portals.map(portalName).join(' + ')}</strong>
@@ -186,12 +236,50 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
         </div>
       </div>
 
+      {canBuySeats && extra && (
+        <div className="o-panel">
+          <div className="o-panel-head">
+            <h2>Seats</h2>
+            <Chip tone={freeSeats ? 'ok' : 'warn'}>{freeSeats ? `${freeSeats} free` : 'All in use'}</Chip>
+          </div>
+          <p className="muted" style={{ fontSize: 13, margin: '0 0 12px' }}>
+            {state.seatsUsed} of {state.seats} seats in use{state.extraSeats ? ` (${state.extraSeats} bought later)` : ''}. Someone who leaves frees their seat for the next
+            person at no extra cost. Your GM and a director (management) do not need a seat.
+          </p>
+          <div className="o-row" style={{ gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <label className="o-field" style={{ margin: 0 }}>
+              More seats
+              <input
+                className="o-input"
+                type="number"
+                min={1}
+                max={1000}
+                value={addSeats}
+                onChange={(e) => setAddSeats(Math.max(1, Math.min(1000, Math.floor(Number(e.target.value) || 1))))}
+                style={{ width: 110 }}
+              />
+            </label>
+            <div style={{ fontSize: 13 }}>
+              <strong>
+                {m(extra.dueNow)}
+                {tax}
+              </strong>{' '}
+              now for the {extra.daysLeft} days left until {date(state.currentPeriodEnd)}, then {m(extra.perCycle)}
+              {tax} per {cycleOf(state.cycle!).per} with your plan.
+            </div>
+            <Button variant="primary" disabled={busy} onClick={() => void buySeats()}>
+              Buy {addSeats} {addSeats === 1 ? 'seat' : 'seats'}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {custom ? (
         <div className="o-panel">
           <h2 style={{ margin: 0 }}>Your custom plan: {custom.label}</h2>
           <p className="muted" style={{ fontSize: 13, margin: '6px 0 12px' }}>
             Agreed with SteelConnect360 for {company}
-            {custom.maxUsers ? `, up to ${custom.maxUsers} people` : ''}. Prices in {cur === 'USD' ? 'US dollars' : 'Indian rupees'} · {taxNote(cur)}.
+            {custom.maxUsers ? `, up to ${custom.maxUsers} people` : ''}. Prices in {currencyWords(cur)} · {taxNote(cur)}.
           </p>
           {!custom.monthlyPrice && !custom.yearlyPrice ? (
             <p style={{ fontSize: 13, margin: 0 }}>SteelConnect360 will share your price shortly.</p>
@@ -240,7 +328,7 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
         <>
       <h2 style={{ margin: '8px 0 0' }}>{paid ? 'Change plan' : 'Choose your plan'}</h2>
       <p className="muted" style={{ fontSize: 13, margin: 0 }}>
-        Prices in {cur === 'USD' ? 'US dollars' : 'Indian rupees'} · {taxNote(cur)}
+        Priced per person, in {currencyWords(cur)} · {taxNote(cur)}
       </p>
       <div className="b-steps">
         <span className="b-step">1. Portals</span>
@@ -251,31 +339,36 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
         <CycleSwitch cycle={cycle} onChange={setCycle} />
       </div>
       <div className="b-steps">
-        <span className="b-step">3. Team size</span>
-        <PlanCards
+        <span className="b-step">3. Your people</span>
+        <SeatCalculator
           bundle={bundle}
           cycle={cycle}
           currency={cur}
-          action={(tier) => {
-            const t = tierOf(tier)!;
-            const id = `${bundle}_${tier}`;
-            return paid && !state.cancelAtPeriodEnd && state.plan === id && state.cycle === cycle ? (
+          seats={seats}
+          onSeats={(n) => setSeats(Math.max(state.billable, n))}
+          minSeats={state.billable}
+          peopleNote={peopleNote}
+          action={
+            onThisPlan ? (
               <Button block disabled>
                 Current plan
               </Button>
             ) : (
-              <Button block variant={t.popular ? 'primary' : undefined} disabled={busy || state.usage.users > t.users} onClick={() => setPick(tier)}>
-                {state.usage.users > t.users ? `Over ${t.users} people` : paid ? `Switch to ${t.name}` : `Choose ${t.name}`}
+              <Button block variant="primary" disabled={busy} onClick={() => setPick(true)}>
+                {paid ? `Switch to ${bundleName}` : `Subscribe: ${m(quote.total)} per ${cycleOf(cycle).per}`}
               </Button>
-            );
-          }}
-          enterprise={
-            <a className="o-btn block" href="mailto:sales@metalyxtech.com?subject=SteelConnect360%20Enterprise">
-              Talk to us
-            </a>
+            )
           }
         />
       </div>
+      <ul className="b-rules">
+        {seatRules(cur).map((t) => (
+          <li key={t}>{t}</li>
+        ))}
+      </ul>
+      <p className="muted" style={{ fontSize: 13, margin: 0 }}>
+        Over 150 people or several companies? <a href="mailto:sales@metalyxtech.com?subject=SteelConnect360%20Enterprise">Talk to us</a> about an Enterprise price.
+      </p>
       <ul className="b-trust">
         {trustFor(cur, state.trialDays).map((t) => (
           <li key={t}>{t}</li>
@@ -300,35 +393,32 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
           columns={[
             { key: 'd', header: 'Date', render: (r) => date(r.at) },
             { key: 't', header: 'Event', render: (r) => EVENT[r.type] ?? r.type },
-            { key: 'a', header: 'Amount', num: true, render: (r) => (r.amount ? money(r.amount / 100, r.currency === 'USD' ? 'USD' : r.currency === 'INR' ? 'INR' : cur) : '-') },
+            { key: 'a', header: 'Amount', num: true, render: (r) => (r.amount ? money(r.amount / 100, r.currency === 'USD' || r.currency === 'GBP' || r.currency === 'INR' ? r.currency : cur) : '-') },
             { key: 'r', header: 'Reference', render: (r) => <span className="faint" style={{ fontSize: 11 }}>{r.ref}</span> },
           ]}
         />
       </div>
 
       <ConfirmDialog
-        open={!!pick}
-        title={pick ? `${planOf(`${bundle}_${pick}`)?.name}, ${cycleOf(cycle).label.toLowerCase()}` : ''}
+        open={pick}
+        title={`${bundleName}, ${cycleOf(cycle).label.toLowerCase()}`}
         confirmLabel="Continue to payment"
-        onCancel={() => setPick(null)}
-        onConfirm={() => pick && void pay(pick)}
+        onCancel={() => setPick(false)}
+        onConfirm={() => void pay()}
       >
-        {pick && (
-          <>
-            {m(priceFor(bundle, pick, cycle, cur))}{tax} per {cycleOf(cycle).per}, for up to {tierOf(pick)?.users} people.
-            {state.status === 'trial' && state.trialDaysLeft > 0
-              ? ` Your ${cur === 'USD' ? 'card' : 'card or UPI'} is set up now; the first charge is on ${date(state.trialEndsAt)} when the trial ends.`
-              : paid && state.currentPeriodEnd && new Date(state.currentPeriodEnd).getTime() > Date.now()
-                ? ` Your current plan runs until ${date(state.currentPeriodEnd)}, which you have already paid for; the first charge for this plan is then.`
-                : ' You pay now through Razorpay.'}{' '}
-            Cancel any time.
-            {portalsOutside(`${bundle}_${pick}`, used).length > 0 && (
-              <p className="o-banner hivis" style={{ margin: '10px 0 0' }}>
-                This plan does not include {portalsOutside(`${bundle}_${pick}`, used).map(portalName).join(' and ')}. It will be paused for everyone in
-                your company once you subscribe. Its data is kept, and it comes back if you later choose a plan that includes it.
-              </p>
-            )}
-          </>
+        {m(quote.total)}
+        {tax} per {cycleOf(cycle).per}, for {quote.seats} seats.
+        {state.status === 'trial' && state.trialDaysLeft > 0
+          ? ` Your ${cur === 'INR' ? 'card or UPI' : 'card'} is set up now; the first charge is on ${date(state.trialEndsAt)} when the trial ends.`
+          : paid && state.currentPeriodEnd && new Date(state.currentPeriodEnd).getTime() > Date.now()
+            ? ` Your current plan runs until ${date(state.currentPeriodEnd)}, which you have already paid for; the first charge for this plan is then.`
+            : ' You pay now through Razorpay.'}{' '}
+        Someone who leaves frees their seat for the next person; buy more seats any time. Cancel any time.
+        {portalsOutside(`${bundle}_users`, used).length > 0 && (
+          <p className="o-banner hivis" style={{ margin: '10px 0 0' }}>
+            This plan does not include {portalsOutside(`${bundle}_users`, used).map(portalName).join(' and ')}. It will be paused for everyone in your
+            company once you subscribe. Its data is kept, and it comes back if you later choose a plan that includes it.
+          </p>
         )}
       </ConfirmDialog>
       <ConfirmDialog

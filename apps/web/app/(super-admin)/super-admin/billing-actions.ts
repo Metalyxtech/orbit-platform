@@ -6,6 +6,7 @@ import { audit } from '@orbit/core';
 import { getDb } from '@orbit/core/next';
 import { withTenant } from '@orbit/db';
 import { extendFreePeriod, markPaymentsSeen, saveBillingSettings } from '@/billing/admin';
+import { asCurrency } from '@/billing/plans';
 import { billingSettings } from '@/billing/state';
 import { requireSuperAdmin } from './guard';
 import { addCompanyAdmin, createCompany, readNewCompanyForm } from './new-company';
@@ -58,7 +59,7 @@ export async function setCompanyBillingAction(companyId: string, form: FormData)
   const db = await getDb();
   await withTenant(db, { companyId: id, userId }, async (tx) => {
     const s = await saveBillingSettings(tx, id, {
-      currency: form.get('currency') === 'USD' ? 'USD' : 'INR',
+      currency: asCurrency(String(form.get('currency') ?? '')),
       showPlans: form.get('showPlans') !== 'hide',
       trialDays: Number(form.get('trialDays') ?? 7),
     });

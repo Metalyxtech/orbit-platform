@@ -4,7 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button, Chip, useConfirm, useToast } from '@orbit/ui';
 import type { PeopleData } from '@/company-admin/people';
-import { addPersonAction, changePersonPortalAction, setPersonPortalRoleAction } from '../actions';
+import { RemoveMemberButton } from '@/company-admin/RemoveMemberButton';
+import { addPersonAction, changePersonPortalAction, removePersonAction, setPersonPortalRoleAction } from '../actions';
 
 const ROLE_LABEL: Record<string, string> = {
   employee: 'Employee',
@@ -16,7 +17,7 @@ const ROLE_LABEL: Record<string, string> = {
 
 type Person = PeopleData['people'][number];
 
-export function PeopleClient({ data, me }: { data: PeopleData; me: string }) {
+export function PeopleClient({ data, me, seats }: { data: PeopleData; me: string; seats: { used: number; total: number } | null }) {
   const router = useRouter();
   const toast = useToast();
   const [adding, setAdding] = useState(false);
@@ -72,6 +73,17 @@ export function PeopleClient({ data, me }: { data: PeopleData; me: string }) {
           </Button>
         </div>
       </div>
+      {seats && (
+        <div className={`o-banner${seats.used >= seats.total ? ' hivis' : ''}`} role="status">
+          <strong>
+            {seats.used} of {seats.total} seats in use
+          </strong>
+          {seats.used >= seats.total
+            ? '. Every seat is taken: buy more seats to add someone (management viewers, up to 2, do not need one).'
+            : `. ${seats.total - seats.used} free to give to new people at no extra cost.`}{' '}
+          <Link href="/manage/company/billing">{seats.used >= seats.total ? 'Buy more seats' : 'Seats and billing'}</Link>
+        </div>
+      )}
       {adding && <AddPerson portals={data.portals} onDone={() => setAdding(false)} />}
       <div className="o-row">
         <input className="o-input" style={{ maxWidth: 320 }} placeholder="Search name or email" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search people" />
@@ -102,6 +114,11 @@ export function PeopleClient({ data, me }: { data: PeopleData; me: string }) {
                       {p.title ? ` · ${p.title}` : ''}
                     </div>
                     {p.status !== 'active' && <Chip tone={p.status === 'pending' ? 'warn' : 'bad'}>{p.status === 'pending' ? 'Waiting to join' : 'Blocked'}</Chip>}
+                    {p.membershipId !== me && (
+                      <div style={{ marginTop: 6 }}>
+                        <RemoveMemberButton name={p.name} company="this company" remove={(typed) => removePersonAction(p.membershipId, typed)} />
+                      </div>
+                    )}
                   </td>
                   <td className="muted" style={{ fontSize: 12 }}>
                     {ROLE_LABEL[p.role] ?? p.role}

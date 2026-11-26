@@ -1,24 +1,9 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { audit, type ActionContext, type SessionContext } from '@orbit/core';
-import { billingEvents, billingPlans, companies, companyBilling, companyPortals, companySubscriptions, memberships, type Tx } from '@orbit/db';
-import {
-  BILLING_LAUNCH,
-  BUNDLES,
-  CYCLES,
-  TIERS,
-  TRIAL_DAYS,
-  TRIAL_LIMITS,
-  cycleOf,
-  planId,
-  planOf,
-  portalName,
-  priceFor,
-  type Bundle,
-  type Currency,
-  type Cycle,
-  type TierId,
-} from './plans';
+import { billingEvents, companies, companyBilling, companyPortals, companySubscriptions, memberships, type Tx } from '@orbit/db';
+import { BILLING_LAUNCH, BUNDLES, CYCLES, TRIAL_DAYS, TRIAL_LIMITS, asCurrency, cycleOf, planId, planOf, portalName, priceFor, type Bundle, type Currency, type Cycle } from './plans';
+import { endSeatAddons, headcount, readSeats, seatPlanId, seatsTaken, writeMainSeats } from './seats';
 import { fitPortalsToPlan } from './portals';
 import { getCustomPlan } from '../custom/plan';
 import { markCreditUsed } from '../custom/plan';
@@ -37,7 +22,7 @@ export type BillingStatus = 'trial' | 'trial_ended' | 'active' | 'past_due' | 'c
 /** SteelConnect360's billing settings for a company: currency, plans released or hidden, trial length. */
 export async function billingSettings(tx: Tx, companyId: string): Promise<{ currency: Currency; showPlans: boolean; trialDays: number }> {
   const [row] = await tx.select().from(companyBilling).where(eq(companyBilling.companyId, companyId));
-  return { currency: row?.currency === 'USD' ? 'USD' : 'INR', showPlans: row?.showPlans ?? true, trialDays: row?.trialDays ?? TRIAL_DAYS };
+  return { currency: asCurrency(row?.currency), showPlans: row?.showPlans ?? true, trialDays: row?.trialDays ?? TRIAL_DAYS };
 }
 
 /** The company's plan, status, limits and usage (migrations 0011 and 0012 have run everywhere). */
@@ -62,10 +47,7 @@ export async function billingStateFor(tx: Tx, companyId: string) {
   else if (sub && (sub.status === 'cancelled' || sub.status === 'completed')) status = 'cancelled';
   else status = trialEnds.getTime() > now ? 'trial' : 'trial_ended';
   const onPlan = status === 'active' || status === 'past_due';
-  const [users, enabled] = await Promise.all([
-    tx.select({ id: memberships.id }).from(memberships).where(and(eq(memberships.companyId, companyId), eq(memberships.status, 'active'))),
-    tx.select({ p: companyPortals.portal }).from(companyPortals).where(and(eq(companyPortals.companyId, companyId), eq(companyPortals.enabled, true))),
-  ]);
+  const enabled = await tx.select({ p: companyPortals.portal }).from(companyPortals).where(and(eq(companyPortals.companyId, companyId), eq(companyPortals.enabled, true)));
   const portals = enabled.map((p) => p.p);
   // A custom deal (plan "custom"): its own name and people limit; every portal SteelConnect360 switched on.
   const custom = sub?.plan === 'custom' ? await getCustomPlan(tx, companyId) : null;
@@ -75,6 +57,11 @@ export async function billingStateFor(tx: Tx, companyId: string) {
       : onPlan && sub?.plan === 'custom'
         ? { users: custom?.maxUsers ?? 100_000, portals: [...new Set([...TRIAL_LIMITS.portals, ...portals])] }
         : TRIAL_LIMITS;
+  // People, and on a per-user plan the seats paid for (main subscription plus extra seats bought later).
+  const people = await headcount(tx, companyId);
+  const bought = plan?.perUser ? await readSeats(tx, companyId) : { main: null, extra: 0, addons: [] };
+  const seats = plan?.perUser ? (bought.main ?? people.billable) + bought.extra : null;
+  const cycle = (sub?.cycle as Cycle | undefined) ?? null;
   return {
     status,
     currency: settings.currency,
@@ -84,24 +71,59 @@ export async function billingStateFor(tx: Tx, companyId: string) {
     planName: plan?.name ?? (sub?.plan === 'custom' ? (custom?.label ?? 'Custom plan') : null),
     bundle: plan?.bundle ?? null,
     tier: plan?.tier ?? null,
-    cycle: (sub?.cycle as Cycle | undefined) ?? null,
+    perUser: plan?.perUser ?? false,
+    /** Seats paid for (per-user plans): the main subscription's plus extra seats bought later. */
+    seats,
+    /** Of those, bought later as extra-seat subscriptions. */
+    extraSeats: bought.extra,
+    /** Seats taken: active people less up to 2 free management viewers. */
+    seatsUsed: people.used,
+    /** Smallest number of seats that fits today's people (never below the minimum). */
+    billable: people.billable,
+    managementPeople: people.management,
+    /** What the current standard plan charges each cycle, extra seats included (null: trial or custom plan). */
+    price: plan && cycle ? priceFor(plan.bundle, plan.tier, cycle, settings.currency, seats ?? undefined) : null,
+    cycle,
     razorpayStatus: sub?.status ?? null,
     trialEndsAt: trialEnds.toISOString(),
     trialDaysLeft: Math.max(0, Math.ceil((trialEnds.getTime() - now) / DAY)),
     currentPeriodEnd: periodEnd?.toISOString() ?? null,
     cancelAtPeriodEnd: sub?.cancelAtPeriodEnd ?? false,
     limits,
-    usage: { users: users.length, portals },
+    usage: { users: people.active, portals },
     /** Can the company keep adding people and portals? */
     usable: status === 'trial' || status === 'active' || status === 'past_due',
   };
 }
 export type BillingState = Awaited<ReturnType<typeof billingState>>;
 
-/** Throws when adding one more person, or a portal outside the plan, is not allowed. */
-export async function assertWithinPlan(tx: Tx, ctx: SessionContext, what: 'user' | 'portal', portal?: string) {
+/** After someone leaves: how many seats are free to fill (empty when not on a per-user plan). */
+export async function seatNote(tx: Tx, companyId: string) {
+  try {
+    const s = await tx.transaction((sp) => billingStateFor(sp, companyId));
+    if (!s.perUser || s.seats === null || !(s.status === 'active' || s.status === 'past_due')) return '';
+    const free = Math.max(0, s.seats - s.seatsUsed);
+    return `${free} of ${s.seats} seats ${free === 1 ? 'is' : 'are'} free: add someone in their place at no extra cost.`;
+  } catch {
+    return '';
+  }
+}
+
+/** The message shown when every seat is taken. */
+export const SEATS_FULL = 'Buy more seats in Plan and billing, or remove someone to free a seat.';
+
+/**
+ * Throws when adding one more person (with company role `role`), or a portal outside the plan, is
+ * not allowed. On a per-user plan the person needs a free seat, unless they are one of the free
+ * management viewers.
+ */
+export async function assertWithinPlan(tx: Tx, ctx: SessionContext, what: 'user' | 'portal', portal?: string, role?: string) {
   const s = await billingState(tx, ctx);
   if (!s.usable) throw new Error('Your SteelConnect360 plan has ended. Choose a plan in Plan and billing to keep adding people and portals.');
+  if (what === 'user' && s.perUser && s.seats !== null && (s.status === 'active' || s.status === 'past_due')) {
+    const after = seatsTaken(s.usage.users + 1, s.managementPeople + (role === 'management' ? 1 : 0));
+    if (after > s.seats) throw new Error(`All ${s.seats} seats are in use. ${SEATS_FULL}`);
+  }
   if (what === 'user' && s.usage.users >= s.limits.users) throw new Error(`Your plan includes ${s.limits.users} people. Upgrade in Plan and billing to add more.`);
   if (what === 'portal' && portal && !s.limits.portals.includes(portal)) {
     throw new Error(`Your ${s.planName ?? ''} plan does not include this portal. Switch to a plan with it in Plan and billing.`);
@@ -112,41 +134,32 @@ const requireAdmin = (ctx: SessionContext) => {
   if (ctx.role !== 'company_admin') throw new Error('Only the company admin can manage the subscription');
 };
 
-/** The Razorpay plan for a bundle, tier and cycle, created on first use. */
-async function razorpayPlanId(tx: Tx, b: Bundle, t: TierId, cycle: Cycle, currency: Currency) {
-  const key = `${planId(b, t)}_${cycle}_${currency}`;
-  const p = planOf(planId(b, t))!;
-  const c = cycleOf(cycle);
-  const amount = priceFor(b, t, cycle, currency) * 100; // paise or cents
-  const [row] = await tx.select().from(billingPlans).where(eq(billingPlans.key, key));
-  if (row && row.amount === amount) return row.razorpayPlanId;
-  const created = await rz.createPlan({ period: c.rz.period, interval: c.rz.interval, name: `SteelConnect360 ${p.name} (${c.label})`, amount, currency, description: `Up to ${p.users} people` });
-  await tx
-    .insert(billingPlans)
-    .values({ key, razorpayPlanId: created.id, amount })
-    .onConflictDoUpdate({ target: billingPlans.key, set: { razorpayPlanId: created.id, amount } });
-  return created.id;
-}
-
 const startInput = z.object({
   bundle: z.enum(BUNDLES.map((b) => b.id) as [Bundle, ...Bundle[]]),
-  tier: z.enum(TIERS.map((t) => t.id) as [TierId, ...TierId[]]),
   cycle: z.enum(CYCLES.map((c) => c.id) as [Cycle, ...Cycle[]]),
+  /** Seats to buy; at least the people in the company today (and the minimum). */
+  seats: z.number().int().min(1).max(100_000).optional(),
 });
 
-/** Creates the Razorpay subscription; the browser then opens Razorpay Checkout with its id. */
+/**
+ * Creates the Razorpay subscription for a per-user plan and its number of seats; the browser then
+ * opens Razorpay Checkout with its id.
+ */
 export async function startCheckout(tx: Tx, ctx: ActionContext, raw: z.input<typeof startInput>) {
   requireAdmin(ctx);
   const input = startInput.parse(raw);
   const state = await billingState(tx, ctx);
   if (!state.showPlans) throw new Error('Your plan is arranged by the SteelConnect360 team. Contact SteelConnect360 to change it.');
   const currency = state.currency;
-  const id = planId(input.bundle, input.tier);
+  const id = planId(input.bundle, 'users');
   const plan = planOf(id)!;
-  if (state.usage.users > plan.users) throw new Error(`${plan.name} includes ${plan.users} people and you have ${state.usage.users}. Pick a larger team size.`);
+  const { billable } = await headcount(tx, ctx.companyId);
+  const seats = Math.max(billable, input.seats ?? state.seats ?? billable);
   // A plan without a portal the company uses is allowed: that portal is paused once payment is confirmed.
-  if (state.status === 'active' && !state.cancelAtPeriodEnd && state.plan === id && state.cycle === input.cycle) throw new Error('You are already on this plan.');
-  const rzPlan = await razorpayPlanId(tx, input.bundle, input.tier, input.cycle, currency);
+  if (state.status === 'active' && !state.cancelAtPeriodEnd && state.plan === id && state.cycle === input.cycle && state.seats === seats) {
+    throw new Error('You are already on this plan.');
+  }
+  const rzPlan = await seatPlanId(tx, input.bundle, seats, input.cycle, currency);
   // First charge after the trial or after the period already paid for; the current plan is untouched until payment.
   const { startAt, paidUntil, replaces } = await switchTiming(tx, ctx.companyId, state);
   const sub = await rz.createSubscription({
@@ -155,9 +168,9 @@ export async function startCheckout(tx: Tx, ctx: ActionContext, raw: z.input<typ
     notes: { company_id: ctx.companyId, company: ctx.companyName, plan: id, cycle: input.cycle, currency },
     startAt,
   });
-  const amount = priceFor(input.bundle, input.tier, input.cycle, currency);
-  await recordCheckout(tx, ctx.companyId, sub.id, amount * 100, { plan: id, cycle: input.cycle, currency, replaces });
-  return { subscriptionId: sub.id, keyId: await rz.publicKeyId(), planName: plan.name, amount, currency, cycle: cycleOf(input.cycle).label, email: ctx.email, name: ctx.name, paidUntil };
+  const amount = priceFor(input.bundle, 'users', input.cycle, currency, seats);
+  await recordCheckout(tx, ctx.companyId, sub.id, Math.round(amount * 100), { plan: id, cycle: input.cycle, currency, replaces, seats });
+  return { subscriptionId: sub.id, keyId: await rz.publicKeyId(), planName: `${plan.name}, ${seats} seats`, amount, currency, cycle: cycleOf(input.cycle).label, email: ctx.email, name: ctx.name, paidUntil };
 }
 
 const confirmInput = z.object({ paymentId: z.string().min(5).max(80), subscriptionId: z.string().min(5).max(80), signature: z.string().min(10).max(200) });
@@ -173,6 +186,12 @@ export async function confirmCheckout(tx: Tx, ctx: ActionContext, raw: z.input<t
   const state = await billingState(tx, ctx);
   await completeSwitch(tx, ctx, input.subscriptionId, sub, new Date(state.trialEndsAt));
   await applyRazorpay(tx, ctx.companyId, live);
+  // Per-user plan: the new subscription pays for all the seats, so extra-seat subscriptions bought
+  // on the old plan stop when their paid period ends.
+  if (sub.seats) {
+    await writeMainSeats(tx, ctx.companyId, sub.seats);
+    await endSeatAddons(tx, ctx.companyId);
+  }
   if (sub.credit) await markCreditUsed(tx, ctx.companyId);
   const fit = await fitPortalsToPlan(tx, ctx, sub.plan);
   await tx.insert(billingEvents).values({ companyId: ctx.companyId, type: 'checkout.completed', razorpayId: input.paymentId, data: { subscription: input.subscriptionId } });
@@ -201,6 +220,8 @@ export async function cancelPlan(tx: Tx, ctx: ActionContext) {
   }
   const live = await rz.cancelSubscription(sub.razorpaySubscriptionId, true);
   await tx.update(companySubscriptions).set({ cancelAtPeriodEnd: true, status: live.status === 'cancelled' ? 'cancelled' : sub.status, updatedAt: new Date() }).where(eq(companySubscriptions.companyId, ctx.companyId));
+  // Extra seats stop with the plan; they count until Razorpay reports them ended.
+  await endSeatAddons(tx, ctx.companyId, false);
   await tx.insert(billingEvents).values({ companyId: ctx.companyId, type: 'subscription.cancel_requested', razorpayId: sub.razorpaySubscriptionId });
   await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'billing.cancel', entity: 'company_subscriptions', entityId: ctx.companyId, data: { summary: ['Subscription set to end at the end of the paid period'] }, requestId: ctx.requestId });
   return { ok: true as const };

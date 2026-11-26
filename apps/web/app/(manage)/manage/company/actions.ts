@@ -1,7 +1,7 @@
 'use server';
 import { revalidatePath } from 'next/cache';
 import { runAction } from '@orbit/core/next';
-import { addPerson, changePersonPortal, setPersonPortalRole } from '@/company-admin/people';
+import { addPerson, changePersonPortal, removePerson, setPersonPortalRole } from '@/company-admin/people';
 import { cancelCompanyPortal, requestCompanyPortal } from '@/company-admin/portals';
 
 type In<F> = F extends (tx: never, ctx: never, input: infer I) => unknown ? I : never;
@@ -22,4 +22,9 @@ export async function addPersonAction(input: In<typeof addPerson>) {
   const res = await runAction((tx, ctx) => addPerson(tx, ctx, input));
   if (res.ok) revalidatePath('/manage/company/people');
   return res;
+}
+/** Remove from company (typed confirmation). The dialog refreshes the list when it closes. */
+export async function removePersonAction(membershipId: string, typed: string) {
+  const res = await runAction((tx, ctx) => removePerson(tx, ctx, { membershipId, typed }));
+  return res.ok ? { ok: true as const, summary: res.data.summary, billing: res.data.billing } : { ok: false as const, error: res.error };
 }

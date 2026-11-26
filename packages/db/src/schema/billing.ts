@@ -41,18 +41,31 @@ export const companyBilling = pgTable('company_billing', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-/**
- * Per-user plans (migration 0032): people billed from the next charge, and a new count waiting for the
- * admin to confirm when Razorpay cannot change the subscription by itself (UPI AutoPay, e-mandate).
- */
+/** Per-user plans (migration 0032): seats paid for by the company's main subscription. */
 export const subscriptionSeats = pgTable('subscription_seats', {
   companyId: uuid('company_id')
     .primaryKey()
     .references(() => companies.id),
   seats: integer('seats').notNull(),
-  pendingSeats: integer('pending_seats'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Extra seats bought later, each its own Razorpay subscription (migration 0032). status: started | active | ended. */
+export const seatAddons = pgTable(
+  'seat_addons',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    companyId: uuid('company_id')
+      .notNull()
+      .references(() => companies.id),
+    razorpaySubscriptionId: text('razorpay_subscription_id').notNull().unique(),
+    seats: integer('seats').notNull(),
+    status: text('status').notNull().default('started'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('seat_addons_company').on(t.companyId, t.status)],
+);
 
 /** Payments and subscription events, for the billing history. */
 export const billingEvents = pgTable(

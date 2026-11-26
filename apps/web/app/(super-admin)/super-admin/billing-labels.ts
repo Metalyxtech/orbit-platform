@@ -22,7 +22,6 @@ export const EVENT_LABEL: Record<string, string> = {
   'subscription.cancel_requested': 'Cancel requested',
   'subscription.completed': 'Completed',
   'payment.failed': 'Payment failed',
-  'seats.changed': 'Number of people changed (from the next bill)',
-  'seats.needs_confirmation': 'New number of people waiting for the admin to confirm',
-  'seats.sync_failed': 'Number of people not sent to Razorpay (check)',
+  'seats.checkout_started': 'Extra seats: checkout started',
+  'seats.added': 'Extra seats bought',
 };

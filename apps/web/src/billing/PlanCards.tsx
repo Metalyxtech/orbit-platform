@@ -87,6 +87,7 @@ export function SeatCalculator({
   currency,
   seats,
   onSeats,
+  minSeats = 1,
   peopleNote,
   action,
 }: {
@@ -95,6 +96,8 @@ export function SeatCalculator({
   currency: Currency;
   seats: number;
   onSeats?: (n: number) => void;
+  /** Fewest seats that can be chosen (the company's people today). */
+  minSeats?: number;
   peopleNote?: ReactNode;
   action: ReactNode;
 }) {
@@ -118,13 +121,13 @@ export function SeatCalculator({
         )}
         <div className="b-seats">
           <label className="o-field" style={{ margin: 0 }}>
-            Number of people
+            Number of seats (people)
             {onSeats ? (
               <input
                 className="o-input"
                 type="number"
                 inputMode="numeric"
-                min={1}
+                min={minSeats}
                 max={100000}
                 value={seats}
                 onChange={(e) => onSeats(Math.max(1, Math.min(100000, Math.floor(Number(e.target.value) || 1))))}
@@ -198,10 +201,11 @@ export function SeatCalculator({
 
 /** How per-user billing works, shown under the calculator. */
 export const seatRules = (currency: Currency) => [
-  `Pay only for the people who use SteelConnect360 (at least ${MIN_SEATS})`,
+  `Buy a seat for each person who uses SteelConnect360 (at least ${MIN_SEATS})`,
   `${FREE_VIEWERS} management viewers free: your GM and a director can view, hold and comment at no cost`,
-  'Bigger teams pay less: 15% off people 26 to 100, 25% off from the 101st',
-  'Add someone and the bill goes up from the next billing date; remove someone and it goes down from the next billing date',
+  'Bigger teams pay less: 15% off seats 26 to 100, 25% off from the 101st',
+  'Someone leaves? Their seat stays yours: give it to someone else at no extra cost',
+  'Need more? Buy extra seats any time: pay only for the rest of the current period, then they renew with your plan',
   `Prices in ${currency === 'INR' ? 'rupees' : currency === 'GBP' ? 'pounds' : 'US dollars'}`,
 ];
 

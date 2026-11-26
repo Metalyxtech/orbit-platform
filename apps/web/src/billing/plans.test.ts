@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUNDLES, CURRENCIES, MIN_SEATS, SEAT_PRICE, billableSeats, money, planOf, priceFor, seatQuote, seatSavingPct } from './plans';
+import { BUNDLES, CURRENCIES, MIN_SEATS, SEAT_PRICE, billableSeats, extraSeatsQuote, money, planOf, priceFor, seatQuote, seatSavingPct } from './plans';
 
 describe('per-user pricing', () => {
   it('prices every bundle in every currency', () => {
@@ -55,5 +55,22 @@ describe('per-user pricing', () => {
   it('shows the package saving', () => {
     expect(seatSavingPct('factory', 'INR')).toBe(37);
     expect(seatSavingPct('timesheet', 'INR')).toBe(0);
+  });
+});
+
+describe('extra seats', () => {
+  const day = 864e5;
+  it('charges the band price for each renewal and the part of the period left now', () => {
+    // 25 seats on the Manufacturing suite, monthly, in rupees; 2 more fall in the 15% band.
+    const end = new Date('2026-12-31T00:00:00Z');
+    const now = end.getTime() - 15 * day; // half of a 30-day month left
+    const q = extraSeatsQuote('factory', 25, 2, 'monthly', 'INR', end, now);
+    expect(q.perCycle).toBe(2 * 849); // ₹999 less 15%
+    expect(q.dueNow).toBe(849);
+    expect(q.daysLeft).toBe(15);
+  });
+
+  it('charges nothing now when the period has ended', () => {
+    expect(extraSeatsQuote('timesheet', 5, 1, 'yearly', 'GBP', new Date(Date.now() - day)).dueNow).toBe(0);
   });
 });

@@ -17,7 +17,7 @@ const ROLE_LABEL: Record<string, string> = {
 
 type Person = PeopleData['people'][number];
 
-export function PeopleClient({ data, me }: { data: PeopleData; me: string }) {
+export function PeopleClient({ data, me, seats }: { data: PeopleData; me: string; seats: { used: number; total: number } | null }) {
   const router = useRouter();
   const toast = useToast();
   const [adding, setAdding] = useState(false);
@@ -73,6 +73,17 @@ export function PeopleClient({ data, me }: { data: PeopleData; me: string }) {
           </Button>
         </div>
       </div>
+      {seats && (
+        <div className={`o-banner${seats.used >= seats.total ? ' hivis' : ''}`} role="status">
+          <strong>
+            {seats.used} of {seats.total} seats in use
+          </strong>
+          {seats.used >= seats.total
+            ? '. Every seat is taken: buy more seats to add someone (management viewers, up to 2, do not need one).'
+            : `. ${seats.total - seats.used} free to give to new people at no extra cost.`}{' '}
+          <Link href="/manage/company/billing">{seats.used >= seats.total ? 'Buy more seats' : 'Seats and billing'}</Link>
+        </div>
+      )}
       {adding && <AddPerson portals={data.portals} onDone={() => setAdding(false)} />}
       <div className="o-row">
         <input className="o-input" style={{ maxWidth: 320 }} placeholder="Search name or email" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search people" />
@@ -169,7 +180,7 @@ function AddPerson({ portals, onDone }: { portals: PeopleData['portals']; onDone
     const res = await addPersonAction({ ...v, role: v.role as 'employee', title: v.title || undefined, portals: every ? portals.map((p) => p.id) : picked, portalRoles: roles });
     setBusy(false);
     if (!res.ok) return toast(res.error, 'bad');
-    toast(`${every ? `${v.name} added with every portal.` : `${v.name} added. They can sign in now.`}${res.data.billing ? ` ${res.data.billing}` : ''}`);
+    toast(every ? `${v.name} added with every portal.` : `${v.name} added. They can sign in now.`);
     onDone();
     router.refresh();
   }

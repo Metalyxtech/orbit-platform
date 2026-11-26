@@ -9,10 +9,12 @@ people, cycle and currency on first use.
 Currencies: India pays in rupees (GST extra), the UK in pounds (VAT extra), everyone else in US dollars.
 Super Admin sets the currency per company (Add company > Country, or the company's Billing panel).
 
-People added or removed: the subscription is moved to the plan for the new number of people from the
-next billing date (Razorpay "update subscription", end of cycle). Razorpay cannot change UPI AutoPay or
-e-mandate subscriptions; for those the company admin sees "Confirm new amount" on Plan and billing,
-which sets the subscription up again for the new amount from the next billing date.
+Seats: a company buys a number of seats with its plan (at least the people it has). The period is paid
+up front, so removing someone never changes the bill: their seat stays free to fill. When every seat is
+taken, adding someone asks for more seats: Plan and billing > Seats > Buy more seats creates a separate
+Razorpay subscription for them. Its first payment (an upfront amount) covers the rest of the current
+period, and it then renews on the main plan's billing date. Changing plan folds every seat into the new
+subscription and stops the extra-seat ones at the end of their paid period.
 
 ## 1. Keys (Razorpay Dashboard)
 1. Sign in at dashboard.razorpay.com and switch to **Test mode** first.
@@ -39,7 +41,7 @@ Until they exist, Plan and billing shows "Online payments are not set up yet".
 
 ## 3. Database
 Run the migrations (add `billing_plans`, `company_subscriptions`, `company_billing`, `billing_events`, and
-from 0032 pounds and `subscription_seats`):
+from 0032 pounds, `subscription_seats` and `seat_addons`):
 
     pnpm db:migrate
 

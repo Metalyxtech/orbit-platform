@@ -1,37 +1,43 @@
--- Per-user plans: UK clients pay in pounds, and each company's subscription is billed for a number of
--- people (seats) that follows the people added and removed.
+-- Per-user plans: UK clients pay in pounds, and a company pays for a number of seats. Removing someone
+-- leaves a seat free to fill; more seats are bought as a separate subscription (seat_addons).
 ALTER TABLE company_billing DROP CONSTRAINT IF EXISTS company_billing_currency_check;
 --> statement-breakpoint
 ALTER TABLE company_billing ADD CONSTRAINT company_billing_currency_check CHECK (currency IN ('INR', 'USD', 'GBP'));
 --> statement-breakpoint
--- seats: people billed from the subscription's next charge. pending_seats: a new count Razorpay could
--- not take by itself (UPI AutoPay and e-mandates cannot be changed), waiting for the admin to confirm.
+-- Seats paid for by the company's main subscription.
 CREATE TABLE IF NOT EXISTS subscription_seats (
   company_id uuid PRIMARY KEY REFERENCES companies(id),
   seats integer NOT NULL CHECK (seats > 0),
-  pending_seats integer CHECK (pending_seats > 0),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 --> statement-breakpoint
-ALTER TABLE subscription_seats ENABLE ROW LEVEL SECURITY;
+-- Extra seats bought later, each its own Razorpay subscription renewing with the main plan.
+-- status: started (checkout opened) | active | ended (cancelled, failed or replaced).
+CREATE TABLE IF NOT EXISTS seat_addons (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id uuid NOT NULL REFERENCES companies(id),
+  razorpay_subscription_id text NOT NULL UNIQUE,
+  seats integer NOT NULL CHECK (seats > 0),
+  status text NOT NULL DEFAULT 'started' CHECK (status IN ('started', 'active', 'ended')),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 --> statement-breakpoint
-ALTER TABLE subscription_seats FORCE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS seat_addons_company ON seat_addons (company_id, status);
 --> statement-breakpoint
-DROP POLICY IF EXISTS tenant_isolation ON subscription_seats;
---> statement-breakpoint
-CREATE POLICY tenant_isolation ON subscription_seats
-  USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid)
-  WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
---> statement-breakpoint
-DROP POLICY IF EXISTS workers_all ON subscription_seats;
---> statement-breakpoint
-CREATE POLICY workers_all ON subscription_seats TO orbit_worker USING (true) WITH CHECK (true);
---> statement-breakpoint
-DO $$ BEGIN
-  EXECUTE format('DROP POLICY IF EXISTS owner_all ON subscription_seats');
-  EXECUTE format('CREATE POLICY owner_all ON subscription_seats TO %I USING (true) WITH CHECK (true)', current_user);
+DO $$
+DECLARE t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['subscription_seats', 'seat_addons'] LOOP
+    EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
+    EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);
+    EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
+    EXECUTE format('CREATE POLICY tenant_isolation ON %I USING (company_id = nullif(current_setting(''app.company_id'', true), '''')::uuid) WITH CHECK (company_id = nullif(current_setting(''app.company_id'', true), '''')::uuid)', t);
+    EXECUTE format('DROP POLICY IF EXISTS workers_all ON %I', t);
+    EXECUTE format('CREATE POLICY workers_all ON %I TO orbit_worker USING (true) WITH CHECK (true)', t);
+    EXECUTE format('DROP POLICY IF EXISTS owner_all ON %I', t);
+    EXECUTE format('CREATE POLICY owner_all ON %I TO %I USING (true) WITH CHECK (true)', t, current_user);
+    EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I TO orbit_app, orbit_worker', t);
+    EXECUTE format('GRANT SELECT ON %I TO orbit_reports', t);
+  END LOOP;
 END $$;
---> statement-breakpoint
-GRANT SELECT, INSERT, UPDATE, DELETE ON subscription_seats TO orbit_app, orbit_worker;
---> statement-breakpoint
-GRANT SELECT ON subscription_seats TO orbit_reports;

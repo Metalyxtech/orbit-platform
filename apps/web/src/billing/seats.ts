@@ -1,63 +1,69 @@
 import { and, eq } from 'drizzle-orm';
-import { billingEvents, billingPlans, companySubscriptions, memberships, subscriptionSeats, type Tx } from '@orbit/db';
-import { billableSeats, cycleOf, planOf, seatQuote, type Bundle, type Currency, type Cycle } from './plans';
+import { billingPlans, memberships, seatAddons, subscriptionSeats, type Tx } from '@orbit/db';
+import { FREE_VIEWERS, MIN_SEATS, cycleOf, extraSeatsQuote, planOf, seatQuote, type Bundle, type Currency, type Cycle } from './plans';
 import * as rz from './razorpay';
 
-// Per-user plans: the subscription is billed for the people in the company.
-//  - Someone added or removed: the new count is sent to Razorpay to apply from the next billing
-//    date (nothing is charged or refunded mid-period), so a removal lowers the bill after the
-//    period already paid for, and an addition raises it from the next bill.
-//  - Razorpay cannot change UPI AutoPay or e-mandate subscriptions. Then the new count waits
-//    (pending_seats) and the admin confirms it once on Plan and billing, which sets up the
-//    subscription again for the new amount from the next billing date.
-// Nothing here may stop a person being added or removed: every failure is recorded instead.
+// Per-user plans are bought as seats.
+//  - The main subscription pays for a number of seats for the whole period (already charged for a
+//    quarter or a year), so removing someone never changes the bill: their seat is free to fill.
+//  - Adding someone when every seat is taken needs more seats: a separate subscription for the extra
+//    seats, charged now for the rest of the current period and then renewing with the main plan.
+//  - Up to FREE_VIEWERS management people (GM, directors) do not take a seat.
 
-const PAID = ['active', 'authenticated'];
 const pgCode = (err: unknown) => (err as { code?: string; cause?: { code?: string } })?.code ?? (err as { cause?: { code?: string } })?.cause?.code;
-const tableMissing = (err: unknown) => pgCode(err) === '42P01' || /relation "subscription_seats" does not exist/.test(String(err));
+const tableMissing = (err: unknown) => pgCode(err) === '42P01' || /relation "(subscription_seats|seat_addons)" does not exist/.test(String(err));
 
 export interface Seats {
-  /** People billed from the next charge (null: not on a per-user plan yet). */
-  seats: number | null;
-  /** A new count waiting for the admin to confirm (UPI AutoPay or e-mandate). */
-  pendingSeats: number | null;
+  /** Seats paid by the main subscription (null: not on a per-user plan yet). */
+  main: number | null;
+  /** Seats bought later, still paid for. */
+  extra: number;
+  /** Extra-seat subscriptions still paid for. */
+  addons: { id: string; subscriptionId: string; seats: number }[];
 }
 
-/** Seats stored for the company (null before migration 0032 or before the first per-user checkout). */
+/** Seats the company has paid for (empty before migration 0032 or the first per-user checkout). */
 export async function readSeats(tx: Tx, companyId: string): Promise<Seats> {
   try {
-    const [row] = await tx.transaction((sp) => sp.select().from(subscriptionSeats).where(eq(subscriptionSeats.companyId, companyId)));
-    return { seats: row?.seats ?? null, pendingSeats: row?.pendingSeats ?? null };
+    return await tx.transaction(async (sp) => {
+      const [row] = await sp.select().from(subscriptionSeats).where(eq(subscriptionSeats.companyId, companyId));
+      const addons = await sp
+        .select({ id: seatAddons.id, subscriptionId: seatAddons.razorpaySubscriptionId, seats: seatAddons.seats })
+        .from(seatAddons)
+        .where(and(eq(seatAddons.companyId, companyId), eq(seatAddons.status, 'active')));
+      return { main: row?.seats ?? null, extra: addons.reduce((n, a) => n + a.seats, 0), addons };
+    });
   } catch (err) {
-    if (tableMissing(err)) return { seats: null, pendingSeats: null };
+    if (tableMissing(err)) return { main: null, extra: 0, addons: [] };
     throw err;
   }
 }
 
-export async function writeSeats(tx: Tx, companyId: string, seats: number, pendingSeats: number | null) {
+export async function writeMainSeats(tx: Tx, companyId: string, seats: number) {
   await tx
     .insert(subscriptionSeats)
-    .values({ companyId, seats, pendingSeats })
-    .onConflictDoUpdate({ target: subscriptionSeats.companyId, set: { seats, pendingSeats, updatedAt: new Date() } });
+    .values({ companyId, seats })
+    .onConflictDoUpdate({ target: subscriptionSeats.companyId, set: { seats, updatedAt: new Date() } });
 }
 
-/** Active people and how many of them are management (up to 2 of those are free). */
+/** Seats a set of people takes: everyone active except up to FREE_VIEWERS management people. */
+export const seatsTaken = (active: number, management: number) => Math.max(0, active - Math.min(FREE_VIEWERS, management));
+
+/** Active people, how many are management, the seats they take, and the smallest plan that fits them. */
 export async function headcount(tx: Tx, companyId: string) {
   const rows = await tx.select({ role: memberships.role }).from(memberships).where(and(eq(memberships.companyId, companyId), eq(memberships.status, 'active')));
   const management = rows.filter((r) => r.role === 'management').length;
-  return { active: rows.length, management, billable: billableSeats(rows.length, management) };
+  const used = seatsTaken(rows.length, management);
+  return { active: rows.length, management, used, billable: Math.max(MIN_SEATS, used) };
 }
 
-/** The Razorpay plan for a bundle at a number of people and cycle, created on first use. */
-export async function seatPlanId(tx: Tx, bundle: Bundle, seats: number, cycle: Cycle, currency: Currency) {
-  const q = seatQuote(bundle, seats, cycle, currency);
-  const key = `${bundle}_users_${q.seats}_${cycle}_${currency}`;
-  const amount = Math.round(q.total * 100); // paise, pence or cents
+/** A Razorpay plan for an amount per cycle, created once and reused by its key. */
+async function planFor(tx: Tx, key: string, input: { name: string; description: string; amount: number; cycle: Cycle; currency: Currency }) {
+  const amount = Math.round(input.amount * 100); // paise, pence or cents
   const [row] = await tx.select().from(billingPlans).where(eq(billingPlans.key, key));
   if (row && row.amount === amount) return row.razorpayPlanId;
-  const c = cycleOf(cycle);
-  const name = planOf(`${bundle}_users`)?.name ?? bundle;
-  const created = await rz.createPlan({ period: c.rz.period, interval: c.rz.interval, name: `SteelConnect360 ${name} (${c.label})`, amount, currency, description: `${q.seats} people` });
+  const c = cycleOf(input.cycle);
+  const created = await rz.createPlan({ period: c.rz.period, interval: c.rz.interval, name: input.name, amount, currency: input.currency, description: input.description });
   await tx
     .insert(billingPlans)
     .values({ key, razorpayPlanId: created.id, amount })
@@ -65,71 +71,46 @@ export async function seatPlanId(tx: Tx, bundle: Bundle, seats: number, cycle: C
   return created.id;
 }
 
-export type SeatSync =
-  | { result: 'not_per_user' }
-  | { result: 'unchanged'; seats: number }
-  | { result: 'scheduled'; from: number; to: number }
-  | { result: 'needs_confirmation'; from: number; to: number };
+const bundleName = (b: Bundle) => planOf(`${b}_users`)?.name ?? b;
+
+/** The main subscription's plan: a bundle for a number of seats. */
+export function seatPlanId(tx: Tx, bundle: Bundle, seats: number, cycle: Cycle, currency: Currency) {
+  const q = seatQuote(bundle, seats, cycle, currency);
+  return planFor(tx, `${bundle}_users_${q.seats}_${cycle}_${currency}`, {
+    name: `SteelConnect360 ${bundleName(bundle)} (${cycleOf(cycle).label})`,
+    description: `${q.seats} seats`,
+    amount: q.total,
+    cycle,
+    currency,
+  });
+}
 
 /**
- * Brings the subscription in line with the people in the company. Call after anyone is added,
- * removed, blocked or approved. Never throws: a failure is recorded and left for the admin.
+ * Stops the company's extra-seat subscriptions at the end of their paid period. `endNow` also stops
+ * counting their seats today (a new main subscription already pays for them); otherwise they count
+ * until Razorpay reports them cancelled.
  */
-export async function syncSeats(tx: Tx, companyId: string, currency: Currency): Promise<SeatSync> {
-  try {
-    return await tx.transaction((sp) => applySeats(sp, companyId, currency));
-  } catch (err) {
-    console.error(JSON.stringify({ seats: 'sync_failed', companyId, error: String(err).slice(0, 300) }));
+export async function endSeatAddons(tx: Tx, companyId: string, endNow = true) {
+  const { addons } = await readSeats(tx, companyId);
+  for (const a of addons) {
     try {
-      await tx.insert(billingEvents).values({ companyId, type: 'seats.sync_failed', data: { error: String(err).slice(0, 300) } });
-    } catch {
-      // Billing tables not there yet: nothing to record.
+      await rz.cancelSubscription(a.subscriptionId, true);
+    } catch (err) {
+      // Already cancelled or finished at Razorpay: nothing left to stop.
+      console.error(JSON.stringify({ seats: 'addon_cancel_failed', companyId, subscription: a.subscriptionId, error: String(err).slice(0, 200) }));
     }
-    return { result: 'not_per_user' };
+    if (endNow) await tx.update(seatAddons).set({ status: 'ended', updatedAt: new Date() }).where(eq(seatAddons.id, a.id));
   }
 }
 
-async function applySeats(tx: Tx, companyId: string, currency: Currency): Promise<SeatSync> {
-  const [sub] = await tx.select().from(companySubscriptions).where(eq(companySubscriptions.companyId, companyId));
-  const plan = sub ? planOf(sub.plan) : undefined;
-  if (!sub || !plan?.perUser || !sub.razorpaySubscriptionId || !PAID.includes(sub.status) || sub.cancelAtPeriodEnd) return { result: 'not_per_user' };
-  const stored = await readSeats(tx, companyId);
-  const { billable: to } = await headcount(tx, companyId);
-  const from = stored.seats ?? to;
-  if (to === from) {
-    if (stored.pendingSeats !== null) await writeSeats(tx, companyId, from, null); // back to what is billed: nothing to confirm
-    return { result: 'unchanged', seats: from };
-  }
-  const cycle = sub.cycle as Cycle;
-  const rzPlan = await seatPlanId(tx, plan.bundle, to, cycle, currency);
-  try {
-    await schedule(sub.razorpaySubscriptionId, rzPlan);
-  } catch (err) {
-    if (!rz.cannotUpdate(err) && !(err instanceof rz.RazorpayError)) throw err;
-    await writeSeats(tx, companyId, from, to);
-    await tx.insert(billingEvents).values({ companyId, type: 'seats.needs_confirmation', razorpayId: sub.razorpaySubscriptionId, data: { from, to, reason: (err as rz.RazorpayError).description || String(err).slice(0, 200) } });
-    return { result: 'needs_confirmation', from, to };
-  }
-  const q = seatQuote(plan.bundle, to, cycle, currency);
-  await writeSeats(tx, companyId, to, null);
-  await tx.insert(billingEvents).values({ companyId, type: 'seats.changed', razorpayId: sub.razorpaySubscriptionId, amount: Math.round(q.total * 100), data: { from, to, currency } });
-  return { result: 'scheduled', from, to };
-}
-
-/** One sentence for the person who made the change (empty when billing is not affected). */
-export function seatMessage(r: SeatSync) {
-  if (r.result === 'scheduled') return `The subscription now bills ${r.to} people instead of ${r.from}, from the next billing date.`;
-  if (r.result === 'needs_confirmation') return `The new number of people (${r.to}) needs the company admin to confirm it once in Plan and billing.`;
-  return '';
-}
-
-/** Schedules the plan change for the next billing date, replacing a change already waiting. */
-async function schedule(subscriptionId: string, planId: string) {
-  try {
-    await rz.updateSubscriptionPlan(subscriptionId, planId, 'cycle_end');
-  } catch (err) {
-    if (!rz.changeAlreadyScheduled(err)) throw err;
-    await rz.cancelScheduledChange(subscriptionId);
-    await rz.updateSubscriptionPlan(subscriptionId, planId, 'cycle_end');
-  }
+/** The extra-seat subscription's plan: `add` seats on top of `have`, for each renewal. */
+export function extraSeatPlanId(tx: Tx, bundle: Bundle, have: number, add: number, cycle: Cycle, currency: Currency) {
+  const { perCycle } = extraSeatsQuote(bundle, have, add, cycle, currency, null);
+  return planFor(tx, `${bundle}_extra_${have}_${add}_${cycle}_${currency}`, {
+    name: `SteelConnect360 ${bundleName(bundle)}: ${add} more ${add === 1 ? 'seat' : 'seats'} (${cycleOf(cycle).label})`,
+    description: `${add} extra seats on top of ${have}`,
+    amount: perCycle,
+    cycle,
+    currency,
+  });
 }

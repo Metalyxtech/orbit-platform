@@ -218,9 +218,9 @@ export const MIN_SEATS = 5;
 export const FREE_VIEWERS = 2;
 /** Bigger teams pay less per person: each band is priced at its own rate (like tax bands). */
 export const VOLUME_BANDS: { from: number; to: number; discount: number; label: string }[] = [
-  { from: 1, to: 25, discount: 0, label: 'First 25 people' },
-  { from: 26, to: 100, discount: 0.15, label: 'People 26 to 100 (15% off)' },
-  { from: 101, to: Number.POSITIVE_INFINITY, discount: 0.25, label: 'People 101 and more (25% off)' },
+  { from: 1, to: 25, discount: 0, label: 'First 25 seats' },
+  { from: 26, to: 100, discount: 0.15, label: 'Seats 26 to 100 (15% off)' },
+  { from: 101, to: Number.POSITIVE_INFINITY, discount: 0.25, label: 'Seats 101 and more (25% off)' },
 ];
 
 /** Whole rupees; pence and cents to 2 decimals. */
@@ -254,3 +254,16 @@ export const seatSavingPct = (b: Bundle, cur: Currency = 'INR') => (isCombo(b) ?
 
 /** A yearly price paid monthly: 12 equal payments (rounded up to the whole rupee or dollar). */
 export const installmentOf = (yearly: number) => Math.ceil(yearly / 12);
+
+/**
+ * Price of `add` more seats on top of `have`: what they add to each renewal (priced in the volume
+ * band they fall in), and what is due now for the part of the current period that is left.
+ */
+export function extraSeatsQuote(bundle: Bundle, have: number, add: number, cycle: Cycle, currency: Currency, periodEnd: Date | null, now = Date.now()) {
+  const perCycle = roundMoney(seatQuote(bundle, have + add, cycle, currency).total - seatQuote(bundle, have, cycle, currency).total, currency);
+  const months = cycleOf(cycle).months;
+  const end = periodEnd?.getTime() ?? 0;
+  const start = periodEnd ? new Date(periodEnd).setMonth(periodEnd.getMonth() - months) : 0;
+  const left = end > now && end > start ? Math.min(1, (end - now) / (end - start)) : 0;
+  return { perCycle, dueNow: roundMoney(perCycle * left, currency), daysLeft: Math.max(0, Math.ceil((end - now) / 864e5)) };
+}

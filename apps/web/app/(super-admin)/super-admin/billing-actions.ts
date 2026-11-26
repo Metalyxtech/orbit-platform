@@ -7,7 +7,7 @@ import { getDb } from '@orbit/core/next';
 import { withTenant } from '@orbit/db';
 import { extendFreePeriod, markPaymentsSeen, saveBillingSettings } from '@/billing/admin';
 import { asCurrency } from '@/billing/plans';
-import { billingSettings, peopleChanged } from '@/billing/state';
+import { billingSettings } from '@/billing/state';
 import { requireSuperAdmin } from './guard';
 import { addCompanyAdmin, createCompany, readNewCompanyForm } from './new-company';
 
@@ -43,7 +43,6 @@ export async function addCompanyAdminAction(companyId: string, form: FormData) {
         entityId: m,
         data: { summary: [`${v('email').trim().toLowerCase()} made company admin by SteelConnect360`] },
       });
-      await peopleChanged(tx, id);
     });
   } catch (err) {
     const msg = err instanceof z.ZodError ? (err.issues[0]?.message ?? 'Check the form') : err instanceof Error && !('code' in err) ? err.message : 'Could not add the admin. Try again.';

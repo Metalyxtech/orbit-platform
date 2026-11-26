@@ -2,6 +2,7 @@
 import { revalidatePath } from 'next/cache';
 import { runAction } from '@orbit/core/next';
 import { startCustomCheckout } from '@/billing/custom-checkout';
+import { confirmSeatsCheckout, startSeatsCheckout } from '@/billing/extra-seats';
 import { cancelPlan, confirmCheckout, startCheckout } from '@/billing/state';
 
 type In<F> = F extends (tx: never, ctx: never, input: infer I) => unknown ? I : never;
@@ -21,4 +22,12 @@ export async function cancelPlanAction() {
 }
 export async function startCustomCheckoutAction(input: In<typeof startCustomCheckout>) {
   return runAction((tx, ctx) => startCustomCheckout(tx, ctx, input), { always: true });
+}
+export async function startSeatsCheckoutAction(input: { add: number }) {
+  return runAction((tx, ctx) => startSeatsCheckout(tx, ctx, input), { always: true });
+}
+export async function confirmSeatsCheckoutAction(input: In<typeof confirmSeatsCheckout>) {
+  const res = await runAction((tx, ctx) => confirmSeatsCheckout(tx, ctx, input), { always: true });
+  revalidatePath('/manage', 'layout');
+  return res;
 }

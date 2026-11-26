@@ -3,9 +3,9 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button, Chip, ConfirmDialog, DataTable, EmptyState, useToast } from '@orbit/ui';
 import { BundlePicker, CycleSwitch, SeatCalculator, seatRules, trustFor } from '@/billing/PlanCards';
-import { FREE_VIEWERS, bundleFor, currencyWords, cycleOf, money, planOf, portalName, portalsOutside, seatQuote, taxNote, type Bundle, type Cycle } from '@/billing/plans';
+import { FREE_VIEWERS, bundleFor, currencyWords, cycleOf, extraSeatsQuote, money, planOf, portalName, portalsOutside, seatQuote, taxNote, type Bundle, type Cycle } from '@/billing/plans';
 import type { BillingState } from '@/billing/state';
-import { cancelPlanAction, confirmCheckoutAction, startCheckoutAction, startCustomCheckoutAction } from './actions';
+import { cancelPlanAction, confirmCheckoutAction, confirmSeatsCheckoutAction, startCheckoutAction, startCustomCheckoutAction, startSeatsCheckoutAction } from './actions';
 
 type CustomDeal = { label: string; monthlyPrice: number | null; yearlyPrice: number | null; maxUsers: number | null; credit: number; installment: number | null };
 type CustomCycle = 'monthly' | 'yearly' | 'yearly_monthly';
@@ -35,9 +35,8 @@ const EVENT: Record<string, string> = {
   'subscription.cancel_requested': 'Cancellation requested',
   'subscription.completed': 'Subscription completed',
   'payment.failed': 'Payment failed',
-  'seats.changed': 'Number of people changed (from the next bill)',
-  'seats.needs_confirmation': 'New number of people to confirm',
-  'seats.sync_failed': 'Number of people not updated yet',
+  'seats.checkout_started': 'Extra seats: checkout started',
+  'seats.added': 'Extra seats bought',
 };
 
 function loadCheckout(): Promise<boolean> {
@@ -83,25 +82,50 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
   const cur = state.currency;
   const m = (v: number) => money(v, cur);
   const tax = cur === 'INR' ? ' + GST' : cur === 'GBP' ? ' + VAT' : '';
-  // The bill for the chosen portals and cycle, for the people in the company today.
-  const quote = seatQuote(bundle, state.billable, cycle, cur);
+  // Seats to buy: at least everyone who needs one today; more leaves room to add people later.
+  const [seats, setSeats] = useState(Math.max(state.billable, state.seats ?? state.billable));
+  const quote = seatQuote(bundle, seats, cycle, cur);
   const bundleName = planOf(`${bundle}_users`)?.name ?? bundle;
-  const onThisPlan = paid && !state.cancelAtPeriodEnd && state.plan === `${bundle}_users` && state.cycle === cycle && !state.pendingSeats;
+  const onThisPlan = paid && !state.cancelAtPeriodEnd && state.plan === `${bundle}_users` && state.cycle === cycle && state.seats === quote.seats;
   const freeViewers = Math.min(FREE_VIEWERS, state.managementPeople);
   const peopleNote = (
     <>
-      {state.usage.users} active {state.usage.users === 1 ? 'person' : 'people'}
-      {freeViewers ? `, ${freeViewers} management ${freeViewers === 1 ? 'viewer' : 'viewers'} free` : ''}. Add or remove people in People; the bill follows from the next billing date.
+      {state.seatsUsed} {state.seatsUsed === 1 ? 'person needs' : 'people need'} a seat today
+      {freeViewers ? ` (${freeViewers} management ${freeViewers === 1 ? 'viewer' : 'viewers'} free)` : ''}. Buy more to leave room for new people. When someone leaves, their seat
+      stays yours to give to someone else.
     </>
   );
+  // More seats on the current plan: charged now for the rest of the period, then with each renewal.
+  const [addSeats, setAddSeats] = useState(1);
+  const freeSeats = state.seats !== null ? Math.max(0, state.seats - state.seatsUsed) : 0;
+  const canBuySeats = paid && state.perUser && state.seats !== null && !state.cancelAtPeriodEnd && !!state.bundle && !!state.cycle && !!state.currentPeriodEnd;
+  const extra = canBuySeats
+    ? extraSeatsQuote(state.bundle as Bundle, state.seats!, addSeats, state.cycle as Cycle, cur, new Date(state.currentPeriodEnd!))
+    : null;
 
   function pay(b: Bundle = bundle, c: Cycle = cycle) {
     setPick(false);
-    return run(() => startCheckoutAction({ bundle: b, cycle: c }));
+    return run(() => startCheckoutAction({ bundle: b, cycle: c, seats: quote.seats }), async (r) => {
+      const done = await confirmCheckoutAction(r);
+      if (!done.ok) return done;
+      const paused = done.data.paused.length ? ` ${done.data.paused.join(' and ')} is paused; your data is kept.` : '';
+      const resumed = done.data.resumed.length ? ` ${done.data.resumed.join(' and ')} is back on.` : '';
+      return { ok: true as const, text: `${paused}${resumed}` };
+    });
   }
 
-  /** Starts a subscription (standard or custom) and opens Razorpay Checkout. */
-  async function run(start: () => ReturnType<typeof startCheckoutAction>) {
+  function buySeats() {
+    return run(() => startSeatsCheckoutAction({ add: addSeats }), async (r) => {
+      const done = await confirmSeatsCheckoutAction(r);
+      return done.ok ? { ok: true as const, text: ` You now have ${(state.seats ?? 0) + done.data.seats} seats.` } : done;
+    });
+  }
+
+  type Confirmed = { ok: true; text: string } | { ok: false; error: string };
+  type Paid = { paymentId: string; subscriptionId: string; signature: string };
+
+  /** Starts a subscription (plan, custom plan or extra seats), opens Razorpay Checkout, then confirms it. */
+  async function run(start: () => ReturnType<typeof startCheckoutAction>, confirm: (r: Paid) => Promise<Confirmed> = defaultConfirm) {
     setBusy(true);
     const res = await start();
     if (!res.ok) {
@@ -122,14 +146,12 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
       theme: { color: '#2f5d8a' },
       modal: { ondismiss: () => setBusy(false) },
       handler: async (r: RzResponse) => {
-        const done = await confirmCheckoutAction({ paymentId: r.razorpay_payment_id, subscriptionId: r.razorpay_subscription_id, signature: r.razorpay_signature });
+        const done = await confirm({ paymentId: r.razorpay_payment_id, subscriptionId: r.razorpay_subscription_id, signature: r.razorpay_signature });
         setBusy(false);
         if (!done.ok) return toast(done.error, 'bad');
-        const paused = done.data.paused.length ? ` ${done.data.paused.join(' and ')} is paused; your data is kept.` : '';
-        const resumed = done.data.resumed.length ? ` ${done.data.resumed.join(' and ')} is back on.` : '';
         // Switching from a plan already paid for: the new one starts when that period ends (no double payment).
         const starts = res.data.paidUntil ? ` It starts on ${date(res.data.paidUntil)}, when your current paid period ends.` : '';
-        toast(`You are on ${res.data.planName}. Thank you!${starts}${paused}${resumed}`);
+        toast(`Paid: ${res.data.planName}. Thank you!${starts}${done.text}`);
         router.refresh();
       },
     });
@@ -138,6 +160,11 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
       toast(e.error?.description ?? 'The payment failed. Nothing was charged.', 'bad');
     });
     rz.open();
+  }
+
+  async function defaultConfirm(r: Paid): Promise<Confirmed> {
+    const done = await confirmCheckoutAction(r);
+    return done.ok ? { ok: true, text: '' } : done;
   }
 
   async function doCancel() {
@@ -183,7 +210,7 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
             {state.status === 'active' &&
               (state.cancelAtPeriodEnd
                 ? `${planLabel}, ${cycleText}. Ends on ${date(state.currentPeriodEnd)}; it will not renew.`
-                : `${planLabel}, ${cycleText}${state.perUser && state.seats ? ` for ${state.seats} people` : ''}${planPrice ? `, ${m(planPrice)}${tax}` : ''}. Renews on ${date(state.currentPeriodEnd)}.`)}
+                : `${planLabel}, ${cycleText}${state.perUser && state.seats ? `, ${state.seats} seats` : ''}${planPrice ? `, ${m(planPrice)}${tax}` : ''}. Renews on ${date(state.currentPeriodEnd)}.`)}
             {state.status === 'past_due' && 'Razorpay could not take the last payment and is retrying. Update your payment method from the link Razorpay emailed you.'}
             {state.status === 'cancelled' && 'Your subscription has ended. Choose a plan to continue.'}
           </p>
@@ -196,8 +223,10 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
           </div>
           {state.perUser && state.seats !== null && (
             <div>
-              <span>Billed for</span>
-              <strong>{state.seats} people</strong>
+              <span>Seats</span>
+              <strong>
+                {state.seatsUsed} of {state.seats}
+              </strong>
             </div>
           )}
           <div>
@@ -207,15 +236,41 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
         </div>
       </div>
 
-      {paid && state.perUser && state.pendingSeats !== null && state.bundle && state.cycle && (
-        <div className="o-banner hivis" role="status">
-          <strong>Confirm your new number of people.</strong> You now have {state.pendingSeats} people to pay for (billed today: {state.seats}). Your payment method
-          (UPI AutoPay or bank mandate) cannot be changed automatically, so confirm the new amount of{' '}
-          {m(seatQuote(state.bundle, state.pendingSeats, state.cycle as Cycle, cur).total)}
-          {tax} per {cycleOf(state.cycle).per}. It starts on {date(state.currentPeriodEnd)}, when the period you have paid for ends.{' '}
-          <Button size="small" variant="primary" disabled={busy} onClick={() => void pay(state.bundle as Bundle, state.cycle as Cycle)}>
-            Confirm new amount
-          </Button>
+      {canBuySeats && extra && (
+        <div className="o-panel">
+          <div className="o-panel-head">
+            <h2>Seats</h2>
+            <Chip tone={freeSeats ? 'ok' : 'warn'}>{freeSeats ? `${freeSeats} free` : 'All in use'}</Chip>
+          </div>
+          <p className="muted" style={{ fontSize: 13, margin: '0 0 12px' }}>
+            {state.seatsUsed} of {state.seats} seats in use{state.extraSeats ? ` (${state.extraSeats} bought later)` : ''}. Someone who leaves frees their seat for the next
+            person at no extra cost. Your GM and a director (management) do not need a seat.
+          </p>
+          <div className="o-row" style={{ gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <label className="o-field" style={{ margin: 0 }}>
+              More seats
+              <input
+                className="o-input"
+                type="number"
+                min={1}
+                max={1000}
+                value={addSeats}
+                onChange={(e) => setAddSeats(Math.max(1, Math.min(1000, Math.floor(Number(e.target.value) || 1))))}
+                style={{ width: 110 }}
+              />
+            </label>
+            <div style={{ fontSize: 13 }}>
+              <strong>
+                {m(extra.dueNow)}
+                {tax}
+              </strong>{' '}
+              now for the {extra.daysLeft} days left until {date(state.currentPeriodEnd)}, then {m(extra.perCycle)}
+              {tax} per {cycleOf(state.cycle!).per} with your plan.
+            </div>
+            <Button variant="primary" disabled={busy} onClick={() => void buySeats()}>
+              Buy {addSeats} {addSeats === 1 ? 'seat' : 'seats'}
+            </Button>
+          </div>
         </div>
       )}
 
@@ -289,7 +344,9 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
           bundle={bundle}
           cycle={cycle}
           currency={cur}
-          seats={state.billable}
+          seats={seats}
+          onSeats={(n) => setSeats(Math.max(state.billable, n))}
+          minSeats={state.billable}
           peopleNote={peopleNote}
           action={
             onThisPlan ? (
@@ -350,13 +407,13 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
         onConfirm={() => void pay()}
       >
         {m(quote.total)}
-        {tax} per {cycleOf(cycle).per}, for {quote.seats} people.
+        {tax} per {cycleOf(cycle).per}, for {quote.seats} seats.
         {state.status === 'trial' && state.trialDaysLeft > 0
           ? ` Your ${cur === 'INR' ? 'card or UPI' : 'card'} is set up now; the first charge is on ${date(state.trialEndsAt)} when the trial ends.`
           : paid && state.currentPeriodEnd && new Date(state.currentPeriodEnd).getTime() > Date.now()
             ? ` Your current plan runs until ${date(state.currentPeriodEnd)}, which you have already paid for; the first charge for this plan is then.`
             : ' You pay now through Razorpay.'}{' '}
-        When you add or remove people, the amount changes from the next billing date. Cancel any time.
+        Someone who leaves frees their seat for the next person; buy more seats any time. Cancel any time.
         {portalsOutside(`${bundle}_users`, used).length > 0 && (
           <p className="o-banner hivis" style={{ margin: '10px 0 0' }}>
             This plan does not include {portalsOutside(`${bundle}_users`, used).map(portalName).join(' and ')}. It will be paused for everyone in your

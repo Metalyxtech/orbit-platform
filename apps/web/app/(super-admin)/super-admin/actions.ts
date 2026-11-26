@@ -11,8 +11,7 @@ import { hasCustomRequest } from '@/custom/requests';
 import { requireSuperAdmin, setPortal } from './guard';
 import { extendFreePeriod } from '@/billing/admin';
 import { TRIAL_DAYS } from '@/billing/plans';
-import { billingStateFor, peopleChanged } from '@/billing/state';
-import { seatMessage } from '@/billing/seats';
+import { billingStateFor, seatNote } from '@/billing/state';
 import { timesheetManifest } from '@orbit/portal-timesheet/manifest';
 
 /**
@@ -87,7 +86,7 @@ export async function removeMemberAction(companyId: string, membershipId: string
     const { summary, billing } = await withTenant(db, { companyId, userId }, async (tx) => {
       const result = await removeMembership(tx, companyId, id);
       await audit(tx, { companyId, actorId: null, action: 'membership.remove', entity: 'memberships', entityId: id, data: result });
-      return { summary: result, billing: seatMessage(await peopleChanged(tx, companyId)) };
+      return { summary: result, billing: await seatNote(tx, companyId) };
     });
     // No revalidatePath here: the dialog shows the result first and refreshes the list when closed.
     return { ok: true as const, summary, billing };
@@ -108,7 +107,6 @@ export async function approveMemberAction(companyId: string, membershipId: strin
       .where(and(eq(memberships.id, id), eq(memberships.companyId, companyId), eq(memberships.status, 'pending')));
     await activateRequestedPortals(tx, [id]);
     await audit(tx, { companyId, actorId: null, action: 'membership.approve', entity: 'memberships', entityId: id });
-    await peopleChanged(tx, companyId);
   });
   revalidatePath('/super-admin', 'layout');
 }
@@ -151,7 +149,6 @@ export async function setMemberBlockedAction(companyId: string, membershipId: st
       .set({ status: blocked ? 'disabled' : 'active' })
       .where(and(eq(memberships.id, id), eq(memberships.companyId, companyId)));
     await audit(tx, { companyId, actorId: null, action: blocked ? 'membership.block' : 'membership.unblock', entity: 'memberships', entityId: id });
-    await peopleChanged(tx, companyId);
   });
   revalidatePath('/super-admin', 'layout');
 }

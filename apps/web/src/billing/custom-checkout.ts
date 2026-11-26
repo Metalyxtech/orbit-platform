@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { ActionContext } from '@orbit/core';
 import { billingPlans, type Tx } from '@orbit/db';
 import { customCredit, customPrice, getCustomPlan, type CustomCycle } from '../custom/plan';
+import type { Currency } from './plans';
 import * as rz from './razorpay';
 import { billingState } from './state';
 import { recordCheckout, switchTiming } from './switch';
@@ -17,7 +18,7 @@ const RZ: Record<CustomCycle, { period: 'monthly' | 'yearly'; totalCount: number
   yearly_monthly: { period: 'monthly', totalCount: 12, label: 'Yearly, paid monthly' },
 };
 
-async function razorpayCustomPlan(tx: Tx, companyId: string, cycle: CustomCycle, currency: 'INR' | 'USD', amount: number, label: string) {
+async function razorpayCustomPlan(tx: Tx, companyId: string, cycle: CustomCycle, currency: Currency, amount: number, label: string) {
   const key = `custom_${companyId}_${cycle}_${currency}`;
   const [row] = await tx.select().from(billingPlans).where(eq(billingPlans.key, key));
   if (row && row.amount === amount) return row.razorpayPlanId;

@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { audit, type ActionContext } from '@orbit/core';
 import { customPlans, customRequests, type Tx } from '@orbit/db';
-import { cycleOf, priceFor, type Cycle } from '../billing/plans';
+import { cycleOf, type Cycle } from '../billing/plans';
 import { billingStateFor } from '../billing/state';
 import { customCycleLabel, customPrice, getCustomPlan, type CustomCycle } from './plan';
 
@@ -20,8 +20,8 @@ export async function subscriptionSnapshot(tx: Tx, companyId: string) {
   const custom = s.plan === 'custom' ? await getCustomPlan(tx, companyId) : null;
   const cycle = s.cycle as Cycle | null;
   const price =
-    s.bundle && s.tier && cycle
-      ? priceFor(s.bundle, s.tier, cycle, s.currency)
+    s.price !== null
+      ? s.price
       : custom && cycle
         ? customPrice(custom, cycle as CustomCycle)
         : null;

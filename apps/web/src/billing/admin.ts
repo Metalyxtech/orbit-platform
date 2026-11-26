@@ -1,7 +1,7 @@
 import { and, desc, eq, gt, inArray, isNotNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { billingEvents, companies, companyBilling, companySubscriptions, type Tx } from '@orbit/db';
-import { BILLING_LAUNCH, cycleOf, priceFor, type Currency, type Cycle } from './plans';
+import { BILLING_LAUNCH, cycleOf, type Currency } from './plans';
 import { customPrice, getCustomPlan, type CustomCycle } from '../custom/plan';
 import { billingSettings, billingStateFor, missing } from './state';
 
@@ -12,7 +12,7 @@ import { billingSettings, billingStateFor, missing } from './state';
 export const CONFIRMATIONS = ['checkout.completed', 'subscription.activated', 'subscription.charged'];
 
 export const settingsInput = z.object({
-  currency: z.enum(['INR', 'USD']),
+  currency: z.enum(['INR', 'USD', 'GBP']),
   showPlans: z.boolean(),
   trialDays: z.coerce.number().int().min(0).max(3650),
 });
@@ -92,8 +92,8 @@ export async function companyBillingSummary(tx: Tx, companyId: string) {
   const currency: Currency = settings.currency;
   const custom = state.plan === 'custom' ? await getCustomPlan(tx, companyId) : null;
   const price =
-    state.bundle && state.tier && state.cycle
-      ? priceFor(state.bundle, state.tier, state.cycle as Cycle, currency)
+    state.price !== null
+      ? state.price
       : custom && state.cycle
         ? customPrice(custom, state.cycle as CustomCycle)
         : null;
@@ -113,5 +113,5 @@ export type CompanyBillingSummary = Awaited<ReturnType<typeof companyBillingSumm
 /** Currency stored on an event (webhooks and checkout save it), else the company's currency. */
 export const eventCurrency = (e: { data: unknown }, fallback: Currency): Currency => {
   const c = (e.data as { currency?: string } | null)?.currency?.toUpperCase();
-  return c === 'USD' ? 'USD' : c === 'INR' ? 'INR' : fallback;
+  return c === 'USD' || c === 'GBP' || c === 'INR' ? c : fallback;
 };

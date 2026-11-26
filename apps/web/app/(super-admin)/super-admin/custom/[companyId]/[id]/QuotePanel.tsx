@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { installmentOf, money } from '@/billing/plans';
+import { currencySymbol, installmentOf, money } from '@/billing/plans';
 import type { SubscriptionSnapshot } from '@/custom/quotes';
 
 type Quote = { label: string | null; monthly: number | null; yearly: number | null; credit: number; installments: boolean; note: string | null; quotedAt: string | null; approved: boolean | null; decidedAt: string | null };
@@ -60,16 +60,16 @@ export function QuotePanel({ snap, quote, company, action }: { snap: Subscriptio
         </label>
         <div className="o-row" style={{ gap: 10 }}>
           <label className="o-field" style={{ flex: 1 }}>
-            Monthly price ({cur === 'USD' ? '$' : '₹'})
+            Monthly price ({currencySymbol(cur)})
             <input className="o-input" name="monthly" type="number" min={1} value={monthly} onChange={(e) => setMonthly(e.target.value)} placeholder="Not offered" />
           </label>
           <label className="o-field" style={{ flex: 1 }}>
-            Yearly price ({cur === 'USD' ? '$' : '₹'})
+            Yearly price ({currencySymbol(cur)})
             <input className="o-input" name="yearly" type="number" min={1} value={yearly} onChange={(e) => setYearly(e.target.value)} placeholder="Not offered" />
           </label>
         </div>
         <label className="o-field">
-          Credit off the first yearly payment ({cur === 'USD' ? '$' : '₹'})
+          Credit off the first yearly payment ({currencySymbol(cur)})
           <input className="o-input" name="credit" type="number" min={0} value={credit} onChange={(e) => setCredit(e.target.value)} />
         </label>
         <label className="o-row" style={{ gap: 8, fontSize: 13 }}>

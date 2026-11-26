@@ -1,11 +1,18 @@
 # Razorpay subscriptions: setup
 
-SteelConnect360 bills companies through Razorpay Subscriptions (7-day free trial; Timesheet, Purchase or both;
-monthly, quarterly, half-yearly or yearly). Plans and prices live in
-`apps/web/src/billing/plans.ts`; SteelConnect360 creates the matching Razorpay plans on first use.
+SteelConnect360 bills companies through Razorpay Subscriptions (free trial; one portal or a package;
+monthly, quarterly, half-yearly or yearly). Plans are **priced per person** (`SEAT_PRICE` in
+`apps/web/src/billing/plans.ts`, at least 5 people, 2 management viewers free, volume discounts from the
+26th and 101st person). SteelConnect360 creates the matching Razorpay plan for each package, number of
+people, cycle and currency on first use.
 
-Indian companies pay in rupees (GST extra). Companies outside India pay the same plans in US dollars
-at `USD_RATE` (90 rupees = 1 dollar, rounded up). Super Admin sets the currency per company.
+Currencies: India pays in rupees (GST extra), the UK in pounds (VAT extra), everyone else in US dollars.
+Super Admin sets the currency per company (Add company > Country, or the company's Billing panel).
+
+People added or removed: the subscription is moved to the plan for the new number of people from the
+next billing date (Razorpay "update subscription", end of cycle). Razorpay cannot change UPI AutoPay or
+e-mandate subscriptions; for those the company admin sees "Confirm new amount" on Plan and billing,
+which sets the subscription up again for the new amount from the next billing date.
 
 ## 1. Keys (Razorpay Dashboard)
 1. Sign in at dashboard.razorpay.com and switch to **Test mode** first.
@@ -16,8 +23,9 @@ at `USD_RATE` (90 rupees = 1 dollar, rounded up). Super Admin sets the currency 
    - Events: `subscription.activated`, `subscription.charged`, `subscription.pending`,
      `subscription.halted`, `subscription.cancelled`, `subscription.completed`, `payment.failed`.
 4. Make sure **Subscriptions** is enabled on the account (Products > Subscriptions).
-5. For foreign clients (US dollars): Settings > Payment methods > **International payments** must be
-   enabled. Razorpay reviews this; until it is approved, dollar checkouts fail.
+5. For foreign clients (pounds and US dollars): Settings > Payment methods > **International payments**
+   must be enabled, with GBP and USD among the currencies. Razorpay reviews this; until it is approved,
+   pound and dollar checkouts fail. Foreign subscriptions are paid by card.
 
 ## 2. Store the keys in AWS (once per stage)
 Use the `put` helper you used for the other secrets (stage `dev`):
@@ -30,7 +38,8 @@ They are read from `/orbit/dev/app/*` (SecureString). The app picks them up with
 Until they exist, Plan and billing shows "Online payments are not set up yet".
 
 ## 3. Database
-Run the migration (adds `billing_plans`, `company_subscriptions`, `company_billing`, `billing_events`):
+Run the migrations (add `billing_plans`, `company_subscriptions`, `company_billing`, `billing_events`, and
+from 0032 pounds and `subscription_seats`):
 
     pnpm db:migrate
 

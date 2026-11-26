@@ -1122,3 +1122,18 @@ p { margin: 0 0 12px; }
 /* "Loading SteelConnect360…" full-page state: the brand mark breathes while the server prepares the page. */
 .o-loading-mark { animation: o-pulse 1.4s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .o-loading-mark { animation: none; } }
+
+/* Per-user plans: the plan card next to the worked-out bill. */
+.b-calc { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; align-items: stretch; }
+.b-seats { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.b-seats .o-input { max-width: 160px; font-size: 18px; font-weight: 600; }
+.b-bill { margin: 0; display: flex; flex-direction: column; }
+.b-lines { width: 100%; border-collapse: collapse; font-size: 13px; }
+.b-lines td { padding: 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.b-lines td:last-child { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-left: 12px; }
+.b-lines .b-good td { color: var(--ok); }
+.b-total { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.b-total strong { font-size: 30px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.b-total span { color: var(--ink-3); font-size: 13px; }
+.b-rules { margin: 0; padding-left: 18px; font-size: 13px; color: var(--ink-2); display: flex; flex-direction: column; gap: 4px; }
+@media (max-width: 767px) { .b-calc { grid-template-columns: minmax(0, 1fr); } }

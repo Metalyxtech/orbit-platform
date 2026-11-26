@@ -41,6 +41,19 @@ export const companyBilling = pgTable('company_billing', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * Per-user plans (migration 0032): people billed from the next charge, and a new count waiting for the
+ * admin to confirm when Razorpay cannot change the subscription by itself (UPI AutoPay, e-mandate).
+ */
+export const subscriptionSeats = pgTable('subscription_seats', {
+  companyId: uuid('company_id')
+    .primaryKey()
+    .references(() => companies.id),
+  seats: integer('seats').notNull(),
+  pendingSeats: integer('pending_seats'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** Payments and subscription events, for the billing history. */
 export const billingEvents = pgTable(
   'billing_events',

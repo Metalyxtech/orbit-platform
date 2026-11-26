@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { getSecret } from '@orbit/core/aws';
+import type { Currency } from './plans';
 
 // Small Razorpay REST client (subscriptions). RAZORPAY_API_BASE lets tests point at a mock server.
 const base = () => process.env.RAZORPAY_API_BASE ?? 'https://api.razorpay.com/v1';
@@ -23,7 +24,18 @@ export async function publicKeyId() {
   return (await keys()).id;
 }
 
-async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
+/** Razorpay refused a request; `description` is Razorpay's own reason. */
+export class RazorpayError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly description: string,
+  ) {
+    super(message);
+  }
+}
+
+async function call<T>(method: 'GET' | 'POST' | 'PATCH', path: string, body?: unknown): Promise<T> {
   const k = await keys();
   const res = await fetch(`${base()}${path}`, {
     method,
@@ -35,7 +47,11 @@ async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown): Pr
   if (!res.ok) {
     console.error(JSON.stringify({ razorpay: path, status: res.status, error: data.error }));
     if (res.status === 401) throw new Error('Razorpay did not accept SteelConnect360’s payment keys. SteelConnect360 is fixing this; please try again later.');
-    throw new Error(data.error?.description ? `Payment provider: ${data.error.description}` : 'The payment provider did not respond. Try again in a minute.');
+    throw new RazorpayError(
+      data.error?.description ? `Payment provider: ${data.error.description}` : 'The payment provider did not respond. Try again in a minute.',
+      res.status,
+      data.error?.description ?? '',
+    );
   }
   return data;
 }
@@ -51,7 +67,7 @@ export interface RzSubscription {
   notes?: Record<string, string>;
 }
 
-export const createPlan = (input: { period: 'monthly' | 'yearly'; interval: number; name: string; amount: number; currency: 'INR' | 'USD'; description: string }) =>
+export const createPlan = (input: { period: 'monthly' | 'yearly'; interval: number; name: string; amount: number; currency: Currency; description: string }) =>
   call<{ id: string }>('POST', '/plans', {
     period: input.period,
     interval: input.interval,
@@ -67,7 +83,7 @@ export const createSubscription = (input: {
   totalCount: number;
   notes: Record<string, string>;
   startAt?: number;
-  addons?: { name: string; amount: number; currency: 'INR' | 'USD' }[];
+  addons?: { name: string; amount: number; currency: Currency }[];
 }) =>
   call<RzSubscription>('POST', '/subscriptions', {
     plan_id: input.planId,
@@ -80,6 +96,22 @@ export const createSubscription = (input: {
   });
 
 export const fetchSubscription = (id: string) => call<RzSubscription>('GET', `/subscriptions/${encodeURIComponent(id)}`);
+
+/**
+ * Moves a subscription to another plan. `cycle_end`: the new amount is charged from the next
+ * billing date, with nothing charged or refunded now. Razorpay refuses this for UPI AutoPay
+ * and e-mandate subscriptions (see `cannotUpdate`).
+ */
+export const updateSubscriptionPlan = (id: string, planId: string, at: 'now' | 'cycle_end' = 'cycle_end') =>
+  call<RzSubscription>('PATCH', `/subscriptions/${encodeURIComponent(id)}`, { plan_id: planId, quantity: 1, schedule_change_at: at, customer_notify: 1 });
+
+/** Drops a change scheduled for the end of the cycle (a subscription holds one at a time). */
+export const cancelScheduledChange = (id: string) => call<RzSubscription>('POST', `/subscriptions/${encodeURIComponent(id)}/cancel_scheduled_changes`);
+
+/** Razorpay cannot change this subscription by itself: the customer has to authorise a new one. */
+export const cannotUpdate = (err: unknown) => err instanceof RazorpayError && /upi|e-?mandate|nach/i.test(err.description);
+/** Razorpay refused because a change is already scheduled. */
+export const changeAlreadyScheduled = (err: unknown) => err instanceof RazorpayError && /scheduled|pending update|already/i.test(err.description);
 
 export const cancelSubscription = (id: string, atCycleEnd: boolean) =>
   call<RzSubscription>('POST', `/subscriptions/${encodeURIComponent(id)}/cancel`, { cancel_at_cycle_end: atCycleEnd ? 1 : 0 });

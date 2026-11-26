@@ -225,6 +225,13 @@
       "when": 1796300000000,
       "tag": "0031_direct_inspections",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1796400000000,
+      "tag": "0032_per_user_billing",
+      "breakpoints": true
     }
   ]
 }

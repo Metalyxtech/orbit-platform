@@ -6,7 +6,8 @@ import { audit } from '@orbit/core';
 import { getDb } from '@orbit/core/next';
 import { withTenant } from '@orbit/db';
 import { extendFreePeriod, markPaymentsSeen, saveBillingSettings } from '@/billing/admin';
-import { billingSettings } from '@/billing/state';
+import { asCurrency } from '@/billing/plans';
+import { billingSettings, peopleChanged } from '@/billing/state';
 import { requireSuperAdmin } from './guard';
 import { addCompanyAdmin, createCompany, readNewCompanyForm } from './new-company';
 
@@ -42,6 +43,7 @@ export async function addCompanyAdminAction(companyId: string, form: FormData) {
         entityId: m,
         data: { summary: [`${v('email').trim().toLowerCase()} made company admin by SteelConnect360`] },
       });
+      await peopleChanged(tx, id);
     });
   } catch (err) {
     const msg = err instanceof z.ZodError ? (err.issues[0]?.message ?? 'Check the form') : err instanceof Error && !('code' in err) ? err.message : 'Could not add the admin. Try again.';
@@ -58,7 +60,7 @@ export async function setCompanyBillingAction(companyId: string, form: FormData)
   const db = await getDb();
   await withTenant(db, { companyId: id, userId }, async (tx) => {
     const s = await saveBillingSettings(tx, id, {
-      currency: form.get('currency') === 'USD' ? 'USD' : 'INR',
+      currency: asCurrency(String(form.get('currency') ?? '')),
       showPlans: form.get('showPlans') !== 'hide',
       trialDays: Number(form.get('trialDays') ?? 7),
     });

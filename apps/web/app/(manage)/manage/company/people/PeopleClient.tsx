@@ -4,7 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button, Chip, useConfirm, useToast } from '@orbit/ui';
 import type { PeopleData } from '@/company-admin/people';
-import { addPersonAction, changePersonPortalAction, setPersonPortalRoleAction } from '../actions';
+import { RemoveMemberButton } from '@/company-admin/RemoveMemberButton';
+import { addPersonAction, changePersonPortalAction, removePersonAction, setPersonPortalRoleAction } from '../actions';
 
 const ROLE_LABEL: Record<string, string> = {
   employee: 'Employee',
@@ -102,6 +103,11 @@ export function PeopleClient({ data, me }: { data: PeopleData; me: string }) {
                       {p.title ? ` · ${p.title}` : ''}
                     </div>
                     {p.status !== 'active' && <Chip tone={p.status === 'pending' ? 'warn' : 'bad'}>{p.status === 'pending' ? 'Waiting to join' : 'Blocked'}</Chip>}
+                    {p.membershipId !== me && (
+                      <div style={{ marginTop: 6 }}>
+                        <RemoveMemberButton name={p.name} company="this company" remove={(typed) => removePersonAction(p.membershipId, typed)} />
+                      </div>
+                    )}
                   </td>
                   <td className="muted" style={{ fontSize: 12 }}>
                     {ROLE_LABEL[p.role] ?? p.role}
@@ -163,7 +169,7 @@ function AddPerson({ portals, onDone }: { portals: PeopleData['portals']; onDone
     const res = await addPersonAction({ ...v, role: v.role as 'employee', title: v.title || undefined, portals: every ? portals.map((p) => p.id) : picked, portalRoles: roles });
     setBusy(false);
     if (!res.ok) return toast(res.error, 'bad');
-    toast(every ? `${v.name} added with every portal.` : `${v.name} added. They can sign in now.`);
+    toast(`${every ? `${v.name} added with every portal.` : `${v.name} added. They can sign in now.`}${res.data.billing ? ` ${res.data.billing}` : ''}`);
     onDone();
     router.refresh();
   }

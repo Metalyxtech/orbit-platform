@@ -1,5 +1,7 @@
-// SteelConnect360 subscription plans: which portals (bundle) x team size (tier) x how often to pay (cycle).
-// Prices in rupees (India, GST extra) or US dollars at USD_RATE (foreign clients). Change prices here only.
+// SteelConnect360 subscription plans: which portals (bundle) x number of people x how often to pay (cycle).
+// Current plans are priced per person (SEAT_PRICE) in rupees (India), pounds (UK) or US dollars (everyone
+// else). The older fixed team sizes (TIERS) stay readable for companies already on them.
+// Change prices here only.
 // Safe to import from client components.
 
 /** Stored in plan ids (e.g. "both_growth"), so existing ids never change: 'both' is Timesheet + Purchase. */
@@ -16,16 +18,26 @@ export type Bundle =
   | 'production_quality'
   | 'factory'
   | 'complete';
+/** Fixed team sizes (older plans, kept for companies already on them). */
 export type TierId = 'starter' | 'growth' | 'business';
+/** 'users': priced per person (the current plans); the others are the older fixed team sizes. */
+export type PlanTier = TierId | 'users';
 export type Cycle = 'monthly' | 'quarterly' | 'halfyearly' | 'yearly';
-export type PlanId = `${Bundle}_${TierId}`;
+export type PlanId = `${Bundle}_${PlanTier}`;
 
 export const TRIAL_DAYS = 7;
 /** Companies that signed up before billing launched get their trial counted from this date. */
 export const BILLING_LAUNCH = '2026-11-06T00:00:00Z';
 
-export type Currency = 'INR' | 'USD';
-/** Foreign clients pay in US dollars at this rate (rounded up to whole dollars). */
+/** India pays in rupees, the UK in pounds, everyone else in US dollars. */
+export type Currency = 'INR' | 'USD' | 'GBP';
+export const CURRENCIES: { id: Currency; label: string; where: string }[] = [
+  { id: 'INR', label: 'Indian rupees (₹)', where: 'India' },
+  { id: 'GBP', label: 'Pounds sterling (£)', where: 'United Kingdom' },
+  { id: 'USD', label: 'US dollars ($)', where: 'USA and the rest of the world' },
+];
+export const asCurrency = (c: string | null | undefined): Currency => (c === 'USD' || c === 'GBP' ? c : 'INR');
+/** Older fixed-size plans: foreign clients pay in US dollars at this rate (rounded up to whole dollars). */
 export const USD_RATE = 90;
 
 /** Where a bundle is listed on the plan picker. */
@@ -97,7 +109,7 @@ const MONTHLY_INR: Record<Bundle, Record<TierId, number>> = {
 /** Monthly price in the client's currency: rupees, or dollars at USD_RATE rounded up. */
 export function monthly(b: Bundle, t: TierId, cur: Currency = 'INR') {
   const v = MONTHLY_INR[b][t];
-  return cur === 'USD' ? Math.ceil(v / USD_RATE) : v;
+  return cur === 'INR' ? v : Math.ceil(v / USD_RATE);
 }
 
 /** Payment options. Longer terms cost less. `rz` is how Razorpay bills the cycle. */
@@ -120,16 +132,20 @@ export const TRIAL_LIMITS = { users: 40, portals: [...PRICED_PORTALS, ...UNPRICE
 export const cycleOf = (c: string) => CYCLES.find((x) => x.id === c) ?? CYCLES[0];
 export const bundleOf = (b: string) => BUNDLES.find((x) => x.id === b);
 export const tierOf = (t: string) => TIERS.find((x) => x.id === t);
-export const planId = (b: Bundle, t: TierId): PlanId => `${b}_${t}`;
+export const planId = (b: Bundle, t: PlanTier): PlanId => `${b}_${t}`;
 
-/** Name, users and portals for a stored plan id like "both_growth". */
+/** Name, users and portals for a stored plan id like "factory_users" (per user) or "both_growth" (older). */
 export function planOf(id: string) {
   const cut = id.lastIndexOf('_'); // bundle ids can contain "_" (purchase_sales_growth)
   const [b, t] = [id.slice(0, cut), id.slice(cut + 1)];
   const bundle = bundleOf(b);
+  if (!bundle) return undefined;
+  const portals = [...bundle.portals, ...UNPRICED_PORTALS];
+  // Per-user plans have no people limit: the bill follows the number of people.
+  if (t === 'users') return { id: id as PlanId, bundle: bundle.id, tier: 'users' as PlanTier, name: bundle.name, users: Number.POSITIVE_INFINITY, portals, perUser: true };
   const tier = tierOf(t);
-  if (!bundle || !tier) return undefined;
-  return { id: id as PlanId, bundle: bundle.id, tier: tier.id, name: `${bundle.name} ${tier.name}`, users: tier.users, portals: [...bundle.portals, ...UNPRICED_PORTALS] };
+  if (!tier) return undefined;
+  return { id: id as PlanId, bundle: bundle.id, tier: tier.id as PlanTier, name: `${bundle.name} ${tier.name}`, users: tier.users, portals, perUser: false };
 }
 
 /** Display name of a portal id. */
@@ -141,8 +157,9 @@ export function portalsOutside(id: string, inUse: string[]) {
   return plan ? inUse.filter((p) => !plan.portals.includes(p)) : [];
 }
 
-/** Amount charged each cycle, in the client's currency. */
-export function priceFor(b: Bundle, t: TierId, cycle: Cycle, cur: Currency = 'INR') {
+/** Amount charged each cycle, in the client's currency (per-user plans: for `seats` people). */
+export function priceFor(b: Bundle, t: PlanTier, cycle: Cycle, cur: Currency = 'INR', seats = MIN_SEATS) {
+  if (t === 'users') return seatQuote(b, seats, cycle, cur).total;
   const c = cycleOf(cycle);
   return Math.round(monthly(b, t, cur) * c.months * (1 - c.discount));
 }
@@ -165,11 +182,75 @@ export function bundleFor(used: string[]): Bundle {
 /** Money in the client's currency, e.g. ₹5,999 or $67. */
 export function money(v: number, cur: Currency = 'INR') {
   const opts = { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 };
-  return cur === 'USD' ? `$${v.toLocaleString('en-US', opts)}` : `₹${v.toLocaleString('en-IN', opts)}`;
+  if (cur === 'USD') return `$${v.toLocaleString('en-US', opts)}`;
+  if (cur === 'GBP') return `£${v.toLocaleString('en-GB', opts)}`;
+  return `₹${v.toLocaleString('en-IN', opts)}`;
 }
 /** Rupees (older callers). */
 export const inr = (v: number) => money(v, 'INR');
-export const taxNote = (cur: Currency) => (cur === 'USD' ? 'Prices in US dollars' : 'GST extra');
+export const taxNote = (cur: Currency) => (cur === 'USD' ? 'Prices in US dollars, taxes extra where they apply' : cur === 'GBP' ? 'Prices in pounds, VAT extra' : 'GST extra');
+export const currencySymbol = (cur: Currency) => (cur === 'USD' ? '$' : cur === 'GBP' ? '£' : '₹');
+/** "US dollars" etc., for sentences. */
+export const currencyWords = (cur: Currency) => (cur === 'USD' ? 'US dollars' : cur === 'GBP' ? 'pounds sterling' : 'Indian rupees');
+
+// ---------------------------------------------------------------------------------------------
+// Per-user pricing (the current plans). Change prices here only.
+// ---------------------------------------------------------------------------------------------
+
+/** Price per person per month, paid monthly, in each currency. */
+export const SEAT_PRICE: Record<Bundle, Record<Currency, number>> = {
+  timesheet: { INR: 149, USD: 1.99, GBP: 1.99 },
+  quality: { INR: 299, USD: 4.99, GBP: 3.99 },
+  purchase: { INR: 399, USD: 6.99, GBP: 5.99 },
+  sales: { INR: 399, USD: 6.99, GBP: 5.99 },
+  production: { INR: 499, USD: 8.99, GBP: 7.99 },
+  both: { INR: 449, USD: 7.99, GBP: 6.99 },
+  timesheet_sales: { INR: 449, USD: 7.99, GBP: 6.99 },
+  purchase_sales: { INR: 699, USD: 11.99, GBP: 9.99 },
+  production_quality: { INR: 599, USD: 11.99, GBP: 9.99 },
+  all: { INR: 749, USD: 12.99, GBP: 10.99 },
+  factory: { INR: 999, USD: 19.99, GBP: 16.99 },
+  complete: { INR: 1149, USD: 21.99, GBP: 18.99 },
+};
+/** Smallest number of people a company pays for. */
+export const MIN_SEATS = 5;
+/** People with the management role (GM, directors) who use SteelConnect360 free: they view, hold and comment. */
+export const FREE_VIEWERS = 2;
+/** Bigger teams pay less per person: each band is priced at its own rate (like tax bands). */
+export const VOLUME_BANDS: { from: number; to: number; discount: number; label: string }[] = [
+  { from: 1, to: 25, discount: 0, label: 'First 25 people' },
+  { from: 26, to: 100, discount: 0.15, label: 'People 26 to 100 (15% off)' },
+  { from: 101, to: Number.POSITIVE_INFINITY, discount: 0.25, label: 'People 101 and more (25% off)' },
+];
+
+/** Whole rupees; pence and cents to 2 decimals. */
+export const roundMoney = (v: number, cur: Currency) => (cur === 'INR' ? Math.round(v) : Math.round(v * 100) / 100);
+
+/** People billed: everyone active, less up to FREE_VIEWERS management viewers, and never fewer than MIN_SEATS. */
+export const billableSeats = (activePeople: number, managementPeople = 0) => Math.max(MIN_SEATS, activePeople - Math.min(FREE_VIEWERS, managementPeople));
+
+/**
+ * The bill for `seats` people on a bundle: each volume band at its own rate, then the
+ * longer-term discount. `lines` explains the sum on screen.
+ */
+export function seatQuote(b: Bundle, seats: number, cycle: Cycle, cur: Currency) {
+  const n = Math.max(MIN_SEATS, Math.floor(seats));
+  const unit = SEAT_PRICE[b][cur];
+  const c = cycleOf(cycle);
+  const lines = VOLUME_BANDS.map((band) => {
+    const people = Math.max(0, Math.min(n, band.to) - band.from + 1);
+    const each = roundMoney(unit * (1 - band.discount), cur);
+    return { label: band.label, people, each, amount: roundMoney(people * each, cur) };
+  }).filter((l) => l.people > 0);
+  const perMonth = roundMoney(lines.reduce((t, l) => t + l.amount, 0), cur);
+  const total = roundMoney(perMonth * c.months * (1 - c.discount), cur);
+  return { seats: n, unit, lines, perMonth, months: c.months, total, saving: roundMoney(perMonth * c.months - total, cur) };
+}
+
+/** Per-person price of a bundle's portals bought one by one. */
+export const seatSeparately = (b: Bundle, cur: Currency) => roundMoney((bundleOf(b)?.portals ?? []).reduce((n, p) => n + SEAT_PRICE[SINGLE[p]][cur], 0), cur);
+/** A combined bundle's saving against buying its portals one by one, as a whole percentage. */
+export const seatSavingPct = (b: Bundle, cur: Currency = 'INR') => (isCombo(b) ? Math.round((1 - SEAT_PRICE[b][cur] / seatSeparately(b, cur)) * 100) : 0);
 
 /** A yearly price paid monthly: 12 equal payments (rounded up to the whole rupee or dollar). */
 export const installmentOf = (yearly: number) => Math.ceil(yearly / 12);

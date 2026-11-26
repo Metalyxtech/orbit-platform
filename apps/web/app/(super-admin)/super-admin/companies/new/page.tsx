@@ -43,7 +43,8 @@ export default async function NewCompany({ searchParams }: { searchParams: Promi
                 Country
                 <select className="o-select" name="country" defaultValue="india">
                   <option value="india">India: pays in rupees (₹, GST extra)</option>
-                  <option value="abroad">Outside India: pays in US dollars ($)</option>
+                  <option value="uk">United Kingdom: pays in pounds (£, VAT extra)</option>
+                  <option value="abroad">USA and the rest of the world: pays in US dollars ($)</option>
                 </select>
               </label>
               <label className="o-field">

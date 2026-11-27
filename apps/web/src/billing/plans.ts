@@ -19,7 +19,8 @@ export type Bundle =
   | 'factory'
   | 'complete'
   | 'hr'
-  | 'hr_timesheet';
+  | 'hr_timesheet'
+  | 'complete_hr';
 /** Fixed team sizes (older plans, kept for companies already on them). */
 export type TierId = 'starter' | 'growth' | 'business';
 /** 'users': priced per person (the current plans); the others are the older fixed team sizes. */
@@ -72,6 +73,7 @@ export const BUNDLES: { id: Bundle; name: string; portals: string[]; desc: strin
     best: true,
   },
   { id: 'complete', name: 'Complete suite', portals: ['timesheet', 'sales', 'procurement', 'production', 'quality'], group: 'factory', desc: 'All five portals, with timesheets and project hours' },
+  { id: 'complete_hr', name: 'Complete suite + HR', portals: ['timesheet', 'hr', 'sales', 'procurement', 'production', 'quality'], group: 'factory', desc: 'All six portals: the Complete suite with leave, attendance and employee records' },
 ];
 /** Each portal's own bundle, for "you save" against buying them separately. */
 const SINGLE: Record<string, Bundle> = { timesheet: 'timesheet', procurement: 'purchase', sales: 'sales', production: 'production', quality: 'quality', hr: 'hr' };
@@ -111,6 +113,7 @@ const MONTHLY_INR: Record<Bundle, Record<TierId, number>> = {
   // Older fixed sizes are no longer sold; HR has them only so every bundle has a price.
   hr: { starter: 1599, growth: 3999, business: 9299 },
   hr_timesheet: { starter: 2399, growth: 5999, business: 13999 },
+  complete_hr: { starter: 5499, growth: 12999, business: 29999 },
 };
 
 /** Monthly price in the client's currency: rupees, or dollars at USD_RATE rounded up. */
@@ -183,7 +186,7 @@ export const bundleSavingPct = (b: Bundle, t: TierId = 'growth') => (isCombo(b) 
 /** The smallest bundle that covers every portal in use (the default choice on the billing page). */
 export function bundleFor(used: string[]): Bundle {
   const fits = BUNDLES.filter((b) => used.every((p) => b.portals.includes(p) || !SINGLE[p]));
-  return fits.sort((a, b) => a.portals.length - b.portals.length)[0]?.id ?? 'all';
+  return fits.sort((a, b) => a.portals.length - b.portals.length)[0]?.id ?? 'complete_hr';
 }
 
 /** Money in the client's currency, e.g. ₹5,999 or $67. */
@@ -220,6 +223,7 @@ export const SEAT_PRICE: Record<Bundle, Record<Currency, number>> = {
   complete: { INR: 1149, USD: 21.99, GBP: 18.99 },
   hr: { INR: 199, USD: 2.99, GBP: 2.49 },
   hr_timesheet: { INR: 299, USD: 3.99, GBP: 3.49 },
+  complete_hr: { INR: 1399, USD: 24.99, GBP: 21.99 },
 };
 /** Smallest number of people a company pays for. */
 export const MIN_SEATS = 5;

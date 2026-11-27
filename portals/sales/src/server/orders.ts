@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { assertNotHeld } from '@orbit/core/holds';
+import { accountingReady } from '@orbit/core/accounting';
 import { audit, type ActionContext, type SessionContext } from '@orbit/core';
 import { prodWorkOrders, salesCustomers, salesInvoices, salesOrders, salesPayments, type Tx } from '@orbit/db';
 import { fmtMoney, orderLabel, type OrderStatus } from '../config';
@@ -77,6 +78,8 @@ export async function raiseInvoice(tx: Tx, ctx: ActionContext, raw: { id: string
   if (advance > 0) await tx.insert(salesPayments).values({ companyId: ctx.companyId, invoiceId: inv.id, amount: advance, reference: `Advance ${o.advancePct}% with order`, byId: ctx.membershipId });
   await tx.update(salesOrders).set({ status: 'invoiced' }).where(eq(salesOrders.id, o.id));
   await note(tx, ctx, o.id, 'sales.invoice.raise', `${number} raised for ${o.number}: ${fmtMoney(cfg.currency, amount)} incl. GST`);
+  // Sent to the company's accounts software when it chose automatic sending.
+  accountingReady(ctx, 'sales_invoice', inv.id);
   return { number };
 }
 

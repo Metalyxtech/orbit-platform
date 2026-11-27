@@ -205,6 +205,7 @@ p { margin: 0 0 12px; }
 .o-chip.bad { background: var(--bad-tint); color: var(--bad); }
 .o-chip.hivis { background: var(--hivis-tint); color: #b54a08; }
 .o-banner { border: 1px solid #ecd9b4; border-left: 3px solid var(--warn); background: var(--warn-tint); padding: 10px 14px; font-size: 13px; border-radius: var(--radius); }
+.o-banner.ok { border-color: #bfe0cc; border-left-color: var(--ok); background: var(--ok-tint, #eef8f2); }
 .o-banner.bad { border-color: #f0c5c0; border-left-color: var(--bad); background: var(--bad-tint); }
 .o-banner.hivis { border-color: #f6cfb5; border-left-color: var(--hivis); background: var(--hivis-tint); }
 .o-banner.info { border-color: #c9dbec; border-left-color: var(--steel); background: var(--steel-tint); }

@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, lte, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import { audit, type ActionContext, type SessionContext } from '@orbit/core';
+import { approvedLeave } from '@orbit/core/attendance';
 import { memberships, projectMembers, projects, timesheetEntries, timesheets, tsHolidays, tsOtRequests, tsOtSettings, tsRoster, tsShifts, users, type Tx } from '@orbit/db';
 import { addDays, computeTotals, dayLabel, dayName, defaultOtRates, round2, weekDates, weekRangeLabel, weekStartFor, weightedOt, type DayPlan, type GridRow, type OtRates } from '../calc';
 import { loadSettings, rulesFrom } from './shared';
@@ -204,10 +205,14 @@ export async function weekPlans(tx: Tx, companyId: string, ids: string[], weekSt
       [] as { membershipId: string; workDate: string; hours: number }[],
     ),
   ]);
+  // Leave approved in the HR portal counts as leave on days the roster leaves open.
+  const leave = await approvedLeave(tx, companyId, ids, weekStart, end);
   for (const [id, plan] of out) {
     dates.forEach((date, d) => {
       const h = holidays.find((x) => x.holidayDate === date);
       if (h) plan[d].holiday = h.name;
+      const l = leave.get(id)?.get(date);
+      if (l && !l.halfDay) Object.assign(plan[d], { kind: 'leave', shiftName: l.type });
       const c = cells.find((x) => x.membershipId === id && x.workDate === date);
       if (c) {
         plan[d].kind = c.kind as DayPlan['kind'];
@@ -249,6 +254,7 @@ export async function getRoster(tx: Tx, ctx: SessionContext, input: { weekStart?
     safe(tx, (sp) => sp.select().from(tsHolidays).where(and(eq(tsHolidays.companyId, ctx.companyId), gte(tsHolidays.holidayDate, weekStart), lte(tsHolidays.holidayDate, dates[6]))), [] as (typeof tsHolidays.$inferSelect)[]),
   ]);
   const byKey = new Map(cells.map((c) => [`${c.membershipId}:${c.workDate}`, c]));
+  const leave = await approvedLeave(tx, ctx.companyId, ids, weekStart, dates[6]);
   return {
     weekStart,
     rangeLabel: weekRangeLabel(weekStart),
@@ -268,6 +274,8 @@ export async function getRoster(tx: Tx, ctx: SessionContext, input: { weekStart?
         const c = byKey.get(`${p.membershipId}:${date}`);
         return c ? { kind: c.kind as RosterCell['kind'], shiftId: c.shiftId, plannedOt: c.plannedOt, note: c.note, published: c.published } : null;
       }),
+      /** Leave approved in HR, per day (shown on the roster; it counts as leave where nothing is rostered). */
+      leave: dates.map((date) => leave.get(p.membershipId)?.get(date)?.type ?? null),
     })),
     unpublished: cells.filter((c) => !c.published).length,
     canEdit,

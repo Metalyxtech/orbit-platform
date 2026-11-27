@@ -17,6 +17,7 @@
     "@orbit/core": "workspace:*",
     "@orbit/db": "workspace:*",
     "@orbit/portal-custom-1": "workspace:*",
+    "@orbit/portal-hr": "workspace:*",
     "@orbit/portal-procurement": "workspace:*",
     "@orbit/portal-production": "workspace:*",
     "@orbit/portal-quality": "workspace:*",

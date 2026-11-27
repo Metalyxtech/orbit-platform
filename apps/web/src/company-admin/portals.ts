@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { audit, companyIndustry, type ActionContext, type SessionContext } from '@orbit/core';
 import { companyPortals, type Tx } from '@orbit/db';
 import { assertWithinPlan } from '../billing/state';
-import { INDUSTRY_PORTALS } from '../industry-portals';
+import { INDUSTRY_PORTALS, PORTAL_DETAIL } from '../industry-portals';
 import { portalModules } from '../portals';
 
 const requireAdmin = (ctx: SessionContext) => {
@@ -18,13 +18,15 @@ export async function companyPortalList(tx: Tx, ctx: SessionContext) {
   const rows = await tx.select({ portal: companyPortals.portal, enabled: companyPortals.enabled }).from(companyPortals).where(eq(companyPortals.companyId, ctx.companyId));
   // The company type's own portals, plus any portal already switched on (a custom portal only once
   // SteelConnect360 has switched it on).
-  const own = INDUSTRY_PORTALS[await companyIndustry(tx, ctx.companyId)];
+  const industry = await companyIndustry(tx, ctx.companyId);
+  const own = INDUSTRY_PORTALS[industry];
   const shown = Object.values(portalModules).filter((m) => rows.some((r) => r.portal === m.manifest.id && r.enabled) || (!m.manifest.custom && own.includes(m.manifest.id)));
   return shown.map((m) => {
     const row = rows.find((r) => r.portal === m.manifest.id);
     return {
       id: m.manifest.id,
       name: m.manifest.name,
+      detail: PORTAL_DETAIL[industry][m.manifest.id] ?? null,
       roles: m.manifest.portalRoles?.map((r) => r.label) ?? [],
       pages: m.manifest.nav.filter((n) => n.section === 'main').map((n) => n.label),
       state: (row ? (row.enabled ? 'on' : 'requested') : 'none') as CompanyPortalState,

@@ -3,7 +3,7 @@ import { getSession } from '@orbit/core/next';
 import { joinableCompanies } from '@/company-directory';
 import Link from 'next/link';
 import { INDUSTRIES, isIndustry, type Industry } from '@orbit/core';
-import { portalsForIndustry } from '@/industry-portals';
+import { PORTAL_DETAIL, portalsForIndustry } from '@/industry-portals';
 import { standardPortals } from '@/portals';
 import { joinCompanyAction, registerCompanyAction } from '@/session-actions';
 import { AuthCard } from '../AuthCard';
@@ -26,9 +26,16 @@ function PortalPicker({ hint, industry }: { hint: string; industry?: Industry })
     <fieldset className="o-field" style={{ border: 0, padding: 0, margin: 0 }}>
       <legend style={{ marginBottom: 4 }}>Portals</legend>
       {portalList.map((p, i) => (
-        <label key={p.id} className="o-row" style={{ gap: 8, fontSize: 13, color: 'var(--ink)' }}>
-          <input type="checkbox" name="portals" value={p.id} defaultChecked={i === 0} />
-          {p.name}
+        <label key={p.id} className="o-row" style={{ gap: 8, fontSize: 13, color: 'var(--ink)', alignItems: 'flex-start' }}>
+          <input type="checkbox" name="portals" value={p.id} defaultChecked={i === 0} style={{ marginTop: 3 }} />
+          <span>
+            {p.name}
+            {industry && (
+              <span className="faint" style={{ display: 'block', fontSize: 11 }}>
+                {PORTAL_DETAIL[industry][p.id]}
+              </span>
+            )}
+          </span>
         </label>
       ))}
       <span className="faint" style={{ fontSize: 11 }}>{hint}</span>

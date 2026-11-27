@@ -34,10 +34,10 @@ const KINDS: { id: Kind; tag: string; title: string }[] = [
   { id: 'single', tag: 'Fix one problem', title: 'One portal' },
   { id: 'pair', tag: 'Connect two teams', title: 'Two portals' },
   { id: 'suite', tag: 'Run the whole factory', title: 'Full suite' },
-  { id: 'people', tag: 'Your people', title: 'Timesheet + HR' },
+  { id: 'people', tag: 'Your people', title: 'HR + Timesheet' },
 ];
 /** What each kind selects when it is first clicked. */
-const FIRST: Record<Kind, Bundle> = { single: 'production', pair: 'production_quality', suite: 'factory', people: 'timesheet_hr' };
+const FIRST: Record<Kind, Bundle> = { single: 'production', pair: 'production_quality', suite: 'factory', people: 'hr_timesheet' };
 const kindOf = (b: Bundle): Kind | null => {
   const g = bundleOf(b)?.group;
   return g && g !== 'legacy' ? g : null;
@@ -45,7 +45,7 @@ const kindOf = (b: Bundle): Kind | null => {
 
 /**
  * Step 1: which portals. First the kind of plan (one portal, two portals, a full suite, or
- * Timesheet + HR), then which portal or portals.
+ * HR + Timesheet), then which portal or portals.
  */
 export function BundlePicker({
   bundle,
@@ -179,7 +179,7 @@ export function BundlePicker({
                   {seatSavingPct(bundle, currency)}%. {bundleDesc(bundle, companyType)}.
                 </p>
               )}
-              <p className="b-note">Need HR too? Choose Timesheet + HR, or the Complete suite.</p>
+              <p className="b-note">Need HR too? Choose HR on its own, or HR + Timesheet.</p>
             </>
           )}
           {kind === 'suite' && (
@@ -192,7 +192,7 @@ export function BundlePicker({
           )}
           {kind === 'people' && (
             <>
-              <p className="b-pick-q">Timesheet and HR together</p>
+              <p className="b-pick-q">HR and Timesheet together</p>
               <div className="b-bundles">{bundlesIn('people').map((b) => tile(b.id, { on: bundle === b.id, onClick: () => onChange(b.id) }))}</div>
               <p className="b-note">HR builds attendance from the hours people book, and leave approved in HR shows on timesheets and the roster. Want just one of them? Choose One portal.</p>
             </>

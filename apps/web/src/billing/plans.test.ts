@@ -10,6 +10,14 @@ describe('per-user pricing', () => {
     expect(SEAT_PRICE.timesheet).toEqual({ INR: 149, USD: 1.99, GBP: 1.99 });
   });
 
+  it('prices HR alone and with Timesheet', () => {
+    expect(SEAT_PRICE.hr).toEqual({ INR: 199, USD: 2.99, GBP: 2.49 });
+    expect(SEAT_PRICE.hr_timesheet).toEqual({ INR: 299, USD: 3.99, GBP: 3.49 });
+    expect(planOf('hr_users')?.portals).toEqual(['hr']);
+    expect(planOf('hr_timesheet_users')?.portals).toEqual(['timesheet', 'hr']);
+    expect(seatSavingPct('hr_timesheet', 'INR')).toBe(14);
+  });
+
   it('bills at least 5 people', () => {
     expect(seatQuote('timesheet', 2, 'monthly', 'INR').total).toBe(149 * MIN_SEATS);
     expect(billableSeats(1)).toBe(MIN_SEATS);
@@ -75,7 +83,7 @@ describe('extra seats', () => {
   });
 });
 
-describe('plan choices: one portal, two portals, a suite, or Timesheet + HR', () => {
+describe('plan choices: one portal, two portals, a suite, or HR + Timesheet', () => {
   it('sells every pair of the five work portals', () => {
     for (const a of PAIR_PORTALS) for (const b of PAIR_PORTALS) if (a !== b) expect(bundleForPortals([a, b]), `${a}+${b}`).toBeDefined();
     expect(bundlesIn('pair')).toHaveLength(10);
@@ -85,26 +93,16 @@ describe('plan choices: one portal, two portals, a suite, or Timesheet + HR', ()
     for (const b of BUNDLES.filter((x) => x.portals.length > 1)) for (const c of CURRENCIES) expect(SEAT_PRICE[b.id][c.id], `${b.id} ${c.id}`).toBeLessThan(seatSeparately(b.id, c.id));
   });
 
-  it('prices HR on its own and with Timesheet', () => {
-    expect(SEAT_PRICE.hr).toEqual({ INR: 99, USD: 1.49, GBP: 1.29 });
-    expect(SEAT_PRICE.timesheet_hr).toEqual({ INR: 199, USD: 2.79, GBP: 2.59 });
-    expect(bundleForPortals(['hr', 'timesheet'])).toBe('timesheet_hr');
-  });
-
-  it('includes HR in the Complete suite but not the Manufacturing suite', () => {
-    expect(planOf('complete_users')?.portals).toContain('hr');
+  it('offers HR with Timesheet as its own plan', () => {
+    expect(bundleForPortals(['hr', 'timesheet'])).toBe('hr_timesheet');
     expect(planOf('factory_users')?.portals).not.toContain('hr');
-  });
-
-  it('keeps HR free on the older fixed-size plans', () => {
-    expect(planOf('factory_growth')?.portals).toContain('hr');
   });
 
   it('picks the matching pair for the portals a company uses, not a bigger suite', () => {
     expect(bundleFor(['sales', 'quality'])).toBe('sales_quality');
     expect(bundleFor(['timesheet', 'production'])).toBe('timesheet_production');
     expect(bundleFor(['sales', 'procurement', 'production', 'quality'])).toBe('factory');
-    expect(bundleFor(['timesheet', 'hr', 'sales'])).toBe('complete');
+    expect(bundleFor(['timesheet', 'hr'])).toBe('hr_timesheet');
   });
 
   it('names the suite after the company type', () => {

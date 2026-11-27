@@ -19,7 +19,7 @@ export type Bundle =
   | 'factory'
   | 'complete'
   | 'hr'
-  | 'timesheet_hr'
+  | 'hr_timesheet'
   | 'timesheet_production'
   | 'timesheet_quality'
   | 'purchase_production'
@@ -53,7 +53,7 @@ export const USD_RATE = 90;
  *  - single: one portal (pick which);
  *  - pair:   any two of the five work portals (pick which two);
  *  - suite:  the company-type suite (Manufacturing or Production) or the Complete suite;
- *  - people: Timesheet + HR together;
+ *  - people: HR + Timesheet together;
  *  - legacy: no longer offered; kept so companies already on it keep their plan.
  */
 export type BundleGroup = 'single' | 'pair' | 'suite' | 'people' | 'legacy';
@@ -64,7 +64,7 @@ export const BUNDLES: { id: Bundle; name: string; portals: string[]; desc: strin
   { id: 'sales', name: 'Sales', portals: ['sales'], group: 'single', desc: 'Enquiries, costing, quotations, orders and collections' },
   { id: 'production', name: 'Production', portals: ['production'], group: 'single', desc: 'Work orders, trade forms, drawings and daily shop-floor reports' },
   { id: 'quality', name: 'Quality (QC)', portals: ['quality'], group: 'single', desc: 'Incoming and final inspections, NCRs and QC approval' },
-  { id: 'hr', name: 'HR', portals: ['hr'], group: 'single', desc: 'Employee records, leave approval and attendance' },
+  { id: 'hr', name: 'HR', portals: ['hr'], group: 'single', desc: 'Employee records, leave requests and approvals, leave balances and monthly attendance' },
   { id: 'both', name: 'Timesheet + Purchase', portals: ['timesheet', 'procurement'], group: 'pair', desc: 'Site hours and buying in one login' },
   { id: 'timesheet_sales', name: 'Timesheet + Sales', portals: ['timesheet', 'sales'], group: 'pair', desc: 'Win the work and track the hours on it' },
   { id: 'timesheet_production', name: 'Timesheet + Production', portals: ['timesheet', 'production'], group: 'pair', desc: 'Work orders and the hours booked to them' },
@@ -86,11 +86,11 @@ export const BUNDLES: { id: Bundle; name: string; portals: string[]; desc: strin
   {
     id: 'complete',
     name: 'Complete suite',
-    portals: ['timesheet', 'hr', 'sales', 'procurement', 'production', 'quality'],
+    portals: ['timesheet', 'sales', 'procurement', 'production', 'quality'],
     group: 'suite',
-    desc: 'Every portal: the four job portals plus Timesheet and HR',
+    desc: 'All five work portals: the four job portals plus Timesheet',
   },
-  { id: 'timesheet_hr', name: 'Timesheet + HR', portals: ['timesheet', 'hr'], group: 'people', desc: 'Hours, roster and overtime with leave and attendance' },
+  { id: 'hr_timesheet', name: 'HR + Timesheet', portals: ['timesheet', 'hr'], group: 'people', desc: 'Hours, roster and overtime, with leave and attendance' },
   { id: 'all', name: 'Timesheet + Purchase + Sales', portals: ['timesheet', 'procurement', 'sales'], group: 'legacy', desc: 'One login, one GM dashboard' },
 ];
 /** Each portal's own bundle, for "you save" against buying them separately. */
@@ -157,6 +157,9 @@ const MONTHLY_INR: Partial<Record<Bundle, Record<TierId, number>>> = {
   production_quality: { starter: 2599, growth: 5999, business: 13499 },
   factory: { starter: 3999, growth: 9499, business: 21999 },
   complete: { starter: 4499, growth: 10499, business: 24499 },
+  // Older fixed sizes are no longer sold; HR has them only so every bundle has a price.
+  hr: { starter: 1599, growth: 3999, business: 9299 },
+  hr_timesheet: { starter: 2399, growth: 5999, business: 13999 },
 };
 
 /** Monthly price in the client's currency: rupees, or dollars at USD_RATE rounded up. */
@@ -178,11 +181,6 @@ export const CYCLES: { id: Cycle; label: string; months: number; discount: numbe
  * plan change. A new portal goes here until it gets bundles and prices above.
  */
 export const UNPRICED_PORTALS: string[] = [];
-/**
- * HR was free with every plan until it got its own price. The older fixed-size plans keep it free.
- * Per-user plans bought before then keep HR switched on until the company changes plan.
- */
-const LEGACY_FREE_PORTALS = ['hr'];
 
 /** Limits while on the free trial: every portal, Growth team size. */
 export const TRIAL_LIMITS = { users: 40, portals: [...PRICED_PORTALS, ...UNPRICED_PORTALS] };
@@ -198,7 +196,7 @@ export function planOf(id: string) {
   const [b, t] = [id.slice(0, cut), id.slice(cut + 1)];
   const bundle = bundleOf(b);
   if (!bundle) return undefined;
-  const portals = [...new Set([...bundle.portals, ...UNPRICED_PORTALS, ...(t === 'users' ? [] : LEGACY_FREE_PORTALS)])];
+  const portals = [...bundle.portals, ...UNPRICED_PORTALS];
   // Per-user plans have no people limit: the bill follows the number of people.
   if (t === 'users') return { id: id as PlanId, bundle: bundle.id, tier: 'users' as PlanTier, name: bundle.name, users: Number.POSITIVE_INFINITY, portals, perUser: true };
   const tier = tierOf(t);
@@ -270,9 +268,8 @@ export const SEAT_PRICE: Record<Bundle, Record<Currency, number>> = {
   all: { INR: 749, USD: 12.99, GBP: 10.99 },
   factory: { INR: 999, USD: 19.99, GBP: 16.99 },
   complete: { INR: 1149, USD: 21.99, GBP: 18.99 },
-  // HR on its own, and with Timesheet (the people plan).
-  hr: { INR: 99, USD: 1.49, GBP: 1.29 },
-  timesheet_hr: { INR: 199, USD: 2.79, GBP: 2.59 },
+  hr: { INR: 199, USD: 2.99, GBP: 2.49 },
+  hr_timesheet: { INR: 299, USD: 3.99, GBP: 3.49 },
   // Any two portals: about 15% to 25% less than buying them one by one.
   timesheet_production: { INR: 549, USD: 9.49, GBP: 8.49 },
   timesheet_quality: { INR: 349, USD: 5.99, GBP: 4.99 },

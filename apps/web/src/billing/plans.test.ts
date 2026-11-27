@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUNDLES, CURRENCIES, MIN_SEATS, SEAT_PRICE, billableSeats, extraSeatsQuote, money, planOf, priceFor, seatQuote, seatSavingPct } from './plans';
+import { BUNDLES, CURRENCIES, bundleFor, MIN_SEATS, SEAT_PRICE, billableSeats, extraSeatsQuote, money, planOf, priceFor, seatQuote, seatSavingPct } from './plans';
 
 describe('per-user pricing', () => {
   it('prices every bundle in every currency', () => {
@@ -16,6 +16,13 @@ describe('per-user pricing', () => {
     expect(planOf('hr_users')?.portals).toEqual(['hr']);
     expect(planOf('hr_timesheet_users')?.portals).toEqual(['timesheet', 'hr']);
     expect(seatSavingPct('hr_timesheet', 'INR')).toBe(14);
+  });
+
+  it('has one plan with all six portals, picked when a company uses them all', () => {
+    expect(SEAT_PRICE.complete_hr).toEqual({ INR: 1399, USD: 24.99, GBP: 21.99 });
+    expect(planOf('complete_hr_users')?.portals.sort()).toEqual(['hr', 'procurement', 'production', 'quality', 'sales', 'timesheet']);
+    expect(bundleFor(['timesheet', 'procurement', 'sales', 'production', 'quality', 'hr'])).toBe('complete_hr');
+    expect(bundleFor(['timesheet', 'hr'])).toBe('hr_timesheet');
   });
 
   it('bills at least 5 people', () => {

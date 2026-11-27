@@ -253,6 +253,13 @@
       "when": 1796700000000,
       "tag": "0035_company_industry",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1796800000000,
+      "tag": "0036_hr",
+      "breakpoints": true
     }
   ]
 }

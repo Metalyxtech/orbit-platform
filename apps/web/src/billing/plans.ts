@@ -124,7 +124,7 @@ export const CYCLES: { id: Cycle; label: string; months: number; discount: numbe
  * Portals not priced in any plan yet: included with every plan and the trial, never paused by a
  * plan change. A new portal goes here until it gets bundles and prices above.
  */
-export const UNPRICED_PORTALS: string[] = [];
+export const UNPRICED_PORTALS: string[] = ['hr'];
 
 /** Limits while on the free trial: every portal, Growth team size. */
 export const TRIAL_LIMITS = { users: 40, portals: [...PRICED_PORTALS, ...UNPRICED_PORTALS] };

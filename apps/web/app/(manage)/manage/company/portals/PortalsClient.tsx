@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Button, Chip, useToast } from '@orbit/ui';
 import { cancelCompanyPortalAction, requestCompanyPortalAction } from '../actions';
 
-type Portal = { id: string; name: string; roles: string[]; pages: string[]; state: 'on' | 'requested' | 'none' };
+type Portal = { id: string; name: string; detail: string | null; roles: string[]; pages: string[]; state: 'on' | 'requested' | 'none' };
 
 export function PortalsClient({ portals }: { portals: Portal[] }) {
   const router = useRouter();
@@ -23,6 +23,7 @@ export function PortalsClient({ portals }: { portals: Portal[] }) {
             <h2 style={{ margin: 0 }}>{p.name}</h2>
             <Chip tone={p.state === 'on' ? 'ok' : p.state === 'requested' ? 'warn' : 'grey'}>{p.state === 'on' ? 'In use' : p.state === 'requested' ? 'Waiting for SteelConnect360' : 'Not added'}</Chip>
           </div>
+          {p.detail && <p style={{ fontSize: 13, margin: '8px 0 0' }}>{p.detail}</p>}
           <p className="muted" style={{ fontSize: 12, margin: '8px 0 4px' }}>
             Pages: {p.pages.join(', ')}
           </p>

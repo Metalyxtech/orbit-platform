@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { TRIAL_DAYS } from '@/billing/plans';
 import { INDUSTRIES, isIndustry } from '@orbit/core';
-import { portalsForIndustry } from '@/industry-portals';
+import { PORTAL_DETAIL, portalsForIndustry } from '@/industry-portals';
 import { createCompanyAction } from '../../billing-actions';
 import { requireSuperAdminPage } from '../../data';
 import { TIMEZONES } from '../../new-company';
@@ -131,9 +131,14 @@ export default async function NewCompany({ searchParams }: { searchParams: Promi
             <fieldset className="o-field" style={{ border: 0, padding: 0, margin: '0 0 12px' }}>
               <legend style={{ marginBottom: 4 }}>Portals switched on</legend>
               {portals.map((p) => (
-                <label key={p.id} className="o-row" style={{ gap: 8, fontSize: 13, color: 'var(--ink)' }}>
-                  <input type="checkbox" name="portals" value={p.id} defaultChecked />
-                  {p.name}
+                <label key={p.id} className="o-row" style={{ gap: 8, fontSize: 13, color: 'var(--ink)', alignItems: 'flex-start' }}>
+                  <input type="checkbox" name="portals" value={p.id} defaultChecked style={{ marginTop: 3 }} />
+                  <span>
+                    <strong>{p.name}</strong>
+                    <span className="faint" style={{ display: 'block', fontSize: 12 }}>
+                      {PORTAL_DETAIL[industry][p.id]}
+                    </span>
+                  </span>
                 </label>
               ))}
               <label className="o-row" style={{ gap: 8, fontSize: 13, color: 'var(--ink)', marginTop: 6 }}>

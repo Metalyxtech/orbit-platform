@@ -170,7 +170,7 @@ function RosterStrip({ e }: { e: WeekEditor }) {
       <div className="ts-roster-strip">
         {view.days.map((d, i) => {
           const p = view.plan[i];
-          const label = p.holiday ? p.holiday : p.kind === 'shift' ? p.shiftName : p.kind === 'off' ? 'Day off' : p.kind === 'leave' ? 'Leave' : d.weeklyOff ? 'Weekly off' : 'Not rostered';
+          const label = p.holiday ? p.holiday : p.kind === 'shift' ? p.shiftName : p.kind === 'off' ? 'Day off' : p.kind === 'leave' ? (p.shiftName ?? 'Leave') : d.weeklyOff ? 'Weekly off' : 'Not rostered';
           const time = p.kind === 'shift' && p.start ? `${p.start}-${p.end}` : '';
           return (
             <div key={d.date} className={`ts-roster-day${p.kind === 'shift' ? '' : ' off'}${totals.overDays[i] ? ' over' : ''}`} style={p.kind === 'shift' && p.color ? { borderTopColor: p.color } : undefined}>

@@ -14,3 +14,4 @@ export * from './control';
 export * from './teams';
 export * from './roster';
 export * from './industry';
+export * from './hr';

@@ -13,6 +13,9 @@ import { queue as productionQueue } from '@orbit/portal-production/server';
 import { qualityManifest } from '@orbit/portal-quality/manifest';
 import { qualityRoutes } from '@orbit/portal-quality/routes';
 import { queue as qualityQueue } from '@orbit/portal-quality/server';
+import { hrManifest } from '@orbit/portal-hr/manifest';
+import { hrRoutes } from '@orbit/portal-hr/routes';
+import { leave as hrLeave } from '@orbit/portal-hr/server';
 import { salesManifest } from '@orbit/portal-sales/manifest';
 import './quality-bridge';
 import { salesRoutes } from '@orbit/portal-sales/routes';
@@ -101,6 +104,19 @@ export const portalModules: Record<string, PortalModule> = {
     routes: qualityRoutes,
     queueCount: (tx, ctx) => qualityQueue.countMyQueue(tx, ctx),
     inboxItems: async (tx, ctx) => (await qualityQueue.myQueue(tx, ctx)).map((i) => ({ ...i, id: `qa:${i.id}`, portal: 'Quality' })),
+  },
+  hr: {
+    manifest: hrManifest,
+    routes: hrRoutes,
+    queueCount: (tx, ctx) => hrLeave.countQueue(tx, ctx),
+    inboxItems: async (tx, ctx) =>
+      (await tx.transaction((sp) => hrLeave.leaveQueue(sp, ctx)).catch(() => [])).map((r) => ({
+        id: `hr:${r.id}`,
+        portal: 'HR',
+        title: `Leave request: ${r.name}`,
+        detail: `${r.type}, ${r.days} ${r.days === 1 ? 'day' : 'days'} from ${r.from}`,
+        href: '/hr/leave',
+      })),
   },
   // Custom portals: one per custom customer, each in its own folder (portals/custom-*).
   'custom-1': { manifest: custom1Manifest, routes: custom1Routes },

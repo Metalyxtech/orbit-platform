@@ -58,8 +58,8 @@ export function RosterClient({ view }: { view: RosterView }) {
     void run(() => setRosterCellsAction({ cells }), (d) => `${d.changed} ${d.changed === 1 ? 'day' : 'days'} updated. Publish the week when you are ready.`);
   }
 
-  const cellText = (c: RosterView['people'][number]['cells'][number]) => {
-    if (!c) return { title: '+', sub: '' };
+  const cellText = (c: RosterView['people'][number]['cells'][number], leave?: string | null) => {
+    if (!c) return leave ? { title: leave, sub: 'Leave (HR)' } : { title: '+', sub: '' };
     if (c.kind === 'shift') {
       const s = shiftOf(c.shiftId);
       return { title: s?.name ?? 'Shift', sub: s ? `${s.startTime}-${s.endTime}` : '' };
@@ -134,9 +134,9 @@ export function RosterClient({ view }: { view: RosterView }) {
                         {p.title && <div className="faint">{p.title}</div>}
                       </td>
                       {p.cells.map((c, i) => {
-                        const t = cellText(c);
+                        const t = cellText(c, p.leave[i]);
                         const s = c?.kind === 'shift' ? shiftOf(c.shiftId) : undefined;
-                        const cls = ['ts-cell', c ? 'set' : '', c && c.kind !== 'shift' ? 'off' : '', c && !c.published ? 'draft' : '', view.days[i].holiday ? 'holiday' : ''].filter(Boolean).join(' ');
+                        const cls = ['ts-cell', c || p.leave[i] ? 'set' : '', (c && c.kind !== 'shift') || (!c && p.leave[i]) ? 'off' : '', c && !c.published ? 'draft' : '', view.days[i].holiday ? 'holiday' : ''].filter(Boolean).join(' ');
                         return (
                           <td key={i}>
                             <button

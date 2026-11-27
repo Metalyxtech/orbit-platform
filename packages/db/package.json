@@ -13,7 +13,8 @@
     "migrate": "tsx scripts/migrate.ts",
     "seed": "tsx scripts/seed.ts",
     "roles": "tsx scripts/create-roles.ts",
-    "check-rls": "tsx scripts/check-rls.ts"
+    "check-rls": "tsx scripts/check-rls.ts",
+    "loadtest": "tsx scripts/loadtest.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "1.2.0",
@@ -22,9 +23,9 @@
   },
   "devDependencies": {
     "@types/node": "22.20.5",
+    "@types/pg": "8.23.1",
     "drizzle-kit": "0.31.11",
     "tsx": "4.23.15",
-    "typescript": "5.9.3",
-    "@types/pg": "8.23.1"
+    "typescript": "5.9.3"
   }
 }

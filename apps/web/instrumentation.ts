@@ -4,6 +4,9 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     const { registerQualityHandlers } = await import('./src/quality-bridge');
     registerQualityHandlers();
+    // Sales invoices and Purchase bills reach the company's accounts software (Zoho, QuickBooks, Xero, Tally).
+    const { registerAccountingBridge } = await import('./src/accounting/bridge');
+    registerAccountingBridge();
     // Changes are refused once a company's subscription period has ended.
     const { registerSubscriptionGate } = await import('./src/billing/gate');
     registerSubscriptionGate();

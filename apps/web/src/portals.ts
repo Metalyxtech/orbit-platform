@@ -18,6 +18,7 @@ import { hrRoutes } from '@orbit/portal-hr/routes';
 import { leave as hrLeave } from '@orbit/portal-hr/server';
 import { salesManifest } from '@orbit/portal-sales/manifest';
 import './quality-bridge';
+import './accounting/bridge';
 import { salesRoutes } from '@orbit/portal-sales/routes';
 import { queue as salesQueue } from '@orbit/portal-sales/server';
 import { timesheetManifest } from '@orbit/portal-timesheet/manifest';

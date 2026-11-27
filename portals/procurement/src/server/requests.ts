@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { audit, type ActionContext, type SessionContext } from '@orbit/core';
 import { latestInspection, qualityOn, requestInspection, type QualityDecision } from '@orbit/core/quality';
 import { notifySupply } from '@orbit/core/supply';
+import { accountingReady } from '@orbit/core/accounting';
 import { assertNotHeld, processThread } from '@orbit/core/holds';
 import { procEvents, procItems, procLines, procMoves, procQuotes, procReceipts, procRequests, procSuppliers, type Tx } from '@orbit/db';
 import { OPEN_STAGES, originOf, RECEIVED_AT, roleLabel, stageLabel, type ProcConfig, type ProcRole, type ReceivedAt, type Stage } from '../config';
@@ -713,8 +714,10 @@ export async function matchInvoice(tx: Tx, ctx: ActionContext, raw: z.input<type
   const expected = expectedInvoice(cfg, lines, await awardedRates(tx, r, lines), receivedQty(lines.length, all));
   const pct = variancePct(input.amount, expected);
   if (!withinTolerance(cfg, pct) && !input.override) throw new Error(`Invoice is ${pct.toFixed(1)}% off the expected ${moneyText(cfg, expected)}. Tick "approve the difference" to accept it.`);
-  await tx.update(procRequests).set({ invoice: { no: input.no, amount: input.amount, expected, variancePct: pct, override: input.override && !withinTolerance(cfg, pct) } }).where(eq(procRequests.id, r.id));
+  await tx.update(procRequests).set({ invoice: { no: input.no, amount: input.amount, date: today(ctx), expected, variancePct: pct, override: input.override && !withinTolerance(cfg, pct) } }).where(eq(procRequests.id, r.id));
   await log(tx, ctx, r, withinTolerance(cfg, pct) ? `Invoice ${input.no} matched to PO and receipt` : `Invoice ${input.no} approved with ${pct.toFixed(1)}% difference`);
+  // Sent to the company's accounts software as a bill when it chose automatic sending.
+  accountingReady(ctx, 'purchase_bill', r.id);
   return { stage: await advance(tx, ctx, cfg, r) };
 }
 

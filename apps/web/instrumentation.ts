@@ -7,5 +7,8 @@ export async function register() {
     // Changes are refused once a company's subscription period has ended.
     const { registerSubscriptionGate } = await import('./src/billing/gate');
     registerSubscriptionGate();
+    // Portal actions are refused for people who may not open that portal (they can be called directly).
+    const { registerPortalAccessGate } = await import('./src/portal-gate');
+    registerPortalAccessGate();
   }
 }

@@ -10,6 +10,14 @@ describe('per-user pricing', () => {
     expect(SEAT_PRICE.timesheet).toEqual({ INR: 149, USD: 1.99, GBP: 1.99 });
   });
 
+  it('prices HR alone and with Timesheet', () => {
+    expect(SEAT_PRICE.hr).toEqual({ INR: 199, USD: 2.99, GBP: 2.49 });
+    expect(SEAT_PRICE.hr_timesheet).toEqual({ INR: 299, USD: 3.99, GBP: 3.49 });
+    expect(planOf('hr_users')?.portals).toEqual(['hr']);
+    expect(planOf('hr_timesheet_users')?.portals).toEqual(['timesheet', 'hr']);
+    expect(seatSavingPct('hr_timesheet', 'INR')).toBe(14);
+  });
+
   it('bills at least 5 people', () => {
     expect(seatQuote('timesheet', 2, 'monthly', 'INR').total).toBe(149 * MIN_SEATS);
     expect(billableSeats(1)).toBe(MIN_SEATS);

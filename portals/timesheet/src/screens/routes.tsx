@@ -1,11 +1,14 @@
 import type { ReactNode } from 'react';
 import { query } from '@orbit/core/next';
 import { DataTable, EmptyState, HBarChart, KpiStrip, StatusChip, TopBar } from '@orbit/ui';
-import { admin, approvals, covers, forms, reports, week } from '../server';
+import { admin, approvals, covers, forms, reports, roster, week } from '../server';
 import { ApprovalsClient } from './ApprovalsClient';
 import { HistoryClient } from './HistoryClient';
 import { FormsClient } from './FormsClient';
 import { MyWeekClient } from './MyWeekClient';
+import { OvertimeClient } from './OvertimeClient';
+import { RosterClient } from './RosterClient';
+import { ShiftsClient } from './ShiftsClient';
 import { ProjectsClient, ReportFilters, SettingsClient, UsersClient, WorkflowClient } from './AdminClients';
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -446,6 +449,36 @@ const Settings: Screen = async () => {
   );
 };
 
+const Roster: Screen = async ({ searchParams }) => {
+  const view = await query((tx, ctx) => roster.getRoster(tx, ctx, { weekStart: one(searchParams.week) }));
+  return <RosterClient key={view.weekStart} view={view} />;
+};
+
+/** Everyone asks for overtime here; managers also decide requests and see the month for payroll. */
+const Overtime: Screen = async ({ searchParams }) => {
+  const data = await query(async (tx, ctx) => {
+    const manager = ctx.role !== 'employee';
+    return {
+      mine: await roster.myOtRequests(tx, ctx),
+      queue: manager && ctx.role !== 'management' ? await roster.otQueue(tx, ctx) : null,
+      report: manager ? await roster.otReport(tx, ctx, { month: one(searchParams.month) }) : null,
+      projects: (await week.getWeek(tx, ctx, {})).options.projects,
+      today: new Date().toLocaleDateString('en-CA', { timeZone: ctx.timezone }),
+    };
+  });
+  return <OvertimeClient {...data} />;
+};
+
+const Shifts: Screen = async ({ searchParams }) => {
+  const year = Number(one(searchParams.year)) || new Date().getFullYear();
+  const data = await query(async (tx, ctx) => ({
+    shifts: await roster.listShifts(tx, ctx, true),
+    holidays: await roster.listHolidays(tx, ctx, year),
+    rates: await roster.otRates(tx, ctx.companyId),
+  }));
+  return <ShiftsClient key={year} {...data} year={year} />;
+};
+
 /** Path (after /timesheet) -> screen. Keys match manifest.nav paths. */
 export const timesheetRoutes: Record<string, Screen> = {
   dashboard: Dashboard,
@@ -453,7 +486,10 @@ export const timesheetRoutes: Record<string, Screen> = {
   history: History,
   approvals: Approvals,
   team: Team,
+  roster: Roster,
+  overtime: Overtime,
   reports: Reports,
+  'admin/roster': Shifts,
   'admin/users': Users,
   'admin/projects': Projects,
   'admin/workflow': Workflow,

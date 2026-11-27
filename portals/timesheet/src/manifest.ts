@@ -20,6 +20,7 @@ export const timesheetManifest: PortalManifest = {
     { path: 'dashboard', label: 'Dashboard', section: 'main', roles: ['supervisor', 'project_manager', 'company_admin', 'management'] },
     { path: '', label: 'My week', section: 'main', menu: 'My timesheets' },
     { path: 'history', label: 'My history', section: 'main', menu: 'My timesheets' },
+    { path: 'overtime', label: 'Overtime', section: 'main', menu: 'My timesheets' },
     {
       path: 'approvals',
       label: 'Approvals',
@@ -29,12 +30,14 @@ export const timesheetManifest: PortalManifest = {
       menu: 'Team',
     },
     { path: 'team', label: 'Team overview', section: 'main', menu: 'Team', roles: ['supervisor', 'project_manager', 'company_admin', 'management'] },
+    { path: 'roster', label: 'Roster', section: 'main', menu: 'Team', roles: ['supervisor', 'project_manager', 'company_admin', 'management'] },
     { path: 'reports', label: 'Reports', section: 'main', menu: 'Team', roles: ['project_manager', 'company_admin', 'management'] },
     { path: 'admin/users', label: 'Users', section: 'admin', roles: ['company_admin'] },
     { path: 'admin/workflow', label: 'Approval workflow', section: 'admin', roles: ['company_admin'] },
     { path: 'admin/forms', label: 'Timesheet forms', section: 'admin', roles: ['company_admin'] },
     { path: 'admin/projects', label: 'Projects and cost codes', section: 'admin', roles: ['company_admin'] },
     { path: 'admin/settings', label: 'Timesheet settings', section: 'admin', roles: ['company_admin'] },
+    { path: 'admin/roster', label: 'Shifts and holidays', section: 'admin', roles: ['company_admin'] },
   ],
   settingsSchema: {
     groups: [

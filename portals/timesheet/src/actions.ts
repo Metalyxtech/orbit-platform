@@ -6,7 +6,7 @@ import { runPortalAction } from '@orbit/core/next';
 /** Every action here needs access to this portal (checked again server-side: actions can be called directly). */
 const PORTAL = 'timesheet';
 import type { GridRow } from './calc';
-import { admin, approvals, covers, forms, reports, week } from './server';
+import { admin, approvals, covers, forms, reports, roster, week } from './server';
 
 export async function saveEntriesAction(input: Parameters<typeof week.saveEntries>[2]) {
   return runPortalAction(PORTAL, (tx, ctx) => week.saveEntries(tx, ctx, input));
@@ -14,7 +14,7 @@ export async function saveEntriesAction(input: Parameters<typeof week.saveEntrie
 export async function copyLastWeekAction(input: { weekStart: string }) {
   return runPortalAction(PORTAL, (tx, ctx) => week.copyLastWeek(tx, ctx, input));
 }
-export async function previewRouteAction(input: { rows: GridRow[] }) {
+export async function previewRouteAction(input: { rows: GridRow[]; weekStart?: string }) {
   return runPortalAction(PORTAL, (tx, ctx) => week.previewRoute(tx, ctx, input));
 }
 export async function submitAction(input: { timesheetId: string; note?: string | null }) {
@@ -71,4 +71,39 @@ export async function setFormChoiceAction(input: { role: string; formId: string 
 
 export async function saveAdminCoversAction(input: Parameters<typeof covers.saveAdminCovers>[2]) {
   return runPortalAction(PORTAL, (tx, ctx) => covers.saveAdminCovers(tx, ctx, input));
+}
+
+// Roster and overtime.
+export async function setRosterCellsAction(input: Parameters<typeof roster.setCells>[2]) {
+  return runPortalAction(PORTAL, (tx, ctx) => roster.setCells(tx, ctx, input));
+}
+export async function copyRosterWeekAction(input: { weekStart: string }) {
+  return runPortalAction(PORTAL, (tx, ctx) => roster.copyRosterWeek(tx, ctx, input));
+}
+export async function publishRosterAction(input: { weekStart: string }) {
+  return runPortalAction(PORTAL, (tx, ctx) => roster.publishWeek(tx, ctx, input));
+}
+export async function requestOtAction(input: Parameters<typeof roster.requestOt>[2]) {
+  return runPortalAction(PORTAL, (tx, ctx) => roster.requestOt(tx, ctx, input));
+}
+export async function cancelOtAction(input: { id: string }) {
+  return runPortalAction(PORTAL, (tx, ctx) => roster.cancelOt(tx, ctx, input));
+}
+export async function decideOtAction(input: { id: string; approve: boolean; note?: string }) {
+  return runPortalAction(PORTAL, (tx, ctx) => roster.decideOt(tx, ctx, input));
+}
+export async function saveShiftAction(input: Parameters<typeof roster.saveShift>[2]) {
+  return runPortalAction(PORTAL, (tx, ctx) => roster.saveShift(tx, ctx, input));
+}
+export async function setShiftActiveAction(input: { id: string; active: boolean }) {
+  return runPortalAction(PORTAL, (tx, ctx) => roster.setShiftActive(tx, ctx, input));
+}
+export async function saveHolidayAction(input: { date: string; name: string }) {
+  return runPortalAction(PORTAL, (tx, ctx) => roster.saveHoliday(tx, ctx, input));
+}
+export async function deleteHolidayAction(input: { id: string }) {
+  return runPortalAction(PORTAL, (tx, ctx) => roster.deleteHoliday(tx, ctx, input));
+}
+export async function saveOtRatesAction(input: { workday: number; offday: number }) {
+  return runPortalAction(PORTAL, (tx, ctx) => roster.saveOtRates(tx, ctx, input));
 }

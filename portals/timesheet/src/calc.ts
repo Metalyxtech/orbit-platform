@@ -39,19 +39,85 @@ export interface WeekTotals {
   /** Days above the standard day (hatched hivis fill). */
   overDays: boolean[];
   rowTotals: number[];
+  /** Overtime on working days, and on days off (weekly off, rostered off or leave, public holiday). */
+  workdayOt: number;
+  offdayOt: number;
+  /** Overtime planned in the roster or asked for and approved in advance, and the rest. */
+  preApprovedOt: number;
+  notPreApprovedOt: number;
+  /** True when the week is planned in the roster: overtime is counted per day against each shift. */
+  rostered: boolean;
 }
+
+/** One day's plan from the roster and the holiday calendar (index 0 = first day of the week). */
+export interface DayPlan {
+  /** shift | off | leave; null when nothing is rostered for the day. */
+  kind: 'shift' | 'off' | 'leave' | null;
+  shiftName?: string;
+  start?: string;
+  end?: string;
+  /** Paid hours of the shift. */
+  hours?: number;
+  color?: string;
+  /** Public holiday name. */
+  holiday?: string;
+  /** Overtime planned in the roster plus overtime requests approved for the day. */
+  preApproved: number;
+}
+
+/** Overtime rates for payroll (multipliers). */
+export interface OtRates {
+  workday: number;
+  offday: number;
+}
+export const defaultOtRates: OtRates = { workday: 1.5, offday: 2 };
+
+/** Overtime hours weighted by the rates, as payroll counts them. */
+export const weightedOt = (t: Pick<WeekTotals, 'workdayOt' | 'offdayOt'>, rates: OtRates) => round2(t.workdayOt * rates.workday + t.offdayOt * rates.offday);
 
 /** Two decimals, avoiding float drift (acceptance test T1: match server to 0.01 h). */
 export const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
-export function computeTotals(rows: GridRow[], rules: TsRules): WeekTotals {
+/**
+ * Totals for a week. Without a roster, overtime is counted as before (week total or each day above
+ * the standard); hours on a public holiday are all overtime. With a roster, each day is counted
+ * against its shift: hours beyond the shift are overtime, and every hour on a day off is overtime.
+ */
+export function computeTotals(rows: GridRow[], rules: TsRules, plan?: DayPlan[], weekStart?: string): WeekTotals {
   const dayTotals = Array.from({ length: 7 }, (_, d) => round2(rows.reduce((s, r) => s + (r.hours[d] ?? 0), 0)));
   const rowTotals = rows.map((r) => round2(r.hours.reduce((s, h) => s + (h ?? 0), 0)));
   const total = round2(dayTotals.reduce((s, h) => s + h, 0));
-  const overtime =
-    rules.overtimeMode === 'week'
-      ? round2(Math.max(0, total - rules.stdWeekHours))
-      : round2(dayTotals.reduce((s, h) => s + Math.max(0, h - rules.stdDayHours), 0));
+  const days = Array.from({ length: 7 }, (_, d) => plan?.[d]);
+  const weeklyOff = (d: number) => (weekStart ? rules.weeklyOff.includes(dayOfWeek(addDays(weekStart, d))) : false);
+  const holiday = (d: number) => !!days[d]?.holiday;
+  const rostered = days.some((p) => p?.kind);
+
+  let otByDay: number[] | null = null; // per day, when it can be known
+  let overtime: number;
+  let offdayOt: number;
+  if (rostered) {
+    // Each day against its plan; a day with nothing rostered keeps the standard day.
+    const expected = days.map((p, d) => (holiday(d) ? 0 : p?.kind === 'shift' ? (p.hours ?? 0) : p?.kind ? 0 : weeklyOff(d) ? 0 : rules.stdDayHours));
+    otByDay = dayTotals.map((h, d) => round2(Math.max(0, h - expected[d])));
+    overtime = round2(otByDay.reduce((s, h) => s + h, 0));
+    offdayOt = round2(otByDay.reduce((s, h, d) => s + (expected[d] === 0 ? h : 0), 0));
+  } else {
+    // As before, but hours on a public holiday are all overtime and leave the week count.
+    const holidayHours = round2(dayTotals.reduce((s, h, d) => s + (holiday(d) ? h : 0), 0));
+    const rest = dayTotals.map((h, d) => (holiday(d) ? 0 : h));
+    const restTotal = round2(rest.reduce((s, h) => s + h, 0));
+    const restOt =
+      rules.overtimeMode === 'week'
+        ? round2(Math.max(0, restTotal - rules.stdWeekHours))
+        : round2(rest.reduce((s, h) => s + Math.max(0, h - rules.stdDayHours), 0));
+    if (rules.overtimeMode === 'day') otByDay = dayTotals.map((h, d) => (holiday(d) ? h : round2(Math.max(0, h - rules.stdDayHours))));
+    overtime = round2(holidayHours + restOt);
+    const weeklyOffHours = round2(rest.reduce((s, h, d) => s + (weeklyOff(d) ? h : 0), 0));
+    offdayOt = round2(holidayHours + Math.min(restOt, weeklyOffHours));
+  }
+  // Pre-approved: per day where overtime is known per day, else across the week.
+  const pre = days.map((p) => p?.preApproved ?? 0);
+  const preApprovedOt = round2(otByDay ? otByDay.reduce((s, h, d) => s + Math.min(h, pre[d]), 0) : Math.min(overtime, pre.reduce((s, h) => s + h, 0)));
   return {
     dayTotals,
     rowTotals,
@@ -59,7 +125,12 @@ export function computeTotals(rows: GridRow[], rules: TsRules): WeekTotals {
     overtime,
     regular: round2(total - overtime),
     maxDay: Math.max(0, ...dayTotals),
-    overDays: dayTotals.map((h) => h > rules.stdDayHours),
+    overDays: otByDay ? otByDay.map((h) => h > 0) : dayTotals.map((h) => h > rules.stdDayHours),
+    workdayOt: round2(overtime - offdayOt),
+    offdayOt,
+    preApprovedOt,
+    notPreApprovedOt: round2(overtime - preApprovedOt),
+    rostered,
   };
 }
 
@@ -82,9 +153,9 @@ export interface SubmitIssue {
   day?: number;
 }
 
-export function validateSubmit(rows: GridRow[], rules: TsRules, note: string | null | undefined, weekStartDate: string) {
+export function validateSubmit(rows: GridRow[], rules: TsRules, note: string | null | undefined, weekStartDate: string, plan?: DayPlan[]) {
   const issues: SubmitIssue[] = [];
-  const totals = computeTotals(rows, rules);
+  const totals = computeTotals(rows, rules, plan, weekStartDate);
 
   for (const r of rows) {
     if (!r.projectId || (rules.requireCostCode && !r.costCodeId)) {
@@ -99,10 +170,18 @@ export function validateSubmit(rows: GridRow[], rules: TsRules, note: string | n
   }
   const dates = weekDates(weekStartDate);
   dates.forEach((date, d) => {
-    if (rules.weeklyOff.includes(dayOfWeek(date)) && totals.dayTotals[d] > 0) {
-      issues.push({ level: 'warning', message: `Hours entered on the weekly off (${dayName(date)}).`, day: d });
-    }
+    const p = plan?.[d];
+    if (totals.dayTotals[d] <= 0) return;
+    if (p?.holiday) issues.push({ level: 'warning', message: `Hours entered on a public holiday (${dayName(date)}, ${p.holiday}): they count as overtime.`, day: d });
+    else if (p?.kind === 'off' || p?.kind === 'leave') issues.push({ level: 'warning', message: `Hours entered on a rostered ${p.kind === 'leave' ? 'leave' : 'day off'} (${dayName(date)}): they count as overtime.`, day: d });
+    else if (!p?.kind && rules.weeklyOff.includes(dayOfWeek(date))) issues.push({ level: 'warning', message: `Hours entered on the weekly off (${dayName(date)}).`, day: d });
   });
+  // Overtime not planned in the roster or approved in advance is allowed, but needs a reason
+  // (only for weeks that use the roster or advance approval, so other companies work as before).
+  const usesPlanning = totals.rostered || !!plan?.some((p) => p.preApproved > 0);
+  if (usesPlanning && totals.notPreApprovedOt > 0 && !note?.trim()) {
+    issues.push({ level: 'error', message: messages.otReasonRequired(totals.notPreApprovedOt) });
+  }
   if (totals.total === 0) issues.push({ level: 'error', message: 'Enter some hours before you submit.' });
 
   // One message per kind is enough for the banner.

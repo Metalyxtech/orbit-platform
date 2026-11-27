@@ -66,6 +66,7 @@ export function WeekFrame({ e, actions, children }: { e: WeekEditor; actions?: R
               </div>
               {!readOnly && actions && <div className="o-row">{actions}</div>}
             </div>
+            <RosterStrip e={e} />
             {children}
           </div>
 
@@ -80,10 +81,31 @@ export function WeekFrame({ e, actions, children }: { e: WeekEditor; actions?: R
                 <span>Overtime</span>
                 <span className={totals.overtime > 0 ? 'hivis' : ''}>{totals.overtime.toFixed(1)}</span>
               </div>
+              {totals.overtime > 0 && (totals.rostered || view.plan.some((p) => p.preApproved > 0)) && (
+                <>
+                  <div className="o-kv" style={{ fontSize: 12 }}>
+                    <span className="muted">Pre-approved</span>
+                    <span>{totals.preApprovedOt.toFixed(1)}</span>
+                  </div>
+                  <div className="o-kv" style={{ fontSize: 12 }}>
+                    <span className="muted">Not approved in advance</span>
+                    <span className={totals.notPreApprovedOt > 0 ? 'hivis' : ''}>{totals.notPreApprovedOt.toFixed(1)}</span>
+                  </div>
+                </>
+              )}
+              {totals.offdayOt > 0 && (
+                <div className="o-kv" style={{ fontSize: 12 }}>
+                  <span className="muted">Of which on days off</span>
+                  <span>{totals.offdayOt.toFixed(1)}</span>
+                </div>
+              )}
               <div className="o-kv total">
                 <span>Total</span>
                 <span>{totals.total.toFixed(1)}</span>
               </div>
+              <p className="faint" style={{ fontSize: 12, margin: '8px 0 0' }}>
+                Working late or on a day off? <Link href="/timesheet/overtime">Ask for overtime in advance</Link>.
+              </p>
             </div>
 
             <div className="o-panel">
@@ -135,5 +157,33 @@ export function WeekFrame({ e, actions, children }: { e: WeekEditor; actions?: R
         )}
       </ConfirmDialog>
     </>
+  );
+}
+
+/** The person's published roster for the week, above the hours. Shown once anything is planned. */
+function RosterStrip({ e }: { e: WeekEditor }) {
+  const { view, totals } = e;
+  if (!view.plan.some((p) => p.kind || p.holiday)) return null;
+  return (
+    <div className="o-panel" aria-label="Your roster this week">
+      <h2 style={{ margin: '0 0 8px', fontSize: 14 }}>Your roster</h2>
+      <div className="ts-roster-strip">
+        {view.days.map((d, i) => {
+          const p = view.plan[i];
+          const label = p.holiday ? p.holiday : p.kind === 'shift' ? p.shiftName : p.kind === 'off' ? 'Day off' : p.kind === 'leave' ? 'Leave' : d.weeklyOff ? 'Weekly off' : 'Not rostered';
+          const time = p.kind === 'shift' && p.start ? `${p.start}-${p.end}` : '';
+          return (
+            <div key={d.date} className={`ts-roster-day${p.kind === 'shift' ? '' : ' off'}${totals.overDays[i] ? ' over' : ''}`} style={p.kind === 'shift' && p.color ? { borderTopColor: p.color } : undefined}>
+              <span className="faint">
+                {d.name} {d.label}
+              </span>
+              <strong>{label}</strong>
+              {time && <span className="muted">{time}</span>}
+              {p.preApproved > 0 && <span className="o-chip ok">+{p.preApproved} h OT approved</span>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

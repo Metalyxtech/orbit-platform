@@ -48,7 +48,7 @@ export function useWeekEditor(view: WeekView, draftKey: string) {
   noteRef.current = note;
 
   const readOnly = view.readOnly;
-  const totals = useMemo(() => computeTotals(rows, view.rules), [rows, view.rules]);
+  const totals = useMemo(() => computeTotals(rows, view.rules, view.plan, view.weekStart), [rows, view.rules, view.plan, view.weekStart]);
   const options = view.options;
 
   const label = useCallback(
@@ -159,6 +159,7 @@ export function useWeekEditor(view: WeekView, draftKey: string) {
       try {
         const res = await previewRouteAction({
           rows: rowsRef.current.map(({ key, projectId, costCodeId, hours }) => ({ key, projectId, costCodeId, hours })),
+          weekStart: view.weekStart,
         });
         if (res.ok) setRoute(res.data);
       } catch {

@@ -24,10 +24,13 @@ import {
   weekNumber,
   weekRangeLabel,
   weekStartFor,
+  type DayPlan,
   type GridRow,
+  type OtRates,
   type SubmitIssue,
   type TsRules,
 } from '../calc';
+import { otRates, weekPlan } from './roster';
 import { messages } from '../messages';
 import {
   approverResolver,
@@ -54,6 +57,9 @@ export interface WeekView {
   days: { date: string; name: string; label: string; weeklyOff: boolean }[];
   deadlineLabel: string;
   rules: TsRules;
+  /** Published roster, holidays and pre-approved overtime for each day of the week. */
+  plan: DayPlan[];
+  otRates: OtRates;
   timesheet: {
     id: string | null;
     status: TimesheetStatus;
@@ -118,8 +124,8 @@ async function options(tx: Tx, ctx: SessionContext) {
   return { projects: p, costCodes: c };
 }
 
-function contextFor(ctx: SessionContext, rows: GridRow[], rules: TsRules) {
-  const t = computeTotals(rows, rules);
+function contextFor(ctx: SessionContext, rows: GridRow[], rules: TsRules, plan?: DayPlan[], weekStart?: string) {
+  const t = computeTotals(rows, rules, plan, weekStart);
   return {
     submitterId: ctx.membershipId,
     totalHours: t.total,
@@ -142,8 +148,9 @@ export async function getWeek(tx: Tx, ctx: SessionContext, input: { weekStart?: 
   const pById = new Map(opts.projects.map((p) => [p.id, p]));
   const cById = new Map(opts.costCodes.map((c) => [c.id, c]));
 
+  const plan = await weekPlan(tx, ctx.companyId, ctx.membershipId, weekStart);
   const def = await boundWorkflow(tx, ctx.companyId);
-  const route = await simulate(def.definition, contextFor(ctx, rows, rules), approverResolver(tx, ctx.companyId));
+  const route = await simulate(def.definition, contextFor(ctx, rows, rules, plan, weekStart), approverResolver(tx, ctx.companyId));
   const deadline = deadlineDate(weekStart, settings.deadlineDow);
   const status = sheet?.status ?? 'draft';
 
@@ -159,6 +166,8 @@ export async function getWeek(tx: Tx, ctx: SessionContext, input: { weekStart?: 
     })),
     deadlineLabel: `${dayName(deadline)} ${dayLabel(deadline)}, ${settings.deadlineTime}`,
     rules,
+    plan,
+    otRates: await otRates(tx, ctx.companyId),
     timesheet: {
       id: sheet?.id ?? null,
       status,
@@ -180,10 +189,12 @@ export async function getWeek(tx: Tx, ctx: SessionContext, input: { weekStart?: 
 }
 
 /** 'Who will approve' refresh (debounced 1.5 s on the client): workflow.simulate on unsaved totals. */
-export async function previewRoute(tx: Tx, ctx: SessionContext, input: { rows: GridRow[] }) {
+export async function previewRoute(tx: Tx, ctx: SessionContext, input: { rows: GridRow[]; weekStart?: string }) {
   const rules = rulesFrom(await loadSettings(tx, ctx.companyId));
+  const weekStart = input.weekStart && dateSchema.safeParse(input.weekStart).success ? weekStartFor(input.weekStart, rules.weekStart) : undefined;
+  const plan = weekStart ? await weekPlan(tx, ctx.companyId, ctx.membershipId, weekStart) : undefined;
   const def = await boundWorkflow(tx, ctx.companyId);
-  return simulate(def.definition, contextFor(ctx, input.rows, rules), approverResolver(tx, ctx.companyId));
+  return simulate(def.definition, contextFor(ctx, input.rows, rules, plan, weekStart), approverResolver(tx, ctx.companyId));
 }
 
 const rowSchema = z.object({
@@ -215,7 +226,7 @@ async function getOrCreateEditable(tx: Tx, ctx: SessionContext, weekStart: strin
 
 async function recalc(tx: Tx, ctx: SessionContext, sheetId: string, weekStart: string, rules: TsRules) {
   const rows = await loadRows(tx, sheetId, weekStart);
-  const t = computeTotals(rows, rules);
+  const t = computeTotals(rows, rules, await weekPlan(tx, ctx.companyId, ctx.membershipId, weekStart), weekStart);
   await tx
     .update(timesheets)
     .set({ totalHours: t.total, overtimeHours: t.overtime, maxDayHours: t.maxDay })
@@ -297,10 +308,11 @@ export async function submit(tx: Tx, ctx: ActionContext, input: { timesheetId: s
 
   const note = input.note !== undefined ? input.note : sheet.note;
   const rows = await loadRows(tx, sheet.id, sheet.weekStart);
-  const issues = validateSubmit(rows, rules, note, sheet.weekStart);
+  const plan = await weekPlan(tx, ctx.companyId, ctx.membershipId, sheet.weekStart);
+  const issues = validateSubmit(rows, rules, note, sheet.weekStart, plan);
   if (issues.some((i) => i.level === 'error')) return { ok: false, issues };
 
-  const totals = computeTotals(rows, rules);
+  const totals = computeTotals(rows, rules, plan, sheet.weekStart);
   await tx
     .update(timesheets)
     .set({
@@ -322,7 +334,7 @@ export async function submit(tx: Tx, ctx: ActionContext, input: { timesheetId: s
       subjectId: sheet.id,
       definitionId: def.id,
       definition: def.definition,
-      context: contextFor(ctx, rows, rules),
+      context: contextFor(ctx, rows, rules, plan, sheet.weekStart),
     },
     approverResolver(tx, ctx.companyId),
   );

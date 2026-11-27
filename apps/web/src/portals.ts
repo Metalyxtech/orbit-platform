@@ -19,7 +19,7 @@ import { salesRoutes } from '@orbit/portal-sales/routes';
 import { queue as salesQueue } from '@orbit/portal-sales/server';
 import { timesheetManifest } from '@orbit/portal-timesheet/manifest';
 import { timesheetRoutes } from '@orbit/portal-timesheet/routes';
-import { approvals } from '@orbit/portal-timesheet/server';
+import { approvals, roster } from '@orbit/portal-timesheet/server';
 
 type Screen = (props: { searchParams: Record<string, string | string[] | undefined> }) => Promise<ReactNode>;
 
@@ -51,14 +51,24 @@ export const portalModules: Record<string, PortalModule> = {
     inboxItems: async (tx, ctx) =>
       ctx.role === 'employee'
         ? []
-        : (await approvals.mine(tx, ctx)).map((r) => ({
-            id: `ts:${r.taskId}`,
-            portal: 'Timesheet',
-            title: `Approve ${r.employee}, week ${r.week}`,
-            detail: `${r.total.toFixed(1)} h · ${r.stepLabel}${r.overdue ? ' · overdue' : ''}`,
-            href: '/timesheet/approvals',
-            urgent: r.overdue,
-          })),
+        : [
+            ...(await approvals.mine(tx, ctx)).map((r) => ({
+              id: `ts:${r.taskId}`,
+              portal: 'Timesheet',
+              title: `Approve ${r.employee}, week ${r.week}`,
+              detail: `${r.total.toFixed(1)} h · ${r.stepLabel}${r.overdue ? ' · overdue' : ''}`,
+              href: '/timesheet/approvals',
+              urgent: r.overdue,
+            })),
+            // Overtime asked for in advance by people this person rosters.
+            ...(ctx.role === 'management' ? [] : await tx.transaction((sp) => roster.otQueue(sp, ctx)).catch(() => [])).map((r) => ({
+              id: `ot:${r.id}`,
+              portal: 'Timesheet',
+              title: `Overtime request: ${r.name}`,
+              detail: `${r.hours} h on ${r.dateLabel}`,
+              href: '/timesheet/overtime',
+            })),
+          ],
   },
   procurement: {
     manifest: procurementManifest,

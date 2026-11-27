@@ -4,6 +4,8 @@ export const messages = {
   missingCostCode: 'Choose a cost code for every row, or remove the empty row.',
   noteRequired: (hours: number) =>
     `Add a note for days over ${hours.toFixed(1)} h, so your approver knows why.`,
+  otReasonRequired: (hours: number) =>
+    `${hours.toFixed(2)} h of overtime was not planned in the roster or approved in advance. Add a note explaining why.`,
   submitted: (week: number, approver: string) => `Week ${week} submitted. ${approver} will review it.`,
   returnedBanner: (by: string, comment: string) =>
     `Returned by ${by}: ${comment}. Fix the week and submit it again.`,

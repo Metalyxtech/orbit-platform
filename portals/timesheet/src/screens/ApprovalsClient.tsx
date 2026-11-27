@@ -188,6 +188,18 @@ export function ApprovalsClient({ rows }: { rows: InboxRow[] }) {
                   </span>
                   <span>{detail.total.toFixed(1)}</span>
                 </div>
+                {detail.overtime > 0 && (
+                  <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>
+                    Overtime: {detail.overtimeSplit.preApproved.toFixed(1)} h pre-approved
+                    {detail.overtimeSplit.notPreApproved > 0 && (
+                      <>
+                        , <span className="hivis">{detail.overtimeSplit.notPreApproved.toFixed(1)} h not approved in advance</span>
+                      </>
+                    )}
+                    {detail.overtimeSplit.offday > 0 && <>, {detail.overtimeSplit.offday.toFixed(1)} h on days off</>}
+                    {detail.overtimeSplit.rostered ? ' (counted against the roster).' : '.'}
+                  </p>
+                )}
               </div>
               {detail.note && (
                 <div className="o-banner">

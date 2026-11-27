@@ -13,8 +13,9 @@ import {
   workflowTasks,
   type Tx,
 } from '@orbit/db';
-import { weekNumber, weekRangeLabel } from '../calc';
-import { approverResolver, email, emit, loadDefinition, loadSettings, membersById } from './shared';
+import { computeTotals, weekDates, weekNumber, weekRangeLabel, type GridRow } from '../calc';
+import { weekPlan } from './roster';
+import { approverResolver, email, emit, loadDefinition, loadSettings, membersById, rulesFrom } from './shared';
 
 export interface InboxRow {
   taskId: string;
@@ -128,6 +129,17 @@ export async function taskDetail(tx: Tx, ctx: SessionContext, input: { taskId: s
   const position = Math.max(1, applies.indexOf(task.stepIndex) + 1);
   const next = def.steps[applies[applies.indexOf(task.stepIndex) + 1]];
   const overDay = sheet.maxDayHours > settings.noteOverHours;
+  // Overtime split against the roster and advance approvals, so the approver sees what was planned.
+  const entries = await tx.select().from(timesheetEntries).where(eq(timesheetEntries.timesheetId, sheet.id));
+  const dates = weekDates(sheet.weekStart);
+  const grid = new Map<string, GridRow>();
+  for (const e of entries) {
+    const row = grid.get(e.rowKey) ?? { key: e.rowKey, projectId: e.projectId, costCodeId: e.costCodeId, hours: Array(7).fill(0) };
+    const d = dates.indexOf(e.workDate);
+    if (d >= 0) row.hours[d] = e.hours;
+    grid.set(e.rowKey, row);
+  }
+  const ot = computeTotals([...grid.values()], rulesFrom(settings), await weekPlan(tx, ctx.companyId, sheet.membershipId, sheet.weekStart), sheet.weekStart);
 
   return {
     taskId: task.id,
@@ -140,6 +152,7 @@ export async function taskDetail(tx: Tx, ctx: SessionContext, input: { taskId: s
     lines: lines.map((l) => ({ label: `${l.project ?? 'No project'}, ${l.costCode ?? ''} ${l.costName ?? ''}`.trim(), hours: l.hours })),
     total: sheet.totalHours,
     overtime: sheet.overtimeHours,
+    overtimeSplit: { preApproved: ot.preApprovedOt, notPreApproved: ot.notPreApprovedOt, workday: ot.workdayOt, offday: ot.offdayOt, rostered: ot.rostered },
     note: sheet.note,
     warning: next
       ? `${overDay ? `A day has ${sheet.maxDayHours} h. ` : ''}After you approve, the week goes to ${next.name}${next.reason ? ` (${next.reason.toLowerCase()})` : ''}.`

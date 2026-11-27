@@ -7,6 +7,7 @@ import {
   validateSubmit,
   weekNumber,
   weekStartFor,
+  weightedOt,
   type GridRow,
 } from '../src/calc';
 import { messages } from '../src/messages';
@@ -75,4 +76,54 @@ describe('dates', () => {
   });
   it('numbers the week like the screens', () => expect(weekNumber('2026-10-25')).toBe(44));
   it('puts the deadline on the Sunday after the week', () => expect(deadlineDate('2026-10-25', 0)).toBe('2026-11-01'));
+});
+
+describe('roster and overtime', () => {
+  // Week from Sun 25 Oct 2026; Friday (index 5) is the weekly off in the default rules.
+  const week = '2026-10-25';
+  const day = (hours: number[]): GridRow[] => [{ key: 'a', projectId: 'p1', costCodeId: 'c1', hours }];
+  const shift = (h: number, preApproved = 0) => ({ kind: 'shift' as const, shiftName: 'Day', hours: h, preApproved });
+  const off = { kind: 'off' as const, preApproved: 0 };
+  const none = { kind: null, preApproved: 0 };
+
+  it('keeps the old count when nothing is rostered', () => {
+    const t = computeTotals(day([10, 10, 10, 10, 10, 0, 0]), defaultRules, Array(7).fill(none), week);
+    expect(t.rostered).toBe(false);
+    expect(t.overtime).toBe(2); // 50 h in the week, standard 48
+  });
+
+  it('counts each rostered day against its shift, and all hours on a day off', () => {
+    const plan = [shift(8), shift(8), shift(8), shift(8), shift(8), off, off];
+    const t = computeTotals(day([9, 8, 8, 8, 8, 4, 0]), defaultRules, plan, week);
+    expect(t.rostered).toBe(true);
+    expect(t.overtime).toBe(5); // 1 h on Sunday + 4 h on the rostered day off
+    expect(t.workdayOt).toBe(1);
+    expect(t.offdayOt).toBe(4);
+  });
+
+  it('splits overtime into pre-approved and not', () => {
+    const plan = [shift(8, 2), shift(8), shift(8), shift(8), shift(8), off, off];
+    const t = computeTotals(day([11, 9, 8, 8, 8, 0, 0]), defaultRules, plan, week);
+    expect(t.overtime).toBe(4);
+    expect(t.preApprovedOt).toBe(2); // only Sunday's 2 h were planned
+    expect(t.notPreApprovedOt).toBe(2);
+  });
+
+  it('makes hours on a public holiday overtime, with or without a roster', () => {
+    const plan = Array(7).fill(none).map((p, d) => (d === 1 ? { ...p, holiday: 'Diwali' } : p));
+    const t = computeTotals(day([8, 6, 8, 8, 8, 0, 8]), defaultRules, plan, week);
+    expect(t.offdayOt).toBe(6);
+    expect(t.overtime).toBe(6); // the other 40 h stay under the 48 h week
+  });
+
+  it('asks for a reason only for overtime that was not planned or approved', () => {
+    const plan = [shift(8, 1), shift(8), shift(8), shift(8), shift(8), off, off];
+    const issues = validateSubmit(day([9, 9, 8, 8, 8, 0, 0]), defaultRules, '', week, plan);
+    expect(issues.some((i) => i.message === messages.otReasonRequired(1))).toBe(true);
+    expect(validateSubmit(day([9, 8, 8, 8, 8, 0, 0]), defaultRules, '', week, plan).some((i) => i.message.includes('not planned'))).toBe(false);
+  });
+
+  it('weights overtime by the payroll rates', () => {
+    expect(weightedOt({ workdayOt: 2, offdayOt: 4 }, { workday: 1.5, offday: 2 })).toBe(11);
+  });
 });

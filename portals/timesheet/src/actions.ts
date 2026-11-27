@@ -1,71 +1,74 @@
 'use server';
 // Server actions for the Timesheet portal. Every call runs as the signed-in member inside one
 // RLS-scoped transaction (runAction), then publishes outbox events and timers after commit.
-import { runAction } from '@orbit/core/next';
+import { runPortalAction } from '@orbit/core/next';
+
+/** Every action here needs access to this portal (checked again server-side: actions can be called directly). */
+const PORTAL = 'timesheet';
 import type { GridRow } from './calc';
 import { admin, approvals, covers, forms, reports, week } from './server';
 
 export async function saveEntriesAction(input: Parameters<typeof week.saveEntries>[2]) {
-  return runAction((tx, ctx) => week.saveEntries(tx, ctx, input));
+  return runPortalAction(PORTAL, (tx, ctx) => week.saveEntries(tx, ctx, input));
 }
 export async function copyLastWeekAction(input: { weekStart: string }) {
-  return runAction((tx, ctx) => week.copyLastWeek(tx, ctx, input));
+  return runPortalAction(PORTAL, (tx, ctx) => week.copyLastWeek(tx, ctx, input));
 }
 export async function previewRouteAction(input: { rows: GridRow[] }) {
-  return runAction((tx, ctx) => week.previewRoute(tx, ctx, input));
+  return runPortalAction(PORTAL, (tx, ctx) => week.previewRoute(tx, ctx, input));
 }
 export async function submitAction(input: { timesheetId: string; note?: string | null }) {
-  return runAction((tx, ctx) => week.submit(tx, ctx, input));
+  return runPortalAction(PORTAL, (tx, ctx) => week.submit(tx, ctx, input));
 }
 export async function requestCorrectionAction(input: { timesheetId: string; reason: string }) {
-  return runAction((tx, ctx) => week.requestCorrection(tx, ctx, input));
+  return runPortalAction(PORTAL, (tx, ctx) => week.requestCorrection(tx, ctx, input));
 }
 export async function taskDetailAction(input: { taskId: string }) {
-  return runAction((tx, ctx) => approvals.taskDetail(tx, ctx, input));
+  return runPortalAction(PORTAL, (tx, ctx) => approvals.taskDetail(tx, ctx, input));
 }
 export async function decideAction(input: Parameters<typeof approvals.decide>[2]) {
-  return runAction((tx, ctx) => approvals.decide(tx, ctx, input));
+  return runPortalAction(PORTAL, (tx, ctx) => approvals.decide(tx, ctx, input));
 }
 export async function decideBulkAction(input: { taskIds: string[] }) {
-  return runAction((tx, ctx) => approvals.decideBulk(tx, ctx, input));
+  return runPortalAction(PORTAL, (tx, ctx) => approvals.decideBulk(tx, ctx, input));
 }
 export async function exportAction(input: { month: string; projectIds?: string[] }) {
-  return runAction((tx, ctx) => reports.requestExport(tx, ctx, input));
+  return runPortalAction(PORTAL, (tx, ctx) => reports.requestExport(tx, ctx, input));
 }
 export async function updateSettingsAction(input: unknown) {
-  return runAction((tx, ctx) => admin.updateSettings(tx, ctx, input));
+  return runPortalAction(PORTAL, (tx, ctx) => admin.updateSettings(tx, ctx, input));
 }
 export async function importCsvAction(input: { csv: string; dryRun: boolean }) {
-  return runAction((tx, ctx) => admin.importCsv(tx, ctx, input));
+  return runPortalAction(PORTAL, (tx, ctx) => admin.importCsv(tx, ctx, input));
 }
 export async function updateMemberAction(input: Parameters<typeof admin.updateMember>[2]) {
-  return runAction((tx, ctx) => admin.updateMember(tx, ctx, input));
+  return runPortalAction(PORTAL, (tx, ctx) => admin.updateMember(tx, ctx, input));
 }
 export async function decideCorrectionAction(input: { id: string; approve: boolean }) {
-  return runAction((tx, ctx) => admin.decideCorrection(tx, ctx, input));
+  return runPortalAction(PORTAL, (tx, ctx) => admin.decideCorrection(tx, ctx, input));
 }
 export async function setWorkflowAction(input: { workflowDefinitionId: string }) {
-  return runAction((tx, ctx) => admin.setWorkflow(tx, ctx, input));
+  return runPortalAction(PORTAL, (tx, ctx) => admin.setWorkflow(tx, ctx, input));
 }
 export async function addMemberAction(input: Parameters<typeof admin.addMember>[2]) {
-  return runAction((tx, ctx) => admin.addMember(tx, ctx, input));
+  return runPortalAction(PORTAL, (tx, ctx) => admin.addMember(tx, ctx, input));
 }
 export async function saveProjectAction(input: Parameters<typeof admin.saveProject>[2]) {
-  return runAction((tx, ctx) => admin.saveProject(tx, ctx, input));
+  return runPortalAction(PORTAL, (tx, ctx) => admin.saveProject(tx, ctx, input));
 }
 export async function saveCostCodeAction(input: Parameters<typeof admin.saveCostCode>[2]) {
-  return runAction((tx, ctx) => admin.saveCostCode(tx, ctx, input));
+  return runPortalAction(PORTAL, (tx, ctx) => admin.saveCostCode(tx, ctx, input));
 }
 export async function saveCustomWorkflowAction(input: Parameters<typeof admin.saveCustomWorkflow>[2]) {
-  return runAction((tx, ctx) => admin.saveCustomWorkflow(tx, ctx, input));
+  return runPortalAction(PORTAL, (tx, ctx) => admin.saveCustomWorkflow(tx, ctx, input));
 }
 export async function changeMemberPortalAction(input: Parameters<typeof admin.changeMemberPortal>[2]) {
-  return runAction((tx, ctx) => admin.changeMemberPortal(tx, ctx, input));
+  return runPortalAction(PORTAL, (tx, ctx) => admin.changeMemberPortal(tx, ctx, input));
 }
 export async function setFormChoiceAction(input: { role: string; formId: string }) {
-  return runAction((tx, ctx) => forms.setFormChoice(tx, ctx, input));
+  return runPortalAction(PORTAL, (tx, ctx) => forms.setFormChoice(tx, ctx, input));
 }
 
 export async function saveAdminCoversAction(input: Parameters<typeof covers.saveAdminCovers>[2]) {
-  return runAction((tx, ctx) => covers.saveAdminCovers(tx, ctx, input));
+  return runPortalAction(PORTAL, (tx, ctx) => covers.saveAdminCovers(tx, ctx, input));
 }

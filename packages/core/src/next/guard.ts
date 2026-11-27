@@ -127,6 +127,31 @@ export function registerActionGate(gate: ActionGate) {
   gateBox[GATE] = gate;
 }
 
+type PortalGate = (tx: Tx, ctx: ActionContext, portal: string) => Promise<boolean>;
+const PORTAL_GATE = Symbol.for('orbit.action.portalGate');
+const portalGateBox = globalThis as unknown as Record<symbol, PortalGate | undefined>;
+
+/**
+ * Sets the check that decides whether this person may use a portal (switched on for the company and
+ * given to them). The app registers the same rule its portal pages use, so actions and pages agree.
+ */
+export function registerPortalGate(gate: PortalGate) {
+  portalGateBox[PORTAL_GATE] = gate;
+}
+
+/**
+ * A portal's server action: like runAction, but refused unless the person may use that portal.
+ * Server actions can be called directly (their ids are in the page JavaScript), so the portal pages'
+ * own access check is not enough on its own. Refuses when no gate is registered (fails closed).
+ */
+export async function runPortalAction<T>(portal: string, fn: (tx: Tx, ctx: ActionContext) => Promise<T>, opts: { always?: boolean } = {}) {
+  return runAction(async (tx, ctx) => {
+    const gate = portalGateBox[PORTAL_GATE];
+    if (!gate || !(await gate(tx, ctx, portal))) throw new Error('You do not have access to this portal. Ask your company admin.');
+    return fn(tx, ctx);
+  }, opts);
+}
+
 /**
  * Runs a server action as the signed-in member: one RLS-scoped transaction, then the
  * outbox publish and timers after commit. `always` skips the action gate (paying for a plan).

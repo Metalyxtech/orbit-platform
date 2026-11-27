@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Button, Chip, EmptyState, TopBar } from '@orbit/ui';
 import { fmtDate, fmtQty, OP_STATUS, pct, SHIFTS, type OpStatus } from '../config';
 import { reportOutputAction } from '../actions';
@@ -14,8 +14,8 @@ export function DailyReportClient({ wos }: { wos: FloorWo[] }) {
   const t0 = new Date().toISOString().slice(0, 10);
   const [day, setDay] = useState(t0);
   const [shift, setShift] = useState(SHIFTS[0]);
-  const [rows, setRows] = useState<Record<string, { qty: string; hours: string; workers: string; remarks: string }>>({});
-  const row = (id: string) => rows[id] ?? { qty: '', hours: '', workers: '', remarks: '' };
+  const [rows, setRows] = useState<Record<string, { qty: string; hours: string; workers: string; remarks: string; m: Record<string, string> }>>({});
+  const row = (id: string) => rows[id] ?? { qty: '', hours: '', workers: '', remarks: '', m: {} };
   const setRow = (id: string, patch: Partial<ReturnType<typeof row>>) => setRows({ ...rows, [id]: { ...row(id), ...patch } });
   const filled = Object.entries(rows).filter(([, r]) => Number(r.qty) > 0 || Number(r.hours) > 0);
 
@@ -23,7 +23,8 @@ export function DailyReportClient({ wos }: { wos: FloorWo[] }) {
     let ok = 0;
     for (const [opId, r] of filled) {
       const wo = wos.find((w) => w.ops.some((o) => o.id === opId))!;
-      const res = await run(() => reportOutputAction({ workOrderId: wo.id, operationId: opId, day, qty: Number(r.qty) || 0, hours: Number(r.hours) || 0, workers: Number(r.workers) || 0, shift, remarks: r.remarks }));
+      const measures = Object.fromEntries(Object.entries(r.m).filter(([, v]) => v !== ''));
+      const res = await run(() => reportOutputAction({ workOrderId: wo.id, operationId: opId, day, qty: Number(r.qty) || 0, hours: Number(r.hours) || 0, workers: Number(r.workers) || 0, shift, remarks: r.remarks, measures }));
       if (res) {
         ok++;
         setRows((x) => {
@@ -72,7 +73,7 @@ export function DailyReportClient({ wos }: { wos: FloorWo[] }) {
                   <tr>
                     <th>Operation</th>
                     <th>Progress</th>
-                    <th className="num">Qty today</th>
+                    <th className="num">{w.measures.length ? 'Good qty today' : 'Qty today'}</th>
                     <th className="num">Hours</th>
                     <th className="num">People</th>
                     <th>Remarks</th>
@@ -82,8 +83,10 @@ export function DailyReportClient({ wos }: { wos: FloorWo[] }) {
                   {w.ops.map((o) => {
                     const open = o.status === 'pending' || o.status === 'running';
                     const r = row(o.id);
+                    const entering = open && w.measures.length > 0 && (Number(r.qty) > 0 || Number(r.hours) > 0);
                     return (
-                      <tr key={o.id}>
+                      <Fragment key={o.id}>
+                      <tr>
                         <td>
                           {o.name} {!open && <Chip tone={OP_STATUS[o.status as OpStatus].tone}>{OP_STATUS[o.status as OpStatus].label}</Chip>}
                         </td>
@@ -111,6 +114,39 @@ export function DailyReportClient({ wos }: { wos: FloorWo[] }) {
                           </td>
                         )}
                       </tr>
+                      {entering && (
+                        <tr>
+                          <td colSpan={6} style={{ background: 'var(--paper)' }}>
+                            <div className="o-row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                              {w.measures.map((f) => (
+                                <label key={f.id} className="o-field" style={{ margin: 0, fontSize: 12, minWidth: 120 }}>
+                                  {f.label}
+                                  {f.unit ? ` (${f.unit})` : ''}
+                                  {f.options ? (
+                                    <select className="o-select" value={r.m[f.id] ?? ''} onChange={(e) => setRow(o.id, { m: { ...r.m, [f.id]: e.target.value } })}>
+                                      <option value="">-</option>
+                                      {f.options.map((x) => (
+                                        <option key={x}>{x}</option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <input
+                                      className="o-input"
+                                      type={f.type === 'number' ? 'number' : 'text'}
+                                      min={0}
+                                      step="any"
+                                      value={r.m[f.id] ?? ''}
+                                      maxLength={200}
+                                      onChange={(e) => setRow(o.id, { m: { ...r.m, [f.id]: e.target.value } })}
+                                    />
+                                  )}
+                                </label>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
                     );
                   })}
                 </tbody>

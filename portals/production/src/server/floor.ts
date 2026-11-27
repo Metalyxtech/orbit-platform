@@ -1,12 +1,12 @@
 import { and, asc, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { ActionContext, SessionContext } from '@orbit/core';
-import { prodOperations, prodReports, prodWorkOrders, type Tx } from '@orbit/db';
+import { prodOperations, prodReportMeasures, prodReports, prodWorkOrders, type Tx } from '@orbit/db';
 import { fmtQty } from '../config';
 import { tradeOf } from '../trades';
 import { drawingCounts } from './drawings';
 import { afterOpsChange, sendToQualityOrComplete } from './progress';
-import { hasRole, loadConfig, lockWo, logEvent, myRole, peopleById, requireRole, today } from './shared';
+import { hasRole, loadConfig, lockWo, logEvent, myRole, notReady, peopleById, requireRole, today } from './shared';
 import { hiddenIds } from './scope';
 
 // Shop floor: the supervisor's daily production report (output, hours, crew per operation)
@@ -21,7 +21,23 @@ const reportInput = z.object({
   workers: z.number().int().min(0).max(10000).default(0),
   shift: z.string().trim().max(40).optional(),
   remarks: z.string().trim().max(1000).optional(),
+  /** The trade's shop-floor measures (machine, shots, strokes, cycle time, rejects). */
+  measures: z.record(z.string().max(40), z.union([z.string().trim().max(200), z.number().min(0).max(1e9)])).optional(),
 });
+
+/** Keeps only the trade's own measures, with numbers for number fields; empty values are dropped. */
+function cleanMeasures(trade: string, raw: Record<string, string | number> | undefined) {
+  const out: Record<string, string | number> = {};
+  for (const f of tradeOf(trade).measures ?? []) {
+    const v = raw?.[f.id];
+    if (v === undefined || v === '') continue;
+    if (f.type === 'number') {
+      const n = Number(v);
+      if (Number.isFinite(n) && n >= 0) out[f.id] = n;
+    } else if (!f.options || f.options.includes(String(v))) out[f.id] = String(v).slice(0, 200);
+  }
+  return out;
+}
 
 /**
  * Records output for one operation on one day. An operation cannot get ahead of the one before it,
@@ -45,7 +61,17 @@ export async function reportOutput(tx: Tx, ctx: ActionContext, raw: z.input<type
   const newDone = op.doneQty + v.qty;
   if (newDone > max + 1e-9) throw new Error(`${op.name}: total would be ${fmtQty(newDone)} ${wo.unit}, more than the ${fmtQty(wo.qty)} ordered (+${cfg.overrunPct}%)`);
   if (i > 0 && newDone > ops[i - 1].doneQty + 1e-9) throw new Error(`${op.name} cannot be ahead of ${ops[i - 1].name} (${fmtQty(ops[i - 1].doneQty)} ${wo.unit} done)`);
-  await tx.insert(prodReports).values({ companyId: ctx.companyId, workOrderId: wo.id, operationId: op.id, day: v.day, qty: v.qty, hours: v.hours, workers: v.workers, shift: v.shift || null, remarks: v.remarks || null, byId: ctx.membershipId });
+  const [rep] = await tx
+    .insert(prodReports)
+    .values({ companyId: ctx.companyId, workOrderId: wo.id, operationId: op.id, day: v.day, qty: v.qty, hours: v.hours, workers: v.workers, shift: v.shift || null, remarks: v.remarks || null, byId: ctx.membershipId })
+    .returning({ id: prodReports.id });
+  const measures = cleanMeasures(wo.trade, v.measures);
+  if (Object.keys(measures).length) {
+    // Kept apart from the report itself; before migration 0035 the measures are simply not stored.
+    await tx.transaction((sp) => sp.insert(prodReportMeasures).values({ reportId: rep.id, companyId: ctx.companyId, measures })).catch((err) => {
+      if (!notReady(err) && !/prod_report_measures/.test(String(err))) throw err;
+    });
+  }
   const complete = newDone >= wo.qty - 1e-9;
   const status = complete ? 'done' : 'running';
   await tx.update(prodOperations).set({ doneQty: newDone, hours: op.hours + v.hours, status }).where(eq(prodOperations.id, op.id));
@@ -82,6 +108,8 @@ export async function floorOperations(tx: Tx, ctx: SessionContext) {
     number: w.number,
     title: w.title,
     trade: tradeOf(w.trade).name,
+    /** The trade's shop-floor measures, asked for with each report line. */
+    measures: tradeOf(w.trade).measures ?? [],
     qty: w.qty,
     unit: w.unit,
     due: w.due,

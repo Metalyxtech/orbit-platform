@@ -1,8 +1,9 @@
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { audit, type ActionContext, type SessionContext } from '@orbit/core';
+import { audit, companyIndustry, type ActionContext, type SessionContext } from '@orbit/core';
 import { companyPortals, type Tx } from '@orbit/db';
 import { assertWithinPlan } from '../billing/state';
+import { INDUSTRY_PORTALS } from '../industry-portals';
 import { portalModules } from '../portals';
 
 const requireAdmin = (ctx: SessionContext) => {
@@ -15,8 +16,10 @@ export type CompanyPortalState = 'on' | 'requested' | 'none';
 export async function companyPortalList(tx: Tx, ctx: SessionContext) {
   requireAdmin(ctx);
   const rows = await tx.select({ portal: companyPortals.portal, enabled: companyPortals.enabled }).from(companyPortals).where(eq(companyPortals.companyId, ctx.companyId));
-  // A custom portal is listed only once SteelConnect360 has switched it on for this company.
-  const shown = Object.values(portalModules).filter((m) => !m.manifest.custom || rows.some((r) => r.portal === m.manifest.id && r.enabled));
+  // The company type's own portals, plus any portal already switched on (a custom portal only once
+  // SteelConnect360 has switched it on).
+  const own = INDUSTRY_PORTALS[await companyIndustry(tx, ctx.companyId)];
+  const shown = Object.values(portalModules).filter((m) => rows.some((r) => r.portal === m.manifest.id && r.enabled) || (!m.manifest.custom && own.includes(m.manifest.id)));
   return shown.map((m) => {
     const row = rows.find((r) => r.portal === m.manifest.id);
     return {
@@ -35,6 +38,7 @@ const portalInput = z.object({ portal: z.string().refine((p) => !!portalModules[
 export async function requestCompanyPortal(tx: Tx, ctx: ActionContext, raw: { portal: string }) {
   requireAdmin(ctx);
   const { portal } = portalInput.parse(raw);
+  if (!INDUSTRY_PORTALS[await companyIndustry(tx, ctx.companyId)].includes(portal)) throw new Error('This portal is not available for your type of company');
   await assertWithinPlan(tx, ctx, 'portal', portal);
   await tx.insert(companyPortals).values({ companyId: ctx.companyId, portal, enabled: false }).onConflictDoNothing();
   await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'company_portal.request', entity: 'company_portals', entityId: ctx.companyId, data: { portal }, requestId: ctx.requestId });

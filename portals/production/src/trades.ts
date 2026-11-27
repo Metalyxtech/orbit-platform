@@ -1,6 +1,9 @@
 // Trade forms: for each trade, the work-order fields, the default operations (routing, with the
 // ones QC must inspect), the QC checklist per inspection and the final inspection checklist.
 // Pure data, safe in client components. Add a trade here; nothing else needs to change.
+// Each trade belongs to a company type: manufacturing (fabrication, piping, projects) or production
+// (machining, moulding and press tool shops). A company sees only its own type's trades.
+import type { Industry } from '@orbit/core';
 
 export type FieldType = 'text' | 'number' | 'select' | 'date';
 export interface TradeField {
@@ -32,6 +35,10 @@ export interface Trade {
   finalChecklist: string[];
   /** Typical materials, offered when building the bill of materials. */
   materials: string[];
+  /** Company types that use this trade (default: manufacturing). */
+  industries?: Industry[];
+  /** Extra measures the supervisor records in the daily production report (machine, shots, rejects). */
+  measures?: TradeField[];
 }
 
 const FINAL_COMMON = ['Quantity matches the work order', 'Identification / marking done', 'Documents and test certificates attached', 'Packing / protection for transport'];
@@ -232,10 +239,105 @@ export const TRADES: Trade[] = [
     finalChecklist: ['Protective film intact', ...FINAL_COMMON],
     materials: ['Aluminium profiles', 'Glass', 'Gaskets', 'Hardware', 'Silicone sealant', 'Screws'],
   },
+  // ---------------- Production companies: machining, moulding and press tool shops ----------------
+  {
+    id: 'prod_machining',
+    name: 'Machining (CNC / VMC / turning)',
+    detail: 'Batch production of turned and milled parts',
+    industries: ['production'],
+    unit: 'nos',
+    units: ['nos', 'sets', 'lot'],
+    fields: [
+      { id: 'part', label: 'Part number / revision', type: 'text', required: true },
+      { id: 'drawing', label: 'Drawing number', type: 'text', required: true },
+      { id: 'material', label: 'Material grade', type: 'select', options: ['EN8', 'EN19', 'EN24', 'EN31', 'MS', 'SS 304', 'SS 316', 'Aluminium 6061', 'Aluminium 6082', 'Brass', 'Cast iron'] },
+      { id: 'machine', label: 'Machine', type: 'select', options: ['CNC turning', 'VMC', 'HMC', 'Traub / sliding head', 'Conventional lathe', 'Grinding'] },
+      { id: 'program', label: 'CNC program number', type: 'text' },
+      { id: 'cycle', label: 'Planned cycle time', type: 'number', unit: 'sec' },
+      { id: 'setup', label: 'Planned setup time', type: 'number', unit: 'min' },
+      { id: 'tolerance', label: 'Critical tolerance', type: 'select', options: ['ISO 2768-m', 'ISO 2768-f', '±0.05 mm', '±0.02 mm', '±0.01 mm'] },
+      { id: 'surface', label: 'Surface finish (Ra)', type: 'text', help: 'e.g. Ra 0.8' },
+    ],
+    operations: [{ name: 'Material cutting' }, { name: 'Setup and first-off', qc: true }, { name: 'Turning' }, { name: 'Milling / VMC', qc: true }, { name: 'Deburring' }, { name: 'Final inspection', qc: true }],
+    checklist: ['First-off approved against drawing', 'Critical dimensions measured (CMM / height gauge)', 'Threads gauged (go / no-go)', 'Surface finish (Ra)', 'Burr-free edges'],
+    finalChecklist: ['PPAP / first-article report attached', 'Sample inspection as per AQL', 'Rust preventive applied', ...FINAL_COMMON],
+    materials: ['Round bar', 'Hex bar', 'Forgings / castings', 'Inserts and tools', 'Coolant'],
+    measures: [
+      { id: 'machine_no', label: 'Machine number', type: 'text' },
+      { id: 'cycle_sec', label: 'Actual cycle time', type: 'number', unit: 'sec' },
+      { id: 'setup_min', label: 'Setup time', type: 'number', unit: 'min' },
+      { id: 'rejected', label: 'Rejected', type: 'number', unit: 'nos' },
+      { id: 'rework', label: 'Sent for rework', type: 'number', unit: 'nos' },
+      { id: 'reason', label: 'Main rejection reason', type: 'select', options: ['None', 'Oversize / undersize', 'Thread NG', 'Surface finish', 'Tool wear', 'Material defect', 'Setting error'] },
+      { id: 'downtime_min', label: 'Machine downtime', type: 'number', unit: 'min' },
+    ],
+  },
+  {
+    id: 'moulding',
+    name: 'Moulding (injection / compression)',
+    detail: 'Plastic and rubber moulded parts',
+    industries: ['production'],
+    unit: 'nos',
+    units: ['nos', 'kg', 'lot'],
+    fields: [
+      { id: 'part', label: 'Part number / revision', type: 'text', required: true },
+      { id: 'mould', label: 'Mould number', type: 'text', required: true },
+      { id: 'cavities', label: 'Cavities', type: 'number' },
+      { id: 'material', label: 'Material', type: 'select', options: ['PP', 'ABS', 'HDPE', 'LDPE', 'PC', 'Nylon 6 / 66', 'POM (acetal)', 'PVC', 'Rubber (EPDM / NBR)', 'Other'] },
+      { id: 'colour', label: 'Colour / masterbatch', type: 'text' },
+      { id: 'machine', label: 'Moulding machine', type: 'text', help: 'e.g. IMM 150 T' },
+      { id: 'cycle', label: 'Planned cycle time', type: 'number', unit: 'sec' },
+      { id: 'weight', label: 'Part weight', type: 'number', unit: 'g' },
+    ],
+    operations: [{ name: 'Material drying' }, { name: 'Mould setting and first-off', qc: true }, { name: 'Moulding' }, { name: 'Degating / trimming' }, { name: 'Inspection and packing', qc: true }],
+    checklist: ['First-off approved against sample / drawing', 'Dimensions within tolerance', 'No short shot, flash or sink marks', 'Colour matches master sample', 'Part weight within limits'],
+    finalChecklist: ['Lot inspection as per AQL', 'Packing as per customer standard', ...FINAL_COMMON],
+    materials: ['Plastic granules', 'Masterbatch', 'Rubber compound', 'Inserts', 'Packing material'],
+    measures: [
+      { id: 'machine_no', label: 'Machine number', type: 'text' },
+      { id: 'shots', label: 'Shots', type: 'number' },
+      { id: 'cycle_sec', label: 'Actual cycle time', type: 'number', unit: 'sec' },
+      { id: 'rejected', label: 'Rejected', type: 'number', unit: 'nos' },
+      { id: 'reason', label: 'Main rejection reason', type: 'select', options: ['None', 'Short shot', 'Flash', 'Sink mark', 'Silver streaks', 'Burn mark', 'Colour variation', 'Warpage'] },
+      { id: 'material_kg', label: 'Material used', type: 'number', unit: 'kg' },
+      { id: 'downtime_min', label: 'Machine downtime', type: 'number', unit: 'min' },
+    ],
+  },
+  {
+    id: 'press_tool',
+    name: 'Press tool (stamping / sheet metal)',
+    detail: 'Blanked, pierced, formed and drawn parts',
+    industries: ['production'],
+    unit: 'nos',
+    units: ['nos', 'kg', 'lot'],
+    fields: [
+      { id: 'part', label: 'Part number / revision', type: 'text', required: true },
+      { id: 'tool', label: 'Tool / die number', type: 'text', required: true },
+      { id: 'material', label: 'Material', type: 'select', options: ['CRCA', 'HRPO', 'GI / GP', 'SS 304', 'Aluminium', 'Spring steel', 'Copper / brass'] },
+      { id: 'thickness', label: 'Sheet / coil thickness', type: 'number', unit: 'mm' },
+      { id: 'press', label: 'Press', type: 'text', help: 'e.g. 100 T power press' },
+      { id: 'tool_type', label: 'Tool type', type: 'select', options: ['Blanking', 'Piercing', 'Progressive', 'Compound', 'Forming / bending', 'Deep drawing'] },
+      { id: 'spm', label: 'Planned strokes per minute', type: 'number' },
+    ],
+    operations: [{ name: 'Sheet / coil cutting' }, { name: 'Tool setting and first-off', qc: true }, { name: 'Pressing' }, { name: 'Deburring / tumbling' }, { name: 'Inspection and packing', qc: true }],
+    checklist: ['First-off approved against drawing', 'Burr height within limit', 'Hole positions and sizes', 'Bend angles / flatness', 'No cracks or dents'],
+    finalChecklist: ['Lot inspection as per AQL', 'Rust preventive / plating as specified', ...FINAL_COMMON],
+    materials: ['Sheet', 'Coil', 'Strip', 'Lubricant / drawing oil', 'Packing material'],
+    measures: [
+      { id: 'press_no', label: 'Press number', type: 'text' },
+      { id: 'strokes', label: 'Strokes', type: 'number' },
+      { id: 'tool_hits', label: 'Tool hits since last sharpening', type: 'number' },
+      { id: 'rejected', label: 'Rejected', type: 'number', unit: 'nos' },
+      { id: 'reason', label: 'Main rejection reason', type: 'select', options: ['None', 'High burr', 'Crack', 'Dent / scratch', 'Dimension out', 'Wrinkle (drawing)', 'Material defect'] },
+      { id: 'scrap_kg', label: 'Scrap', type: 'number', unit: 'kg' },
+      { id: 'downtime_min', label: 'Press downtime', type: 'number', unit: 'min' },
+    ],
+  },
   {
     id: 'general',
     name: 'General manufacturing',
     detail: 'Any product: set your own fields and steps',
+    industries: ['manufacturing', 'production'],
     unit: 'nos',
     units: ['nos', 'sets', 'kg', 'MT', 'm', 'm²', 'lot'],
     fields: [
@@ -251,3 +353,6 @@ export const TRADES: Trade[] = [
 ];
 
 export const tradeOf = (id: string) => TRADES.find((t) => t.id === id) ?? TRADES[TRADES.length - 1];
+
+/** Trades a company of this type works with (manufacturing trades have no `industries`). */
+export const tradesFor = (industry: Industry) => TRADES.filter((t) => (t.industries ?? ['manufacturing']).includes(industry));

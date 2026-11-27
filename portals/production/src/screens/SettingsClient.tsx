@@ -13,7 +13,7 @@ type Draft = Record<string, { role: ProdRole; access: ProdPerson['access']; cove
 const coverRoles = PROD_ROLES.filter((r) => COVER_ROLES.includes(r.id));
 const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
 
-export function SettingsClient({ cfg, team }: { cfg: ProdConfig; team: ProdPerson[] }) {
+export function SettingsClient({ cfg, team, available }: { cfg: ProdConfig; team: ProdPerson[]; available: string[] }) {
   const { busy, run } = useRun();
   const saved = useMemo(() => ({ trades: cfg.trades, overrunPct: cfg.overrunPct, requireRelease: cfg.requireRelease, requireFinalQc: cfg.requireFinalQc }), [cfg]);
   const savedTeam = useMemo<Draft>(() => Object.fromEntries(team.map((p) => [p.membershipId, { role: p.prodRole, access: p.access, covers: p.covers }])), [team]);
@@ -47,7 +47,7 @@ export function SettingsClient({ cfg, team }: { cfg: ProdConfig; team: ProdPerso
           Only these show when planning a work order. None ticked = all trades.
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 6 }}>
-          {TRADES.map((tr) => (
+          {TRADES.filter((tr) => available.includes(tr.id)).map((tr) => (
             <label key={tr.id} className="o-row" style={{ gap: 8, fontSize: 13, cursor: 'pointer' }}>
               <input type="checkbox" checked={f.trades.includes(tr.id)} onChange={(e) => toggleTrade(tr.id, e.target.checked)} />
               {tr.name}

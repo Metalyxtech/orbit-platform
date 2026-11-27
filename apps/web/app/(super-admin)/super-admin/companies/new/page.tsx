@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { TRIAL_DAYS } from '@/billing/plans';
-import { standardPortals } from '@/portals';
+import { INDUSTRIES, isIndustry } from '@orbit/core';
+import { portalsForIndustry } from '@/industry-portals';
 import { createCompanyAction } from '../../billing-actions';
 import { requireSuperAdminPage } from '../../data';
 import { TIMEZONES } from '../../new-company';
@@ -8,10 +9,13 @@ import { TIMEZONES } from '../../new-company';
 export const dynamic = 'force-dynamic';
 
 /** Super Admin > Companies > Add company: set up a client who contacted SteelConnect360. */
-export default async function NewCompany({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export default async function NewCompany({ searchParams }: { searchParams: Promise<{ error?: string; type?: string }> }) {
   await requireSuperAdminPage();
-  const error = (await searchParams).error;
-  const portals = standardPortals().map((m) => m.manifest);
+  const sp = await searchParams;
+  const error = sp.error;
+  // The company type decides which portals (and later plans) it gets; chosen first.
+  const industry = isIndustry(sp.type) ? sp.type : 'manufacturing';
+  const portals = portalsForIndustry(industry).map((m) => m.manifest);
   return (
     <>
       <header className="o-top">
@@ -29,7 +33,23 @@ export default async function NewCompany({ searchParams }: { searchParams: Promi
             {error}
           </div>
         )}
+        <div className="o-panel">
+          <div className="o-panel-head">
+            <h2>Company type</h2>
+          </div>
+          <nav className="o-seg" aria-label="Company type">
+            {INDUSTRIES.map((i) => (
+              <Link key={i.id} href={`?type=${i.id}`} aria-current={industry === i.id ? 'page' : undefined} className={`o-btn small${industry === i.id ? ' primary' : ''}`}>
+                {i.name}
+              </Link>
+            ))}
+          </nav>
+          <p className="muted" style={{ fontSize: 12, margin: '8px 0 0' }}>
+            {INDUSTRIES.find((i) => i.id === industry)?.detail}. It decides the portals, forms and subscription plans the company sees.
+          </p>
+        </div>
         <form action={createCompanyAction} className="o-stack" style={{ gap: 16 }}>
+          <input type="hidden" name="industry" value={industry} />
           <div className="o-panel">
             <div className="o-panel-head">
               <h2>Company</h2>

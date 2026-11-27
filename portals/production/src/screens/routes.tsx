@@ -5,7 +5,7 @@ import { qualityOn } from '@orbit/core/quality';
 import { Chip, DataTable, EmptyState, KpiStrip, TopBar } from '@orbit/ui';
 import { fmtDate, fmtQty, roleLabel, type Priority } from '../config';
 import { TRADES } from '../trades';
-import { admin, dashboard, floor, loadConfig, myRole, NOT_READY, notReady, queue, store, workorders, type WoFilter } from '../server';
+import { admin, dashboard, floor, industryTrades, loadConfig, myRole, NOT_READY, notReady, queue, store, tradeChoices, workorders, type WoFilter } from '../server';
 import { DailyReportClient } from './DailyReportClient';
 import { HoursByTrade, OrdersAtAGlance, ProductionCharts } from './DashboardCharts';
 import { SettingsClient } from './SettingsClient';
@@ -151,7 +151,7 @@ const Orders: Screen = async ({ searchParams }) => {
   const filter = (FILTERS.find((f) => f.id === one(searchParams.f))?.id ?? 'open') as WoFilter;
   const trade = TRADES.find((t) => t.id === one(searchParams.trade))?.id;
   const q = one(searchParams.q) ?? '';
-  const rows = await query((tx, ctx) => workorders.listWorkOrders(tx, ctx, { filter, trade, q }));
+  const { rows, own } = await query(async (tx, ctx) => ({ rows: await workorders.listWorkOrders(tx, ctx, { filter, trade, q }), own: await industryTrades(tx, ctx.companyId) }));
   return (
     <>
       <TopBar crumbs={['Production', 'Work orders']} />
@@ -173,7 +173,7 @@ const Orders: Screen = async ({ searchParams }) => {
             <input type="hidden" name="f" value={filter} />
             <select className="o-select" name="trade" defaultValue={trade ?? ''} aria-label="Trade" style={{ width: 200 }}>
               <option value="">All trades</option>
-              {TRADES.map((t) => (
+              {TRADES.filter((t) => own.includes(t.id)).map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
                 </option>
@@ -194,20 +194,20 @@ const Orders: Screen = async ({ searchParams }) => {
 };
 
 const NewWo: Screen = async () => {
-  const d = await query(async (tx, ctx) => ({ me: await myRole(tx, ctx), cfg: await loadConfig(tx, ctx.companyId), so: await workorders.salesOrdersToPlan(tx, ctx), projects: await workorders.projectsToPlan(tx, ctx) }));
+  const d = await query(async (tx, ctx) => ({ me: await myRole(tx, ctx), trades: await tradeChoices(tx, ctx.companyId), so: await workorders.salesOrdersToPlan(tx, ctx), projects: await workorders.projectsToPlan(tx, ctx) }));
   if (!['engineer', 'manager', 'admin'].includes(d.me)) return <Message title="Your production role does not plan work orders." />;
-  return <WorkOrderForm trades={d.cfg.trades} salesOrders={d.so} projects={d.projects} />;
+  return <WorkOrderForm trades={d.trades} salesOrders={d.so} projects={d.projects} />;
 };
 
 const EditWo: Screen = async ({ searchParams }) => {
   const id = one(searchParams.id) ?? '';
-  const d = isId(id) ? await query(async (tx, ctx) => ({ detail: await workorders.workOrderDetail(tx, ctx, id), cfg: await loadConfig(tx, ctx.companyId), projects: await workorders.projectsToPlan(tx, ctx) })) : null;
+  const d = isId(id) ? await query(async (tx, ctx) => ({ detail: await workorders.workOrderDetail(tx, ctx, id), trades: await tradeChoices(tx, ctx.companyId), projects: await workorders.projectsToPlan(tx, ctx) })) : null;
   if (!d?.detail) return <Message title="Work order not found." />;
   const { wo, materials, ops, can } = d.detail;
   if (!can.edit) return <Message title="Only a draft can be changed." />;
   return (
     <WorkOrderForm
-      trades={d.cfg.trades}
+      trades={d.trades.includes(wo.trade) ? d.trades : [...d.trades, wo.trade]}
       salesOrders={[]}
       projects={d.projects}
       editId={wo.id}
@@ -379,12 +379,14 @@ const Store: Screen = async () => {
   );
 };
 
-const Trades: Screen = async () => (
+const Trades: Screen = async () => {
+  const own = await query((tx, ctx) => industryTrades(tx, ctx.companyId));
+  return (
   <>
     <TopBar crumbs={['Production', 'Trade forms']} />
     <div className="o-page">
       <PageHead title="Trade forms" lead="What each trade's work order asks for and its default operations. The checklists go to QC in the Quality portal when the work is finished." />
-      {TRADES.map((t) => (
+      {TRADES.filter((t) => own.includes(t.id)).map((t) => (
         <details key={t.id} className="o-panel">
           <summary style={{ cursor: 'pointer' }}>
             <strong>{t.name}</strong> <span className="muted" style={{ fontSize: 12 }}>· {t.detail}</span>
@@ -429,17 +431,18 @@ const Trades: Screen = async () => (
       ))}
     </div>
   </>
-);
+  );
+};
 
 const Settings: Screen = async () => {
-  const d = await query(async (tx, ctx) => ({ cfg: await loadConfig(tx, ctx.companyId), team: await admin.productionTeam(tx, ctx), admin: ctx.role === 'company_admin' }));
+  const d = await query(async (tx, ctx) => ({ cfg: await loadConfig(tx, ctx.companyId), own: await industryTrades(tx, ctx.companyId), team: await admin.productionTeam(tx, ctx), admin: ctx.role === 'company_admin' }));
   if (!d.admin) return <Message title="Only a company admin can change production settings." />;
   return (
     <>
       <TopBar crumbs={['Production', 'Production settings']} />
       <div className="o-page">
         <PageHead title="Production settings" lead="Trades, rules and who does what. Nothing changes until you save." />
-        <SettingsClient cfg={d.cfg} team={d.team} />
+        <SettingsClient cfg={d.cfg} team={d.team} available={d.own} />
       </div>
     </>
   );

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { pct, PROD_ROLES, WO_FLOW } from './config';
-import { TRADES, tradeOf } from './trades';
+import { TRADES, tradeOf, tradesFor } from './trades';
 
 describe('trade forms', () => {
   it('have unique ids and the general fallback last', () => {
@@ -32,5 +32,23 @@ describe('config', () => {
     expect(pct(5, 10)).toBe(50);
     expect(pct(12, 10)).toBe(100);
     expect(pct(1, 0)).toBe(0);
+  });
+});
+
+describe('trades by company type', () => {
+  it('gives production companies only machining, moulding, press tool and general', () => {
+    expect(tradesFor('production').map((t) => t.id)).toEqual(['prod_machining', 'moulding', 'press_tool', 'general']);
+  });
+  it('keeps every existing trade for manufacturing companies', () => {
+    const ids = tradesFor('manufacturing').map((t) => t.id);
+    expect(ids).toContain('steel');
+    expect(ids).toContain('machining');
+    expect(ids).not.toContain('moulding');
+  });
+  it('asks production trades for shop-floor measures with rejects', () => {
+    for (const t of tradesFor('production').filter((x) => x.id !== 'general')) {
+      expect(t.measures?.some((m) => m.id === 'rejected')).toBe(true);
+      expect(t.operations.some((o) => o.qc)).toBe(true);
+    }
   });
 });

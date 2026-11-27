@@ -5,7 +5,8 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { companies, companyPortals, memberships, withTenant } from '@orbit/db';
 import { COMPANY_COOKIE, getDb, getSession } from '@orbit/core/next';
-import { requestMemberPortals } from '@orbit/core';
+import { isIndustry, requestMemberPortals, setCompanyIndustry } from '@orbit/core';
+import { INDUSTRY_PORTALS } from './industry-portals';
 import { activeCompany } from './company-directory';
 import { requestFromSignUp } from './custom/requests';
 import { fileUnderCompany } from './legal/state';
@@ -37,7 +38,10 @@ export async function registerCompanyAction(form: FormData) {
   const s = await getSession();
   if (s.state !== 'no_company') redirect('/');
   const input = registerSchema.parse(Object.fromEntries(form));
-  const portals = pickedPortals(form);
+  const industryRaw = String(form.get('industry') ?? '');
+  const industry = isIndustry(industryRaw) ? industryRaw : 'manufacturing';
+  // Only the chosen company type's portals.
+  const portals = pickedPortals(form).filter((p) => INDUSTRY_PORTALS[industry].includes(p));
   // A custom portal alone is fine (companies that need neither Timesheet nor Purchase).
   const custom = form.get('custom') === 'on';
   if (portals.length === 0 && !custom) redirect('/register?error=portals');
@@ -60,6 +64,7 @@ export async function registerCompanyAction(form: FormData) {
       })
       .returning({ id: memberships.id });
     await fileUnderCompany(tx, s.userId, company.id);
+    await setCompanyIndustry(tx, company.id, industry);
     // Requested portals start switched off; Super Admin switches them on when approving.
     if (portals.length) await tx.insert(companyPortals).values(portals.map((portal) => ({ companyId: company.id, portal, enabled: false })));
     if (custom) await requestFromSignUp(tx, { companyId: company.id, membershipId: m.id, name: s.name, details: String(form.get('customDetails') ?? '') });

@@ -2,7 +2,7 @@
 import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { activateRequestedPortals, audit, Effects, newEvent, setMemberPortal, uuidv7 } from '@orbit/core';
+import { activateRequestedPortals, audit, companyIndustry, Effects, industryName, isIndustry, newEvent, setCompanyIndustry, setMemberPortal, uuidv7 } from '@orbit/core';
 import { getDb } from '@orbit/core/next';
 import { companies, companyPortals, memberships, withTenant } from '@orbit/db';
 import { portalModules } from '@/portals';
@@ -149,6 +149,24 @@ export async function setMemberBlockedAction(companyId: string, membershipId: st
       .set({ status: blocked ? 'disabled' : 'active' })
       .where(and(eq(memberships.id, id), eq(memberships.companyId, companyId)));
     await audit(tx, { companyId, actorId: null, action: blocked ? 'membership.block' : 'membership.unblock', entity: 'memberships', entityId: id });
+  });
+  revalidatePath('/super-admin', 'layout');
+}
+
+/**
+ * Changes the company type (Manufacturing or Production). Portals already switched on stay on;
+ * new portals, forms and subscription plans follow the new type.
+ */
+export async function setCompanyIndustryAction(companyId: string, industry: string) {
+  const userId = await requireSuperAdmin();
+  const id = z.uuid().parse(companyId);
+  if (!isIndustry(industry)) throw new Error('Unknown company type');
+  const db = await getDb();
+  await withTenant(db, { companyId: id, userId }, async (tx) => {
+    const before = await companyIndustry(tx, id);
+    if (before === industry) return;
+    await setCompanyIndustry(tx, id, industry);
+    await audit(tx, { companyId: id, actorId: null, action: 'company.set_industry', entity: 'companies', entityId: id, data: { summary: [`Company type changed from ${industryName(before)} to ${industryName(industry)}`] } });
   });
   revalidatePath('/super-admin', 'layout');
 }

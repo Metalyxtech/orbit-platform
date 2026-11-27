@@ -8,7 +8,7 @@ export * as drawings from './drawings';
 export * as stock from './stock';
 export * as mr from './mr';
 export * as receipts from './receipts';
-export { NOT_READY, notReady, myRole, loadConfig } from './shared';
+export { NOT_READY, notReady, myRole, loadConfig, tradeChoices, industryTrades } from './shared';
 export { drawingFile } from './drawings';
 export { onQualityResult } from './progress';
 export { onStoreQualityResult } from './receipts';

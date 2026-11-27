@@ -10,3 +10,4 @@ export * from './member-portals';
 export * from './portal-forms';
 export * from './portal-roles';
 export * as workflow from './workflow';
+export * from './industry';

@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
+import { companyIndustry, INDUSTRIES } from '@orbit/core';
 import { getDb } from '@orbit/core/next';
 import { companies, companyPortals, withTenant, workflowDefinitions } from '@orbit/db';
 import { StatusChip } from '@orbit/ui';
@@ -12,6 +13,7 @@ import {
   resetSandboxAction,
   setCompanyBlockedAction,
   setMemberBlockedAction,
+  setCompanyIndustryAction,
   setStageAction,
 } from '../../actions';
 import { ROLE_LABEL, companyStatusChip, fmtDate, loadMemberPortals, loadPeople, loadPortals, memberStatusChip, requireSuperAdminPage } from '../../data';
@@ -42,6 +44,7 @@ export default async function CompanyPage({ params, searchParams }: { params: Pr
       .where(eq(companyPortals.companyId, c.id)),
   );
   const portalStates = await loadPortals(c.id, me.userId);
+  const industry = await withTenant(db, { companyId: c.id, userId: me.userId }, (tx) => companyIndustry(tx, c.id));
   const memberPortalRows = await loadMemberPortals(c.id, me.userId, people.map((p) => p.id));
   const admins = people.filter((p) => p.role === 'company_admin');
   const registeredBy = [...admins].sort((a, b) => a.joinedAt.getTime() - b.joinedAt.getTime())[0];
@@ -55,6 +58,7 @@ export default async function CompanyPage({ params, searchParams }: { params: Pr
 
   const details: [string, React.ReactNode][] = [
     ['Company name', c.name],
+    ['Company type', INDUSTRIES.find((i) => i.id === industry)?.name ?? industry],
     ['Status', <StatusChip key="s" status={companyStatusChip(c.status)} />],
     ['Stage', <span key="st" style={{ textTransform: 'capitalize' }}>{c.stage}</span>],
     ['Email domains', c.emailDomains.join(', ') || '-'],
@@ -177,6 +181,21 @@ export default async function CompanyPage({ params, searchParams }: { params: Pr
             </div>
             <BillingPanel companyId={c.id} b={billing} />
             {custom && <CustomPanel companyId={c.id} plan={custom.plan} requests={custom.requests} currency={billing.settings.currency} />}
+            <div className="o-panel">
+              <div className="o-panel-head">
+                <h2>Company type</h2>
+              </div>
+              <form className="o-seg" role="group" aria-label="Company type">
+                {INDUSTRIES.map((i) => (
+                  <button key={i.id} aria-pressed={industry === i.id} formAction={setCompanyIndustryAction.bind(null, c.id, i.id)}>
+                    {i.name}
+                  </button>
+                ))}
+              </form>
+              <p className="faint" style={{ fontSize: 12, marginBottom: 0 }}>
+                {INDUSTRIES.find((i) => i.id === industry)?.detail}. Decides which portals, forms and subscription plans the company sees.
+              </p>
+            </div>
             <div className="o-panel">
               <div className="o-panel-head">
                 <h2>Stage</h2>

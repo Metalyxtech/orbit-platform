@@ -11,7 +11,7 @@ import { syncSalesOrder } from './sales-link';
 import { listMrs, supplyForWo, type MrRow, type WoSupply } from './mr';
 import { MR_STATUS } from '../config';
 import { purchaseOn } from '@orbit/core/supply';
-import { hasRole, loadConfig, lockWo, logEvent, myRole, nextNumber, peopleById, requireRole, today } from './shared';
+import { hasRole, loadConfig, lockWo, logEvent, myRole, nextNumber, peopleById, requireRole, today, tradeChoices } from './shared';
 import { hiddenIds } from './scope';
 import { ownProjects, projectScope, salesOn } from '@orbit/core/teams';
 
@@ -52,6 +52,7 @@ async function writeLines(tx: Tx, ctx: ActionContext, woId: string, v: z.output<
 export async function createWorkOrder(tx: Tx, ctx: ActionContext, raw: WoInput & { submit?: boolean }) {
   requireRole(await myRole(tx, ctx), 'engineer', 'manager');
   const v = woInput.parse(raw);
+  if (!(await tradeChoices(tx, ctx.companyId)).includes(v.trade)) throw new Error('Choose one of your company’s trades');
   if (raw.submit) assertForm(v.trade, v.fields);
   const number = await nextNumber(tx, ctx.companyId, 'wo');
   const [wo] = await tx

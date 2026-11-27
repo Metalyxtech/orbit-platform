@@ -1,6 +1,9 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@orbit/core/next';
 import { joinableCompanies } from '@/company-directory';
+import Link from 'next/link';
+import { INDUSTRIES, isIndustry, type Industry } from '@orbit/core';
+import { portalsForIndustry } from '@/industry-portals';
 import { standardPortals } from '@/portals';
 import { joinCompanyAction, registerCompanyAction } from '@/session-actions';
 import { AuthCard } from '../AuthCard';
@@ -16,9 +19,9 @@ const errors: Record<string, string> = {
   no_portal: 'That company does not use the portal you chose. Check with your company admin.',
 };
 
-const portalList = standardPortals().map((m) => m.manifest);
-
-function PortalPicker({ hint }: { hint: string }) {
+function PortalPicker({ hint, industry }: { hint: string; industry?: Industry }) {
+  // Joining: every portal; registering: the chosen company type's portals.
+  const portalList = (industry ? portalsForIndustry(industry) : standardPortals()).map((m) => m.manifest);
   return (
     <fieldset className="o-field" style={{ border: 0, padding: 0, margin: 0 }}>
       <legend style={{ marginBottom: 4 }}>Portals</legend>
@@ -33,12 +36,14 @@ function PortalPicker({ hint }: { hint: string }) {
   );
 }
 
-export default async function Register({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export default async function Register({ searchParams }: { searchParams: Promise<{ error?: string; type?: string }> }) {
   const s = await getSession();
   if (s.state === 'signed_out') redirect('/sign-in');
   if (s.state !== 'no_company') redirect('/');
   await requireAgreement(s);
-  const error = errors[(await searchParams).error ?? ''];
+  const sp = await searchParams;
+  const error = errors[sp.error ?? ''];
+  const industry: Industry = isIndustry(sp.type) ? sp.type : 'manufacturing';
   const list = await joinableCompanies();
   return (
     <AuthCard title="Join your company">
@@ -76,6 +81,18 @@ export default async function Register({ searchParams }: { searchParams: Promise
         You become its company admin once SteelConnect360 approves the registration.
       </p>
       <form action={registerCompanyAction} className="o-stack" style={{ gap: 12 }}>
+        <fieldset className="o-field" style={{ border: 0, padding: 0, margin: 0 }}>
+          <legend style={{ marginBottom: 4 }}>Type of company</legend>
+          <div className="o-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+            {INDUSTRIES.map((i) => (
+              <Link key={i.id} href={`?type=${i.id}`} aria-current={industry === i.id ? 'page' : undefined} className={`o-btn small${industry === i.id ? ' primary' : ''}`}>
+                {i.name}
+              </Link>
+            ))}
+          </div>
+          <span className="faint" style={{ fontSize: 11 }}>{INDUSTRIES.find((i) => i.id === industry)?.detail}</span>
+          <input type="hidden" name="industry" value={industry} />
+        </fieldset>
         <label className="o-field">
           Company name
           <input className="o-input" name="name" required minLength={2} maxLength={120} />
@@ -92,7 +109,7 @@ export default async function Register({ searchParams }: { searchParams: Promise
             ))}
           </select>
         </label>
-        <PortalPicker hint="The portals your company needs. SteelConnect360 reviews and switches them on." />
+        <PortalPicker industry={industry} hint="The portals your company needs. SteelConnect360 reviews and switches them on." />
         <fieldset className="o-field" style={{ border: 0, padding: 0, margin: 0 }}>
           <label className="o-row" style={{ gap: 8, fontSize: 13, color: 'var(--ink)' }}>
             <input type="checkbox" name="custom" />A custom portal built for our company

@@ -1,10 +1,10 @@
 import { and, eq, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { audit } from '@orbit/core';
+import { audit, isIndustry, setCompanyIndustry, type Industry } from '@orbit/core';
 import { companies, memberships, users, withTenant, type Db, type Tx } from '@orbit/db';
 import { saveBillingSettings } from '@/billing/admin';
 import { TRIAL_DAYS } from '@/billing/plans';
-import { portalModules } from '@/portals';
+import { INDUSTRY_PORTALS } from '@/industry-portals';
 import { setPortal } from './guard';
 
 // Super Admin > Add company: SteelConnect360's team sets up a client who contacted them.
@@ -17,6 +17,8 @@ export const TIMEZONES = ['Asia/Kolkata', 'Asia/Dubai', 'Asia/Riyadh', 'Asia/Qat
 
 export const newCompanyInput = z.object({
   name: z.string().trim().min(2, 'Company name is too short').max(120),
+  /** Manufacturing (fabrication, projects) or Production (machining, moulding, press tool). */
+  industry: z.enum(['manufacturing', 'production']).default('manufacturing'),
   country: z.enum(['india', 'uk', 'abroad']),
   timezone: z.enum(TIMEZONES as [string, ...string[]]),
   stage: z.enum(['sandbox', 'pilot', 'live']),
@@ -40,6 +42,7 @@ export function readNewCompanyForm(form: FormData): NewCompanyInput {
   const v = (k: string) => String(form.get(k) ?? '');
   return {
     name: v('name'),
+    industry: (isIndustry(v('industry')) ? v('industry') : 'manufacturing') as Industry,
     country: v('country') === 'abroad' ? 'abroad' : v('country') === 'uk' ? 'uk' : 'india',
     timezone: v('timezone'),
     stage: (v('stage') || 'live') as 'live',
@@ -61,7 +64,8 @@ export async function createCompany(db: Db, superUserId: string, raw: NewCompany
   const input = newCompanyInput.parse(raw);
   const second = input.admin2Name || input.admin2Email ? adminInput.parse({ name: input.admin2Name ?? '', email: input.admin2Email ?? '', title: input.admin2Title }) : null;
   if (second && second.email === input.adminEmail) throw new Error('The second admin needs a different email from the first');
-  const portals = input.customOnly ? [] : [...new Set(input.portals)].filter((p) => portalModules[p] && !portalModules[p].manifest.custom);
+  // Only the company type's own portals can be switched on.
+  const portals = input.customOnly ? [] : [...new Set(input.portals)].filter((p) => INDUSTRY_PORTALS[input.industry].includes(p));
   if (!portals.length && !input.customOnly) throw new Error('Choose at least one portal, or Custom portal only');
   const [dupe] = await db.select({ id: companies.id }).from(companies).where(sql`lower(btrim(${companies.name})) = lower(${input.name})`).limit(1);
   if (dupe) throw new Error(`A company called ${input.name} already exists`);
@@ -72,6 +76,7 @@ export async function createCompany(db: Db, superUserId: string, raw: NewCompany
     .values({ name: input.name, slug, timezone: input.timezone, stage: input.stage, status: 'active', emailDomains: domain ? [domain] : [] })
     .returning({ id: companies.id });
   await withTenant(db, { companyId: company.id, userId: superUserId }, async (tx) => {
+    await setCompanyIndustry(tx, company.id, input.industry);
     // Same as a company admin adding a person: the account is linked when they first sign in with this email.
     await tx.insert(users).values({ workosUserId: `invited|${input.adminEmail}`, email: input.adminEmail, name: input.adminName }).onConflictDoNothing({ target: users.email });
     const [user] = await tx.select({ id: users.id }).from(users).where(eq(users.email, input.adminEmail));

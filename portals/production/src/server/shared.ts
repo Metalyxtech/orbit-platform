@@ -1,9 +1,10 @@
 import { eq, inArray, sql } from 'drizzle-orm';
-import { audit, portalRoleFor, readPortalRoles, type ActionContext, type SessionContext } from '@orbit/core';
+import { audit, companyIndustry, portalRoleFor, readPortalRoles, type ActionContext, type SessionContext } from '@orbit/core';
 import { assertNotHeld } from '@orbit/core/holds';
 import { memberships, prodEvents, prodSettings, prodWorkOrders, users, type Tx } from '@orbit/db';
 import { DEFAULT_CONFIG, type ProdConfig, type ProdRole } from '../config';
 import { productionManifest } from '../manifest';
+import { tradesFor } from '../trades';
 
 export const PORTAL = 'production';
 
@@ -27,6 +28,21 @@ export const hasRole = (me: ProdRole, ...roles: ProdRole[]) => me === 'admin' ||
 export async function loadConfig(tx: Tx, companyId: string): Promise<ProdConfig> {
   const [row] = await tx.select({ config: prodSettings.config }).from(prodSettings).where(eq(prodSettings.companyId, companyId));
   return { ...DEFAULT_CONFIG, ...((row?.config as Partial<ProdConfig> | undefined) ?? {}) };
+}
+
+/**
+ * Trade ids this company can plan with: its company type's trades, narrowed to the ones chosen in
+ * production settings (none chosen = all of its type's trades).
+ */
+export async function tradeChoices(tx: Tx, companyId: string): Promise<string[]> {
+  const own = tradesFor(await companyIndustry(tx, companyId)).map((t) => t.id);
+  const chosen = (await loadConfig(tx, companyId)).trades.filter((t) => own.includes(t));
+  return chosen.length ? chosen : own;
+}
+
+/** Trade ids of the company's type (for settings and the trade forms page). */
+export async function industryTrades(tx: Tx, companyId: string): Promise<string[]> {
+  return tradesFor(await companyIndustry(tx, companyId)).map((t) => t.id);
 }
 
 export async function saveConfig(tx: Tx, companyId: string, config: ProdConfig) {

@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { companyIndustry } from '@orbit/core';
 import { getSession, query } from '@orbit/core/next';
 import { billingHistory, billingState } from '@/billing/state';
 import { customCredit, customPrice, findCustomPlan } from '@/custom/plan';
@@ -15,6 +16,7 @@ export default async function Billing() {
     return {
       state: await billingState(tx, ctx),
       history: await billingHistory(tx, ctx),
+      companyType: await companyIndustry(tx, ctx.companyId),
       custom: plan?.enabled ? { label: plan.label, monthlyPrice: plan.monthlyPrice, yearlyPrice: plan.yearlyPrice, maxUsers: plan.maxUsers, credit: customCredit(plan, 'yearly'), installment: customPrice(plan, 'yearly_monthly') } : null,
     };
   });
@@ -27,6 +29,7 @@ export default async function Billing() {
         state={d.state}
         company={s.ctx.companyName}
         custom={d.custom}
+        companyType={d.companyType}
         history={d.history.map((h) => ({ id: h.id, type: h.type, amount: h.amount, currency: ((h.data ?? {}) as { currency?: string }).currency ?? null, ref: h.razorpayId, at: h.createdAt.toISOString() }))}
       />
     </>

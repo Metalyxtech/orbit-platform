@@ -3,7 +3,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button, Chip, ConfirmDialog, DataTable, EmptyState, useToast } from '@orbit/ui';
 import { BundlePicker, CycleSwitch, SeatCalculator, seatRules, trustFor } from '@/billing/PlanCards';
-import { FREE_VIEWERS, bundleFor, currencyWords, cycleOf, extraSeatsQuote, money, planOf, portalName, portalsOutside, seatQuote, taxNote, type Bundle, type Cycle } from '@/billing/plans';
+import { FREE_VIEWERS, bundleFor, bundleName as nameOfBundle, type CompanyType, currencyWords, cycleOf, extraSeatsQuote, money, planOf, portalName, portalsOutside, seatQuote, taxNote, type Bundle, type Cycle } from '@/billing/plans';
 import type { BillingState } from '@/billing/state';
 import { cancelPlanAction, confirmCheckoutAction, confirmSeatsCheckoutAction, startCheckoutAction, startCustomCheckoutAction, startSeatsCheckoutAction } from './actions';
 
@@ -50,7 +50,19 @@ function loadCheckout(): Promise<boolean> {
   });
 }
 
-export function BillingClient({ state, company, history, custom }: { state: BillingState; company: string; history: History[]; custom?: CustomDeal | null }) {
+export function BillingClient({
+  state,
+  company,
+  history,
+  custom,
+  companyType = 'manufacturing',
+}: {
+  state: BillingState;
+  company: string;
+  history: History[];
+  custom?: CustomDeal | null;
+  companyType?: CompanyType;
+}) {
   const [customPick, setCustomPick] = useState<CustomCycle | null>(null);
   const router = useRouter();
   const toast = useToast();
@@ -64,7 +76,7 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
   const [busy, setBusy] = useState(false);
   const current = state.plan ? planOf(state.plan) : undefined;
   // Name and price of the plan the company is on (standard or its custom plan).
-  const planLabel = state.planName ?? current?.name ?? null;
+  const planLabel = state.bundle === 'factory' && current?.perUser ? nameOfBundle('factory', companyType) : (state.planName ?? current?.name ?? null);
   const planPrice =
     state.price !== null
       ? state.price
@@ -85,7 +97,7 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
   // Seats to buy: at least everyone who needs one today; more leaves room to add people later.
   const [seats, setSeats] = useState(Math.max(state.billable, state.seats ?? state.billable));
   const quote = seatQuote(bundle, seats, cycle, cur);
-  const bundleName = planOf(`${bundle}_users`)?.name ?? bundle;
+  const bundleName = nameOfBundle(bundle, companyType);
   const onThisPlan = paid && !state.cancelAtPeriodEnd && state.plan === `${bundle}_users` && state.cycle === cycle && state.seats === quote.seats;
   const freeViewers = Math.min(FREE_VIEWERS, state.managementPeople);
   const peopleNote = (
@@ -332,7 +344,7 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
       </p>
       <div className="b-steps">
         <span className="b-step">1. Portals</span>
-        <BundlePicker bundle={bundle} onChange={setBundle} currency={cur} />
+        <BundlePicker bundle={bundle} onChange={setBundle} currency={cur} companyType={companyType} />
       </div>
       <div className="b-steps">
         <span className="b-step">2. How often to pay</span>
@@ -344,6 +356,7 @@ export function BillingClient({ state, company, history, custom }: { state: Bill
           bundle={bundle}
           cycle={cycle}
           currency={cur}
+          companyType={companyType}
           seats={seats}
           onSeats={(n) => setSeats(Math.max(state.billable, n))}
           minSeats={state.billable}

@@ -1,18 +1,18 @@
 'use client';
 import Link from 'next/link';
 import { useState } from 'react';
-import { BundlePicker, CycleSwitch, SeatCalculator, seatRules, trustFor } from '@/billing/PlanCards';
-import { BUNDLES, CURRENCIES, SEAT_PRICE, TRIAL_DAYS, money, seatSavingPct, type Bundle, type Currency, type Cycle } from '@/billing/plans';
-
-/** The biggest package saving, for the headline (worked out from the prices, never typed in). */
-const maxSaving = Math.max(...BUNDLES.map((b) => seatSavingPct(b.id)));
+import { BundlePicker, CompanyTypeSwitch, CycleSwitch, SeatCalculator, seatRules, trustFor } from '@/billing/PlanCards';
+import { BUNDLES, CURRENCIES, SEAT_PRICE, TRIAL_DAYS, money, seatSavingPct, type Bundle, type CompanyType, type Currency, type Cycle } from '@/billing/plans';
 
 export function PricingClient() {
   const [cycle, setCycle] = useState<Cycle>('yearly');
   const [bundle, setBundle] = useState<Bundle>('factory');
   const [currency, setCurrency] = useState<Currency>('INR');
   const [seats, setSeats] = useState(20);
-  const from = money(SEAT_PRICE.timesheet[currency], currency);
+  const [companyType, setCompanyType] = useState<CompanyType>('manufacturing');
+  // Worked out from the prices, never typed in.
+  const from = money(Math.min(...BUNDLES.map((b) => SEAT_PRICE[b.id][currency])), currency);
+  const maxSaving = Math.max(...BUNDLES.filter((b) => b.group !== 'legacy').map((b) => seatSavingPct(b.id, currency)));
   return (
     <main className="b-public">
       <header className="b-public-head">
@@ -32,8 +32,8 @@ export function PricingClient() {
       <section className="b-hero">
         <h1>Pay only for the people who use it. From {from} per person.</h1>
         <p>
-          Sales, purchasing, production, quality and timesheets for manufacturing and project companies. Combine portals and save up to {maxSaving}%. Try everything free
-          for {TRIAL_DAYS} days.
+          Sales, purchasing, production, quality, timesheets and HR for manufacturing and production companies. Start with one portal, pair two, or take the whole suite
+          and save up to {maxSaving}%. Try everything free for {TRIAL_DAYS} days.
         </p>
       </section>
       <div className="b-public-body">
@@ -47,9 +47,13 @@ export function PricingClient() {
             ))}
           </div>
         </div>
+        <div className="b-steps" style={{ alignItems: 'center' }}>
+          <span className="b-step">What does your company do?</span>
+          <CompanyTypeSwitch value={companyType} onChange={setCompanyType} />
+        </div>
         <div className="b-steps">
-          <span className="b-step">1. Choose portals</span>
-          <BundlePicker bundle={bundle} onChange={setBundle} currency={currency} />
+          <span className="b-step">1. Choose your plan</span>
+          <BundlePicker bundle={bundle} onChange={setBundle} currency={currency} companyType={companyType} />
         </div>
         <div className="b-steps" style={{ alignItems: 'center' }}>
           <span className="b-step">2. How often to pay</span>
@@ -63,6 +67,7 @@ export function PricingClient() {
             currency={currency}
             seats={seats}
             onSeats={setSeats}
+            companyType={companyType}
             action={
               <Link className="o-btn block primary" href="/auth/login?hint=sign-up">
                 Start {TRIAL_DAYS}-day free trial

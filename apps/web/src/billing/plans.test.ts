@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUNDLES, CURRENCIES, MIN_SEATS, SEAT_PRICE, billableSeats, extraSeatsQuote, money, planOf, priceFor, seatQuote, seatSavingPct } from './plans';
+import { BUNDLES, CURRENCIES, PAIR_PORTALS, bundleFor, bundleForPortals, bundleName, bundlesIn, seatSeparately, MIN_SEATS, SEAT_PRICE, billableSeats, extraSeatsQuote, money, planOf, priceFor, seatQuote, seatSavingPct } from './plans';
 
 describe('per-user pricing', () => {
   it('prices every bundle in every currency', () => {
@@ -72,5 +72,44 @@ describe('extra seats', () => {
 
   it('charges nothing now when the period has ended', () => {
     expect(extraSeatsQuote('timesheet', 5, 1, 'yearly', 'GBP', new Date(Date.now() - day)).dueNow).toBe(0);
+  });
+});
+
+describe('plan choices: one portal, two portals, a suite, or Timesheet + HR', () => {
+  it('sells every pair of the five work portals', () => {
+    for (const a of PAIR_PORTALS) for (const b of PAIR_PORTALS) if (a !== b) expect(bundleForPortals([a, b]), `${a}+${b}`).toBeDefined();
+    expect(bundlesIn('pair')).toHaveLength(10);
+  });
+
+  it('makes every combination cheaper than its portals bought one by one, in every currency', () => {
+    for (const b of BUNDLES.filter((x) => x.portals.length > 1)) for (const c of CURRENCIES) expect(SEAT_PRICE[b.id][c.id], `${b.id} ${c.id}`).toBeLessThan(seatSeparately(b.id, c.id));
+  });
+
+  it('prices HR on its own and with Timesheet', () => {
+    expect(SEAT_PRICE.hr).toEqual({ INR: 99, USD: 1.49, GBP: 1.29 });
+    expect(SEAT_PRICE.timesheet_hr).toEqual({ INR: 199, USD: 2.79, GBP: 2.59 });
+    expect(bundleForPortals(['hr', 'timesheet'])).toBe('timesheet_hr');
+  });
+
+  it('includes HR in the Complete suite but not the Manufacturing suite', () => {
+    expect(planOf('complete_users')?.portals).toContain('hr');
+    expect(planOf('factory_users')?.portals).not.toContain('hr');
+  });
+
+  it('keeps HR free on the older fixed-size plans', () => {
+    expect(planOf('factory_growth')?.portals).toContain('hr');
+  });
+
+  it('picks the matching pair for the portals a company uses, not a bigger suite', () => {
+    expect(bundleFor(['sales', 'quality'])).toBe('sales_quality');
+    expect(bundleFor(['timesheet', 'production'])).toBe('timesheet_production');
+    expect(bundleFor(['sales', 'procurement', 'production', 'quality'])).toBe('factory');
+    expect(bundleFor(['timesheet', 'hr', 'sales'])).toBe('complete');
+  });
+
+  it('names the suite after the company type', () => {
+    expect(bundleName('factory')).toBe('Manufacturing suite');
+    expect(bundleName('factory', 'production')).toBe('Production suite');
+    expect(bundleName('complete', 'production')).toBe('Complete suite');
   });
 });

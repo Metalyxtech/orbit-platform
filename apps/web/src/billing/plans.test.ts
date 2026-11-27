@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUNDLES, CURRENCIES, PAIR_PORTALS, bundleFor, bundleForPortals, bundleName, bundlesIn, seatSeparately, MIN_SEATS, SEAT_PRICE, billableSeats, extraSeatsQuote, money, planOf, priceFor, seatQuote, seatSavingPct } from './plans';
+import { BUNDLES, CURRENCIES, PAIR_PORTALS, bundleFor, bundleForPortals, bundleName, bundlesIn, planNameFor, seatSeparately, MIN_SEATS, SEAT_PRICE, billableSeats, extraSeatsQuote, money, planOf, priceFor, seatQuote, seatSavingPct } from './plans';
 
 describe('per-user pricing', () => {
   it('prices every bundle in every currency', () => {
@@ -111,5 +111,8 @@ describe('plan choices: one portal, two portals, a suite, or Timesheet + HR', ()
     expect(bundleName('factory')).toBe('Manufacturing suite');
     expect(bundleName('factory', 'production')).toBe('Production suite');
     expect(bundleName('complete', 'production')).toBe('Complete suite');
+    expect(planNameFor('factory_users', 'production')).toBe('Production suite');
+    expect(planNameFor('factory_users', 'manufacturing')).toBe('Manufacturing suite');
+    expect(planNameFor('factory_growth', 'production')).toBe('Production suite Growth');
   });
 });

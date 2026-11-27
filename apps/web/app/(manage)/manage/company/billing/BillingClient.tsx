@@ -3,7 +3,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button, Chip, ConfirmDialog, DataTable, EmptyState, useToast } from '@orbit/ui';
 import { BundlePicker, CycleSwitch, SeatCalculator, seatRules, trustFor } from '@/billing/PlanCards';
-import { FREE_VIEWERS, bundleFor, bundleName as nameOfBundle, type CompanyType, currencyWords, cycleOf, extraSeatsQuote, money, planOf, portalName, portalsOutside, seatQuote, taxNote, type Bundle, type Cycle } from '@/billing/plans';
+import { FREE_VIEWERS, bundleFor, bundleName as nameOfBundle, currencyWords, cycleOf, extraSeatsQuote, money, planOf, portalName, portalsOutside, seatQuote, taxNote, type Bundle, type Cycle } from '@/billing/plans';
 import type { BillingState } from '@/billing/state';
 import { cancelPlanAction, confirmCheckoutAction, confirmSeatsCheckoutAction, startCheckoutAction, startCustomCheckoutAction, startSeatsCheckoutAction } from './actions';
 
@@ -55,14 +55,14 @@ export function BillingClient({
   company,
   history,
   custom,
-  companyType = 'manufacturing',
 }: {
   state: BillingState;
   company: string;
   history: History[];
   custom?: CustomDeal | null;
-  companyType?: CompanyType;
 }) {
+  // The suite on offer follows the company type: Production suite or Manufacturing suite.
+  const companyType = state.companyType;
   const [customPick, setCustomPick] = useState<CustomCycle | null>(null);
   const router = useRouter();
   const toast = useToast();
@@ -76,7 +76,7 @@ export function BillingClient({
   const [busy, setBusy] = useState(false);
   const current = state.plan ? planOf(state.plan) : undefined;
   // Name and price of the plan the company is on (standard or its custom plan).
-  const planLabel = state.bundle === 'factory' && current?.perUser ? nameOfBundle('factory', companyType) : (state.planName ?? current?.name ?? null);
+  const planLabel = state.planName ?? current?.name ?? null;
   const planPrice =
     state.price !== null
       ? state.price

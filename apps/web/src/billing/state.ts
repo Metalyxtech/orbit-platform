@@ -1,8 +1,8 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { audit, type ActionContext, type SessionContext } from '@orbit/core';
+import { audit, companyIndustry, type ActionContext, type SessionContext } from '@orbit/core';
 import { billingEvents, companies, companyBilling, companyPortals, companySubscriptions, memberships, type Tx } from '@orbit/db';
-import { BILLING_LAUNCH, BUNDLES, CYCLES, TRIAL_DAYS, TRIAL_LIMITS, asCurrency, cycleOf, planId, planOf, portalName, priceFor, type Bundle, type Currency, type Cycle } from './plans';
+import { BILLING_LAUNCH, BUNDLES, CYCLES, TRIAL_DAYS, TRIAL_LIMITS, asCurrency, cycleOf, planId, planNameFor, planOf, portalName, priceFor, type Bundle, type Currency, type Cycle } from './plans';
 import { endSeatAddons, headcount, readSeats, seatPlanId, seatsTaken, writeMainSeats } from './seats';
 import { fitPortalsToPlan } from './portals';
 import { getCustomPlan } from '../custom/plan';
@@ -39,6 +39,8 @@ export async function billingStateFor(tx: Tx, companyId: string) {
   const trialEnds = sub?.trialEndsAt ?? new Date(trialStart + settings.trialDays * DAY);
   const periodEnd = sub?.currentPeriodEnd ?? null;
   const plan = sub ? planOf(sub.plan) : undefined;
+  // Machining, moulding and press tool shops see the Production suite; everyone else the Manufacturing suite.
+  const companyType = await companyIndustry(tx, companyId);
   let status: BillingStatus;
   if (sub && PAID.includes(sub.status) && (!periodEnd || periodEnd.getTime() > now - 3 * DAY)) status = 'active';
   else if (sub && (sub.status === 'pending' || sub.status === 'halted')) status = 'past_due';
@@ -65,10 +67,11 @@ export async function billingStateFor(tx: Tx, companyId: string) {
   return {
     status,
     currency: settings.currency,
+    companyType,
     showPlans: settings.showPlans,
     trialDays: settings.trialDays,
     plan: plan?.id ?? (sub?.plan === 'custom' ? 'custom' : null),
-    planName: plan?.name ?? (sub?.plan === 'custom' ? (custom?.label ?? 'Custom plan') : null),
+    planName: (plan && planNameFor(plan.id, companyType)) ?? (sub?.plan === 'custom' ? (custom?.label ?? 'Custom plan') : null),
     bundle: plan?.bundle ?? null,
     tier: plan?.tier ?? null,
     perUser: plan?.perUser ?? false,
@@ -170,7 +173,7 @@ export async function startCheckout(tx: Tx, ctx: ActionContext, raw: z.input<typ
   });
   const amount = priceFor(input.bundle, 'users', input.cycle, currency, seats);
   await recordCheckout(tx, ctx.companyId, sub.id, Math.round(amount * 100), { plan: id, cycle: input.cycle, currency, replaces, seats });
-  return { subscriptionId: sub.id, keyId: await rz.publicKeyId(), planName: `${plan.name}, ${seats} seats`, amount, currency, cycle: cycleOf(input.cycle).label, email: ctx.email, name: ctx.name, paidUntil };
+  return { subscriptionId: sub.id, keyId: await rz.publicKeyId(), planName: `${planNameFor(id, state.companyType) ?? plan.name}, ${seats} seats`, amount, currency, cycle: cycleOf(input.cycle).label, email: ctx.email, name: ctx.name, paidUntil };
 }
 
 const confirmInput = z.object({ paymentId: z.string().min(5).max(80), subscriptionId: z.string().min(5).max(80), signature: z.string().min(10).max(200) });
@@ -195,7 +198,7 @@ export async function confirmCheckout(tx: Tx, ctx: ActionContext, raw: z.input<t
   if (sub.credit) await markCreditUsed(tx, ctx.companyId);
   const fit = await fitPortalsToPlan(tx, ctx, sub.plan);
   await tx.insert(billingEvents).values({ companyId: ctx.companyId, type: 'checkout.completed', razorpayId: input.paymentId, data: { subscription: input.subscriptionId } });
-  await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'billing.subscribe', entity: 'company_subscriptions', entityId: ctx.companyId, data: { summary: [`Subscribed to ${planOf(sub.plan)?.name ?? 'the custom plan'} (${sub.plan === 'custom' ? sub.cycle : cycleOf(sub.cycle).label})`] }, requestId: ctx.requestId });
+  await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'billing.subscribe', entity: 'company_subscriptions', entityId: ctx.companyId, data: { summary: [`Subscribed to ${planNameFor(sub.plan, state.companyType) ?? 'the custom plan'} (${sub.plan === 'custom' ? sub.cycle : cycleOf(sub.cycle).label})`] }, requestId: ctx.requestId });
   return { status: live.status, paused: fit.paused.map(portalName), resumed: fit.resumed.map(portalName) };
 }
 

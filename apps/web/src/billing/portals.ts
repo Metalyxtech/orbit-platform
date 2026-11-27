@@ -1,8 +1,8 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
-import { audit, type ActionContext } from '@orbit/core';
+import { audit, companyIndustry, type ActionContext } from '@orbit/core';
 import { billingEvents, companyPortals, type Tx } from '@orbit/db';
 import { isCustomPortal } from '../portals';
-import { planOf, portalName } from './plans';
+import { planNameFor, planOf, portalName } from './plans';
 
 // Fits the company's portals to the plan it just paid for.
 // A smaller plan (e.g. Timesheet only while Purchase is on) pauses the other portal; its data is kept.
@@ -33,6 +33,7 @@ export async function fitPortalsToPlan(tx: Tx, ctx: ActionContext, planId: strin
     await tx.update(companyPortals).set({ enabled: true }).where(and(eq(companyPortals.companyId, ctx.companyId), inArray(companyPortals.portal, resumed)));
   }
   if (paused.length || resumed.length) {
+    const name = planNameFor(planId, await companyIndustry(tx, ctx.companyId)) ?? plan.name;
     const still = wasPaused.filter((p) => !resumed.includes(p));
     await tx.insert(billingEvents).values({ companyId: ctx.companyId, type: PAUSED, data: { portals: [...paused, ...still], plan: planId } });
     await audit(tx, {
@@ -43,8 +44,8 @@ export async function fitPortalsToPlan(tx: Tx, ctx: ActionContext, planId: strin
       entityId: ctx.companyId,
       data: {
         summary: [
-          ...(paused.length ? [`${paused.map(portalName).join(' and ')} paused: not in the ${plan.name} plan`] : []),
-          ...(resumed.length ? [`${resumed.map(portalName).join(' and ')} switched back on with the ${plan.name} plan`] : []),
+          ...(paused.length ? [`${paused.map(portalName).join(' and ')} paused: not in the ${name} plan`] : []),
+          ...(resumed.length ? [`${resumed.map(portalName).join(' and ')} switched back on with the ${name} plan`] : []),
         ],
       },
       requestId: ctx.requestId,

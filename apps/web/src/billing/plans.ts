@@ -116,6 +116,12 @@ export function bundleName(b: Bundle, type: CompanyType = 'manufacturing') {
   if (b === 'factory' && type === 'production') return 'Production suite';
   return bundleOf(b)?.name ?? b;
 }
+/** A stored plan's name as this company sees it (the suite follows the company type). */
+export function planNameFor(id: string, type: CompanyType = 'manufacturing') {
+  const p = planOf(id);
+  if (!p) return undefined;
+  return p.bundle === 'factory' ? p.name.replace(bundleOf('factory')!.name, bundleName('factory', type)) : p.name;
+}
 export function bundleDesc(b: Bundle, type: CompanyType = 'manufacturing') {
   if (b === 'factory' && type === 'production') return 'Sales, Purchase, Production and Quality: from RFQ to inspected, delivered parts';
   return bundleOf(b)?.desc ?? '';

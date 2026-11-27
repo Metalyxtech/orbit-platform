@@ -32,7 +32,7 @@ export function PricingClient() {
       <section className="b-hero">
         <h1>Pay only for the people who use it. From {from} per person.</h1>
         <p>
-          Sales, purchasing, production, quality and timesheets for manufacturing and project companies. Combine portals and save up to {maxSaving}%. Try everything free
+          Sales, purchasing, production, quality, timesheets and HR for manufacturing and project companies. Combine portals and save up to {maxSaving}%. Try everything free
           for {TRIAL_DAYS} days.
         </p>
       </section>

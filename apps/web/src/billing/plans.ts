@@ -17,7 +17,9 @@ export type Bundle =
   | 'all'
   | 'production_quality'
   | 'factory'
-  | 'complete';
+  | 'complete'
+  | 'hr'
+  | 'hr_timesheet';
 /** Fixed team sizes (older plans, kept for companies already on them). */
 export type TierId = 'starter' | 'growth' | 'business';
 /** 'users': priced per person (the current plans); the others are the older fixed team sizes. */
@@ -54,6 +56,8 @@ export const BUNDLES: { id: Bundle; name: string; portals: string[]; desc: strin
   { id: 'sales', name: 'Sales', portals: ['sales'], group: 'single', desc: 'Enquiries, project documents, costing, quotations, orders and collections' },
   { id: 'production', name: 'Production', portals: ['production'], group: 'single', desc: 'Work orders, trade forms, workshop drawings and daily shop-floor reports' },
   { id: 'quality', name: 'Quality (QC)', portals: ['quality'], group: 'single', desc: 'Incoming and final inspections, NCRs, QC manager approval and QC dashboard' },
+  { id: 'hr', name: 'HR', portals: ['hr'], group: 'single', desc: 'Employee records, leave requests and approvals, leave balances and monthly attendance' },
+  { id: 'hr_timesheet', name: 'HR + Timesheet', portals: ['timesheet', 'hr'], group: 'combo', desc: 'Hours, roster and overtime, with leave and attendance' },
   { id: 'both', name: 'Timesheet + Purchase', portals: ['timesheet', 'procurement'], group: 'combo', desc: 'Site hours and buying in one login' },
   { id: 'timesheet_sales', name: 'Timesheet + Sales', portals: ['timesheet', 'sales'], group: 'combo', desc: 'Win the work and track the hours on it' },
   { id: 'purchase_sales', name: 'Purchase + Sales', portals: ['procurement', 'sales'], group: 'combo', desc: 'Quote, win, then buy for the job' },
@@ -70,7 +74,7 @@ export const BUNDLES: { id: Bundle; name: string; portals: string[]; desc: strin
   { id: 'complete', name: 'Complete suite', portals: ['timesheet', 'sales', 'procurement', 'production', 'quality'], group: 'factory', desc: 'All five portals, with timesheets and project hours' },
 ];
 /** Each portal's own bundle, for "you save" against buying them separately. */
-const SINGLE: Record<string, Bundle> = { timesheet: 'timesheet', procurement: 'purchase', sales: 'sales', production: 'production', quality: 'quality' };
+const SINGLE: Record<string, Bundle> = { timesheet: 'timesheet', procurement: 'purchase', sales: 'sales', production: 'production', quality: 'quality', hr: 'hr' };
 /** Every portal that is sold in a plan. */
 export const PRICED_PORTALS = Object.keys(SINGLE);
 export const isCombo = (b: Bundle) => (bundleOf(b)?.portals.length ?? 0) > 1;
@@ -104,6 +108,9 @@ const MONTHLY_INR: Record<Bundle, Record<TierId, number>> = {
   production_quality: { starter: 2599, growth: 5999, business: 13499 },
   factory: { starter: 3999, growth: 9499, business: 21999 },
   complete: { starter: 4499, growth: 10499, business: 24499 },
+  // Older fixed sizes are no longer sold; HR has them only so every bundle has a price.
+  hr: { starter: 1599, growth: 3999, business: 9299 },
+  hr_timesheet: { starter: 2399, growth: 5999, business: 13999 },
 };
 
 /** Monthly price in the client's currency: rupees, or dollars at USD_RATE rounded up. */
@@ -124,7 +131,7 @@ export const CYCLES: { id: Cycle; label: string; months: number; discount: numbe
  * Portals not priced in any plan yet: included with every plan and the trial, never paused by a
  * plan change. A new portal goes here until it gets bundles and prices above.
  */
-export const UNPRICED_PORTALS: string[] = ['hr'];
+export const UNPRICED_PORTALS: string[] = [];
 
 /** Limits while on the free trial: every portal, Growth team size. */
 export const TRIAL_LIMITS = { users: 40, portals: [...PRICED_PORTALS, ...UNPRICED_PORTALS] };
@@ -149,7 +156,7 @@ export function planOf(id: string) {
 }
 
 /** Display name of a portal id. */
-export const portalName = (p: string) => (({ procurement: 'Purchase', timesheet: 'Timesheet', sales: 'Sales', production: 'Production', quality: 'Quality' }) as Record<string, string>)[p] ?? p;
+export const portalName = (p: string) => (({ procurement: 'Purchase', timesheet: 'Timesheet', sales: 'Sales', production: 'Production', quality: 'Quality', hr: 'HR' }) as Record<string, string>)[p] ?? p;
 
 /** Portals in use that a plan does not include: they are paused when the company moves to it. */
 export function portalsOutside(id: string, inUse: string[]) {
@@ -211,6 +218,8 @@ export const SEAT_PRICE: Record<Bundle, Record<Currency, number>> = {
   all: { INR: 749, USD: 12.99, GBP: 10.99 },
   factory: { INR: 999, USD: 19.99, GBP: 16.99 },
   complete: { INR: 1149, USD: 21.99, GBP: 18.99 },
+  hr: { INR: 199, USD: 2.99, GBP: 2.49 },
+  hr_timesheet: { INR: 299, USD: 3.99, GBP: 3.49 },
 };
 /** Smallest number of people a company pays for. */
 export const MIN_SEATS = 5;

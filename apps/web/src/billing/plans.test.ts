@@ -18,6 +18,13 @@ describe('per-user pricing', () => {
     expect(seatSavingPct('hr_timesheet', 'INR')).toBe(14);
   });
 
+  it('has one plan with all six portals, picked when a company uses them all', () => {
+    expect(SEAT_PRICE.complete_hr).toEqual({ INR: 1399, USD: 24.99, GBP: 21.99 });
+    expect(planOf('complete_hr_users')?.portals.sort()).toEqual(['hr', 'procurement', 'production', 'quality', 'sales', 'timesheet']);
+    expect(bundleFor(['timesheet', 'procurement', 'sales', 'production', 'quality', 'hr'])).toBe('complete_hr');
+    expect(bundleFor(['timesheet', 'hr'])).toBe('hr_timesheet');
+  });
+
   it('bills at least 5 people', () => {
     expect(seatQuote('timesheet', 2, 'monthly', 'INR').total).toBe(149 * MIN_SEATS);
     expect(billableSeats(1)).toBe(MIN_SEATS);

@@ -25,7 +25,8 @@ export type Bundle =
   | 'purchase_production'
   | 'purchase_quality'
   | 'sales_production'
-  | 'sales_quality';
+  | 'sales_quality'
+  | 'complete_hr';
 /** Fixed team sizes (older plans, kept for companies already on them). */
 export type TierId = 'starter' | 'growth' | 'business';
 /** 'users': priced per person (the current plans); the others are the older fixed team sizes. */
@@ -89,6 +90,13 @@ export const BUNDLES: { id: Bundle; name: string; portals: string[]; desc: strin
     portals: ['timesheet', 'sales', 'procurement', 'production', 'quality'],
     group: 'suite',
     desc: 'All five work portals: the four job portals plus Timesheet',
+  },
+  {
+    id: 'complete_hr',
+    name: 'Complete suite + HR',
+    portals: ['timesheet', 'hr', 'sales', 'procurement', 'production', 'quality'],
+    group: 'suite',
+    desc: 'All six portals: the Complete suite with leave, attendance and employee records',
   },
   { id: 'hr_timesheet', name: 'HR + Timesheet', portals: ['timesheet', 'hr'], group: 'people', desc: 'Hours, roster and overtime, with leave and attendance' },
   { id: 'all', name: 'Timesheet + Purchase + Sales', portals: ['timesheet', 'procurement', 'sales'], group: 'legacy', desc: 'One login, one GM dashboard' },
@@ -160,6 +168,7 @@ const MONTHLY_INR: Partial<Record<Bundle, Record<TierId, number>>> = {
   // Older fixed sizes are no longer sold; HR has them only so every bundle has a price.
   hr: { starter: 1599, growth: 3999, business: 9299 },
   hr_timesheet: { starter: 2399, growth: 5999, business: 13999 },
+  complete_hr: { starter: 5499, growth: 12999, business: 29999 },
 };
 
 /** Monthly price in the client's currency: rupees, or dollars at USD_RATE rounded up. */
@@ -233,7 +242,7 @@ export const bundleSavingPct = (b: Bundle, t: TierId = 'growth') => (isCombo(b) 
 export function bundleFor(used: string[]): Bundle {
   const fits = BUNDLES.filter((b) => b.group !== 'legacy' && used.every((p) => b.portals.includes(p) || !SINGLE[p]));
   // Fewest portals first; of those, the cheapest.
-  return fits.sort((a, b) => a.portals.length - b.portals.length || SEAT_PRICE[a.id].INR - SEAT_PRICE[b.id].INR)[0]?.id ?? 'complete';
+  return fits.sort((a, b) => a.portals.length - b.portals.length || SEAT_PRICE[a.id].INR - SEAT_PRICE[b.id].INR)[0]?.id ?? 'complete_hr';
 }
 
 /** Money in the client's currency, e.g. ₹5,999 or $67. */
@@ -270,6 +279,7 @@ export const SEAT_PRICE: Record<Bundle, Record<Currency, number>> = {
   complete: { INR: 1149, USD: 21.99, GBP: 18.99 },
   hr: { INR: 199, USD: 2.99, GBP: 2.49 },
   hr_timesheet: { INR: 299, USD: 3.99, GBP: 3.49 },
+  complete_hr: { INR: 1399, USD: 24.99, GBP: 21.99 },
   // Any two portals: about 15% to 25% less than buying them one by one.
   timesheet_production: { INR: 549, USD: 9.49, GBP: 8.49 },
   timesheet_quality: { INR: 349, USD: 5.99, GBP: 4.99 },

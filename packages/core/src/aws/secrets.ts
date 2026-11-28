@@ -10,7 +10,15 @@ export type SecretName =
   | 'sesWebhookTopicArn'
   | 'razorpayKeyId'
   | 'razorpayKeySecret'
-  | 'razorpayWebhookSecret';
+  | 'razorpayWebhookSecret'
+  // Accounting connections: each provider's app keys, and the key that encrypts companies' tokens.
+  | 'accountingTokenKey'
+  | 'zohoClientId'
+  | 'zohoClientSecret'
+  | 'quickbooksClientId'
+  | 'quickbooksClientSecret'
+  | 'xeroClientId'
+  | 'xeroClientSecret';
 
 const TTL_MS = 5 * 60 * 1000;
 const ALL: SecretName[] = [
@@ -22,6 +30,13 @@ const ALL: SecretName[] = [
   'razorpayKeyId',
   'razorpayKeySecret',
   'razorpayWebhookSecret',
+  'accountingTokenKey',
+  'zohoClientId',
+  'zohoClientSecret',
+  'quickbooksClientId',
+  'quickbooksClientSecret',
+  'xeroClientId',
+  'xeroClientSecret',
 ];
 
 let cache: { at: number; values: Partial<Record<SecretName, string>> } | undefined;
@@ -36,14 +51,26 @@ function fromEnv(name: SecretName): string | undefined {
 }
 
 async function load(): Promise<Partial<Record<SecretName, string>>> {
-  const res = await ssmClient().send(
-    new GetParametersCommand({ Names: ALL.map((n) => prefix() + n), WithDecryption: true }),
-  );
+  // SSM returns at most 10 parameters per call.
+  const chunks: SecretName[][] = [];
+  for (let i = 0; i < ALL.length; i += 10) chunks.push(ALL.slice(i, i + 10));
+  const results = await Promise.all(chunks.map((names) => ssmClient().send(new GetParametersCommand({ Names: names.map((n) => prefix() + n), WithDecryption: true }))));
   const values: Partial<Record<SecretName, string>> = {};
-  for (const p of res.Parameters ?? []) {
-    values[p.Name!.slice(prefix().length) as SecretName] = p.Value;
+  for (const res of results) {
+    for (const p of res.Parameters ?? []) {
+      values[p.Name!.slice(prefix().length) as SecretName] = p.Value;
+    }
   }
   return values;
+}
+
+/** A secret that may not be set (optional features): undefined instead of an error. */
+export async function findSecret(name: SecretName): Promise<string | undefined> {
+  try {
+    return (await getSecret(name)).trim() || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Reads /orbit/<env>/app/* once (one SSM call) and caches for 5 minutes. */

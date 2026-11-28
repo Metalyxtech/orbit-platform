@@ -179,7 +179,7 @@ export function BundlePicker({
                   {seatSavingPct(bundle, currency)}%. {bundleDesc(bundle, companyType)}.
                 </p>
               )}
-              <p className="b-note">Need HR too? Choose HR on its own, or HR + Timesheet.</p>
+              <p className="b-note">Need HR too? Choose HR + Timesheet, or Complete suite + HR.</p>
             </>
           )}
           {kind === 'suite' && (

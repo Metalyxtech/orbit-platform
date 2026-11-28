@@ -14,8 +14,12 @@ import {
   setCompanyBlockedAction,
   setMemberBlockedAction,
   setCompanyIndustryAction,
+  setAllowedLanguagesAction,
   setStageAction,
 } from '../../actions';
+import { LANGUAGES, LANGUAGE_REGIONS } from '@orbit/core/i18n';
+import { allowedLanguages, companyLanguages } from '@orbit/core/i18n-store';
+import { companyProfile } from '@orbit/db';
 import { ROLE_LABEL, companyStatusChip, fmtDate, loadMemberPortals, loadPeople, loadPortals, memberStatusChip, requireSuperAdminPage } from '../../data';
 import { RemoveMemberButton } from '../../RemoveMemberButton';
 import { ResetButton } from '../../ResetButton';
@@ -45,6 +49,14 @@ export default async function CompanyPage({ params, searchParams }: { params: Pr
   );
   const portalStates = await loadPortals(c.id, me.userId);
   const industry = await withTenant(db, { companyId: c.id, userId: me.userId }, (tx) => companyIndustry(tx, c.id));
+  // Languages: Super Admin's limit (null = all), what that allows, and what the company uses now.
+  const { langLimit, langAllowed, langInUse } = await withTenant(db, { companyId: c.id, userId: me.userId }, async (tx) => {
+    // A savepoint: before migration 0039 the column is missing and this reads as "no limit".
+    const [row] = await tx
+      .transaction((sp) => sp.select({ allowed: companyProfile.allowedLanguages }).from(companyProfile).where(eq(companyProfile.companyId, c.id)))
+      .catch(() => [] as { allowed: string[] | null }[]);
+    return { langLimit: row?.allowed ?? null, langAllowed: await allowedLanguages(tx, c.id), langInUse: await companyLanguages(tx, c.id) };
+  });
   const memberPortalRows = await loadMemberPortals(c.id, me.userId, people.map((p) => p.id));
   const admins = people.filter((p) => p.role === 'company_admin');
   const registeredBy = [...admins].sort((a, b) => a.joinedAt.getTime() - b.joinedAt.getTime())[0];
@@ -195,6 +207,45 @@ export default async function CompanyPage({ params, searchParams }: { params: Pr
               <p className="faint" style={{ fontSize: 12, marginBottom: 0 }}>
                 {INDUSTRIES.find((i) => i.id === industry)?.detail}. Decides which portals, forms and subscription plans the company sees.
               </p>
+            </div>
+            <div className="o-panel">
+              <div className="o-panel-head">
+                <h2>Languages allowed</h2>
+              </div>
+              <p className="faint" style={{ fontSize: 12, marginTop: 0 }}>
+                {langLimit === null ? 'No limit: the company admin can offer any language.' : `${langAllowed.length} allowed.`} In use: {langInUse.map((l) => LANGUAGES.find((x) => x.code === l)?.name).join(', ')}.
+                English is always available.
+              </p>
+              <form action={setAllowedLanguagesAction.bind(null, c.id)} style={{ display: 'grid', gap: 8 }}>
+                {LANGUAGE_REGIONS.filter((r) => r.codes.some((x) => x !== 'en')).map((r) => (
+                  <fieldset key={r.name} style={{ border: 0, padding: 0, margin: 0 }}>
+                    <legend className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
+                      {r.name}
+                    </legend>
+                    <div className="o-row" style={{ gap: '4px 12px', flexWrap: 'wrap' }}>
+                      {r.codes
+                        .filter((x) => x !== 'en')
+                        .map((x) => {
+                          const l = LANGUAGES.find((y) => y.code === x)!;
+                          return (
+                            <label key={`${r.name}-${x}`} style={{ fontSize: 13, display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                              <input type="checkbox" name="lang" value={x} defaultChecked={langLimit === null || langAllowed.includes(x as never)} />
+                              {l.name}
+                            </label>
+                          );
+                        })}
+                    </div>
+                  </fieldset>
+                ))}
+                <div className="o-row" style={{ gap: 8 }}>
+                  <button className="o-btn small primary" type="submit">
+                    Save allowed languages
+                  </button>
+                  <button className="o-btn small" type="submit" name="all" value="1">
+                    Allow all
+                  </button>
+                </div>
+              </form>
             </div>
             <div className="o-panel">
               <div className="o-panel-head">

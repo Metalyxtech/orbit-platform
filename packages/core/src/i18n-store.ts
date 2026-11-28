@@ -1,7 +1,7 @@
 import { and, eq, isNotNull, notInArray } from 'drizzle-orm';
 import { companyProfile, memberPrefs, type Tx } from '@orbit/db';
 import { audit } from './audit';
-import { DEFAULT_LANG, isLang, langInfo, type Lang } from './i18n';
+import { DEFAULT_LANG, isLang, LANG_CODES, langInfo, type Lang } from './i18n';
 import type { ActionContext, SessionContext } from './session';
 
 // Which languages a company offers (the company admin chooses; the first is the default) and the
@@ -21,11 +21,21 @@ async function safe<T>(tx: Tx, fn: (sp: Tx) => Promise<T>, fallback: T): Promise
   }
 }
 
-/** The company's languages, default first. Always at least English when nothing is set. */
+/** Languages Super Admin allows this company to offer. English is always allowed. Null limit = every language. */
+export async function allowedLanguages(tx: Tx, companyId: string): Promise<Lang[]> {
+  const [row] = await safe(tx, (sp) => sp.select({ allowed: companyProfile.allowedLanguages }).from(companyProfile).where(eq(companyProfile.companyId, companyId)), [] as { allowed: string[] | null }[]);
+  const limit = row?.allowed;
+  if (!limit) return LANG_CODES;
+  return LANG_CODES.filter((l) => l === DEFAULT_LANG || limit.includes(l));
+}
+
+/** The company's languages, default first. English is always one of them (the general option). */
 export async function companyLanguages(tx: Tx, companyId: string): Promise<Lang[]> {
   const [row] = await safe(tx, (sp) => sp.select({ languages: companyProfile.languages }).from(companyProfile).where(eq(companyProfile.companyId, companyId)), [] as { languages: string[] }[]);
-  const list = (row?.languages ?? []).filter(isLang);
-  return list.length ? list : [DEFAULT_LANG];
+  const allowed = await allowedLanguages(tx, companyId);
+  const list = (row?.languages ?? []).filter((l): l is Lang => isLang(l) && allowed.includes(l));
+  if (!list.length) return [DEFAULT_LANG];
+  return list.includes(DEFAULT_LANG) ? list : [...list, DEFAULT_LANG];
 }
 
 /** The language this person sees: their own choice when the company still offers it, else the company default. */
@@ -50,9 +60,12 @@ export async function setMyLanguage(tx: Tx, ctx: ActionContext, raw: { language:
 /** The company admin chooses the languages (default first). People on a removed language move to the default. */
 export async function setCompanyLanguages(tx: Tx, ctx: ActionContext, raw: { languages: string[] }) {
   if (ctx.role !== 'company_admin') throw new Error('Only the company admin can choose languages');
-  const list = [...new Set((raw.languages ?? []).filter(isLang))];
-  if (!list.length) throw new Error('Choose at least one language');
-  if (list.length > 14) throw new Error('Too many languages');
+  const allowed = await allowedLanguages(tx, ctx.companyId);
+  const asked = [...new Set((raw.languages ?? []).filter(isLang))];
+  const refused = asked.filter((l) => !allowed.includes(l));
+  if (refused.length) throw new Error(`${refused.map((l) => langInfo(l).name).join(', ')} is not enabled for your company. Ask SteelConnect360 to enable it.`);
+  // English always stays available as the general option.
+  const list = asked.length ? (asked.includes(DEFAULT_LANG) ? asked : [...asked, DEFAULT_LANG]) : [DEFAULT_LANG];
   const before = await companyLanguages(tx, ctx.companyId);
   await tx
     .insert(companyProfile)
@@ -71,4 +84,25 @@ export async function setCompanyLanguages(tx: Tx, ctx: ActionContext, raw: { lan
     requestId: ctx.requestId,
   });
   return { languages: list };
+}
+
+/**
+ * Super Admin sets which languages a company may offer (null = every language). Languages taken
+ * away are removed from the company's list, and people using them move to the company default.
+ */
+export async function setAllowedLanguages(tx: Tx, companyId: string, raw: string[] | null) {
+  const limit = raw === null ? null : [...new Set([DEFAULT_LANG, ...raw.filter(isLang)])];
+  const before = await companyLanguages(tx, companyId);
+  await tx
+    .insert(companyProfile)
+    .values({ companyId, allowedLanguages: limit })
+    .onConflictDoUpdate({ target: companyProfile.companyId, set: { allowedLanguages: limit, updatedAt: new Date() } });
+  const keep = limit ? before.filter((l) => limit.includes(l)) : before;
+  const list = keep.length ? keep : [DEFAULT_LANG];
+  await tx.update(companyProfile).set({ languages: list, updatedAt: new Date() }).where(eq(companyProfile.companyId, companyId));
+  await tx
+    .update(memberPrefs)
+    .set({ language: null, updatedAt: new Date() })
+    .where(and(eq(memberPrefs.companyId, companyId), isNotNull(memberPrefs.language), notInArray(memberPrefs.language, list)));
+  return { allowed: limit, languages: list };
 }

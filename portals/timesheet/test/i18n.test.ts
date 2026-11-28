@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LANG_CODES, translationProblems } from '@orbit/core/i18n';
-import { TS_EN, TS_TRANSLATIONS, tsT } from './i18n';
+import { TS_EN, TS_TRANSLATIONS, tsT } from '../src/i18n';
 
 describe('timesheet translations', () => {
   it('keep every placeholder and only use known keys', () => {

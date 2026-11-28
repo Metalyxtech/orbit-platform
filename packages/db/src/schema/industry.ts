@@ -15,6 +15,8 @@ export const companyProfile = pgTable('company_profile', {
   industry: text('industry').notNull().default(sql`'manufacturing'`),
   /** Languages the company offers its people, default first (migration 0038). */
   languages: text('languages').array().notNull().default(sql`ARRAY['en']::text[]`),
+  /** Languages Super Admin allows this company to offer (migration 0039). Null = all languages. */
+  allowedLanguages: text('allowed_languages').array(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

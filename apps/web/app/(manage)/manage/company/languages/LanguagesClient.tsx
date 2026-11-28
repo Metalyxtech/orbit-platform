@@ -4,9 +4,9 @@ import { useRouter } from 'next/navigation';
 import { Button, Chip, Field, Select, useToast } from '@orbit/ui';
 import { setCompanyLanguagesAction } from './actions';
 
-type Lang = { code: string; name: string; native: string; rtl: boolean };
+type Lang = { code: string; name: string; native: string; rtl: boolean; region: string };
 
-export function LanguagesClient({ all, offered }: { all: Lang[]; offered: string[] }) {
+export function LanguagesClient({ all, offered, limited }: { all: Lang[]; offered: string[]; limited: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const [picked, setPicked] = useState<string[]>(offered);
@@ -15,6 +15,7 @@ export function LanguagesClient({ all, offered }: { all: Lang[]; offered: string
   const changed = picked.join() !== offered.join() || def !== offered[0];
 
   const toggle = (code: string) =>
+    code !== 'en' &&
     setPicked((p) => {
       const next = p.includes(code) ? p.filter((c) => c !== code) : [...p, code];
       if (!next.includes(def) && next.length) setDef(next[0]);
@@ -36,17 +37,22 @@ export function LanguagesClient({ all, offered }: { all: Lang[]; offered: string
     <>
       <div className="o-panel">
         <h2 style={{ marginTop: 0 }}>Languages your people can choose</h2>
+        {limited && (
+          <p className="muted" style={{ marginTop: 0, fontSize: 13 }}>
+            These are the languages enabled for your company. For another language, ask SteelConnect360 support.
+          </p>
+        )}
         <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))' }}>
           {all.map((l) => (
             <label key={l.code} className="o-panel" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: 0, padding: '10px 12px', cursor: 'pointer', borderColor: picked.includes(l.code) ? 'var(--steel)' : undefined }}>
-              <input type="checkbox" checked={picked.includes(l.code)} onChange={() => toggle(l.code)} aria-label={l.name} />
+              <input type="checkbox" checked={l.code === 'en' || picked.includes(l.code)} disabled={l.code === 'en'} onChange={() => toggle(l.code)} aria-label={l.name} />
               <span style={{ display: 'flex', flexDirection: 'column' }}>
                 <strong lang={l.code} dir={l.rtl ? 'rtl' : 'ltr'}>
                   {l.native}
                 </strong>
                 <span className="muted" style={{ fontSize: 12 }}>
                   {l.name}
-                  {l.rtl ? ' · right to left' : ''}
+                  {l.code === 'en' ? ' · always available' : l.rtl ? ' · right to left' : ''}
                 </span>
               </span>
               {def === l.code && (

@@ -17,7 +17,27 @@ export const LANGUAGES = [
   { code: 'ur', name: 'Urdu', native: 'اردو', dir: 'rtl', locale: 'ur-IN' },
   { code: 'fr', name: 'French', native: 'Français', dir: 'ltr', locale: 'fr-FR' },
   { code: 'de', name: 'German', native: 'Deutsch', dir: 'ltr', locale: 'de-DE' },
+  { code: 'es', name: 'Spanish', native: 'Español', dir: 'ltr', locale: 'es-ES' },
+  { code: 'pt', name: 'Portuguese', native: 'Português', dir: 'ltr', locale: 'pt-PT' },
+  { code: 'it', name: 'Italian', native: 'Italiano', dir: 'ltr', locale: 'it-IT' },
+  { code: 'nl', name: 'Dutch', native: 'Nederlands', dir: 'ltr', locale: 'nl-NL' },
+  { code: 'pl', name: 'Polish', native: 'Polski', dir: 'ltr', locale: 'pl-PL' },
+  { code: 'ro', name: 'Romanian', native: 'Română', dir: 'ltr', locale: 'ro-RO' },
+  { code: 'ru', name: 'Russian', native: 'Русский', dir: 'ltr', locale: 'ru-RU' },
+  { code: 'tr', name: 'Turkish', native: 'Türkçe', dir: 'ltr', locale: 'tr-TR' },
+  { code: 'ar', name: 'Arabic', native: 'العربية', dir: 'rtl', locale: 'ar-AE' },
+  { code: 'ne', name: 'Nepali', native: 'नेपाली', dir: 'ltr', locale: 'ne-NP' },
+  { code: 'fil', name: 'Filipino', native: 'Filipino', dir: 'ltr', locale: 'fil-PH' },
 ] as const;
+
+/** Where each language is mostly used, to group them on the admin pages. Each language is listed once. */
+export const LANGUAGE_REGIONS: { name: string; codes: string[] }[] = [
+  { name: 'English (UK, US, Australia and everywhere)', codes: ['en'] },
+  { name: 'India', codes: ['hi', 'mr', 'gu', 'pa', 'bn', 'or', 'ta', 'te', 'kn', 'ml', 'ur'] },
+  { name: 'Europe', codes: ['fr', 'de', 'es', 'pt', 'it', 'nl', 'pl', 'ro', 'ru', 'tr'] },
+  // Gulf workforces also use Urdu, Hindi, Malayalam, Tamil and Bengali (listed under India).
+  { name: 'Middle East and Gulf (also Urdu, Hindi, Malayalam, Tamil, Bengali above)', codes: ['ar', 'ne', 'fil'] },
+];
 
 export type Lang = (typeof LANGUAGES)[number]['code'];
 export type LangInfo = (typeof LANGUAGES)[number];

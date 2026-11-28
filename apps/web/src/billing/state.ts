@@ -2,7 +2,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { audit, companyIndustry, type ActionContext, type SessionContext } from '@orbit/core';
 import { billingEvents, companies, companyBilling, companyPortals, companySubscriptions, memberships, type Tx } from '@orbit/db';
-import { BILLING_LAUNCH, BUNDLES, CYCLES, TRIAL_DAYS, TRIAL_LIMITS, asCurrency, cycleOf, planId, planNameFor, planOf, portalName, priceFor, type Bundle, type Currency, type Cycle } from './plans';
+import { BILLING_LAUNCH, CYCLES, isBundle, TRIAL_DAYS, TRIAL_LIMITS, asCurrency, cycleOf, planId, planNameFor, planOf, portalName, priceFor, type Bundle, type Currency, type Cycle } from './plans';
 import { endSeatAddons, headcount, readSeats, seatPlanId, seatsTaken, writeMainSeats } from './seats';
 import { fitPortalsToPlan } from './portals';
 import { getCustomPlan } from '../custom/plan';
@@ -138,7 +138,8 @@ const requireAdmin = (ctx: SessionContext) => {
 };
 
 const startInput = z.object({
-  bundle: z.enum(BUNDLES.map((b) => b.id) as [Bundle, ...Bundle[]]),
+  /** A fixed bundle, or the company's own mix of portals ("mix-quality-sales"). */
+  bundle: z.string().max(120).refine(isBundle, 'Choose a plan').transform((b) => b as Bundle),
   cycle: z.enum(CYCLES.map((c) => c.id) as [Cycle, ...Cycle[]]),
   /** Seats to buy; at least the people in the company today (and the minimum). */
   seats: z.number().int().min(1).max(100_000).optional(),

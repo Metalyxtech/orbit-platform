@@ -1,16 +1,22 @@
 'use client';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
-  BUNDLES,
-  BUNDLE_GROUPS,
   CYCLES,
   FREE_VIEWERS,
   MIN_SEATS,
   SEAT_PRICE,
   TRIAL_DAYS,
+  bundleDesc,
+  bestBundleFor,
+  bundleName,
   bundleOf,
+  bundlesIn,
   cycleOf,
+  groupFrom,
   isCombo,
+  MIX_DISCOUNT,
+  seatPrice,
+  suiteCovering,
   money,
   roundMoney,
   seatQuote,
@@ -18,46 +24,227 @@ import {
   seatSeparately,
   taxNote,
   type Bundle,
+  type CompanyType,
   type Currency,
   type Cycle,
 } from './plans';
 
-/** Step 1: which portals. One portal, or a combination at a lower price per person. */
-export function BundlePicker({ bundle, onChange, currency = 'INR' }: { bundle: Bundle; onChange: (b: Bundle) => void; currency?: Currency }) {
+/** The ways to buy, laid out like the sales deck: three cards and a people band. */
+type Kind = 'single' | 'multi' | 'suite' | 'people';
+const JOB_PORTALS = ['sales', 'procurement', 'production', 'quality'];
+const ALL_PORTALS = [...JOB_PORTALS, 'timesheet', 'hr'];
+const PEOPLE: Bundle[] = ['timesheet', 'hr', 'hr_timesheet'];
+const kindOf = (b: Bundle): Kind => {
+  if (PEOPLE.includes(b)) return 'people';
+  const g = bundleOf(b)?.group;
+  return g === 'single' ? 'single' : g === 'suite' ? 'suite' : 'multi';
+};
+const label = (p: string) => (p === 'procurement' ? 'Purchase' : p === 'hr' ? 'HR' : p.charAt(0).toUpperCase() + p.slice(1));
+
+/**
+ * Step 1: the plan. Three cards (one portal, any portals you pick, a full suite) and a band for
+ * the people portals (Timesheet, HR, or both). Each card remembers its own choice.
+ */
+export function BundlePicker({
+  bundle,
+  onChange,
+  currency = 'INR',
+  companyType = 'manufacturing',
+}: {
+  bundle: Bundle;
+  onChange: (b: Bundle) => void;
+  currency?: Currency;
+  companyType?: CompanyType;
+}) {
   const m = (v: number) => money(v, currency);
-  const group = (title: string, list: typeof BUNDLES) => (
-    <div className="o-stack" style={{ gap: 6 }}>
-      <span className="muted" style={{ fontSize: 12, fontWeight: 600 }}>
-        {title}
-      </span>
-      <div className="b-bundles" role="radiogroup" aria-label={title}>
-        {list.map((b) => (
-          <button key={b.id} type="button" role="radio" aria-checked={bundle === b.id} className={`b-bundle${bundle === b.id ? ' on' : ''}`} onClick={() => onChange(b.id)}>
-            <span className="b-radio" aria-hidden />
-            <span>
-              <strong>
-                {b.name}
-                {b.best && (
-                  <span className="b-save" style={{ marginLeft: 6, whiteSpace: 'nowrap', display: 'inline-block' }}>
-                    Best value
-                  </span>
-                )}
-              </strong>
-              <small>{b.desc}</small>
-            </span>
-            <em>
-              {m(SEAT_PRICE[b.id][currency])}/person
-              {isCombo(b.id) && <span className="b-save" style={{ marginLeft: 6 }}>Save {seatSavingPct(b.id, currency)}%</span>}
-            </em>
-          </button>
-        ))}
+  const price = (b: Bundle) => seatPrice(b, currency);
+  const perDay = (v: number) => money(roundMoney(v / 30, currency), currency);
+  const kind = kindOf(bundle);
+  const info = bundleOf(bundle);
+
+  // Each card's own choice, so moving between cards brings it back.
+  const [single, setSingle] = useState<Bundle>(kind === 'single' ? bundle : 'production');
+  const [picked, setPicked] = useState<string[]>(kind === 'multi' && info ? info.portals : ['production', 'quality']);
+  const [suite, setSuite] = useState<Bundle>(kind === 'suite' ? bundle : 'factory');
+  const [people, setPeople] = useState<Bundle>(kind === 'people' ? bundle : 'hr_timesheet');
+  useEffect(() => {
+    const k = kindOf(bundle);
+    if (k === 'single') setSingle(bundle);
+    if (k === 'multi') setPicked(bundleOf(bundle)?.portals ?? []);
+    if (k === 'suite') setSuite(bundle);
+    if (k === 'people') setPeople(bundle);
+  }, [bundle]);
+
+  const multiBundle = picked.length >= 2 ? bestBundleFor(picked) : null;
+  const togglePortal = (p: string) => {
+    const next = picked.includes(p) ? picked.filter((x) => x !== p) : [...picked, p];
+    setPicked(next);
+    if (next.length >= 2) onChange(bestBundleFor(next));
+  };
+  const multiPrice = kind === 'multi' && multiBundle ? price(multiBundle) : groupFrom('pair', currency);
+  // A suite that covers the chosen portals for about the same money is worth pointing out.
+  const tip = multiBundle && kind === 'multi' ? suiteCovering(picked, currency, multiPrice * 1.15) : undefined;
+
+  const singlePrice = kind === 'single' ? price(bundle) : Math.min(...JOB_PORTALS.map((p) => price(bestBundleFor([p]))));
+  const legacy = info?.group === 'legacy';
+
+  const head = (k: Kind, body: ReactNode) => (
+    <button type="button" role="radio" aria-checked={kind === k} className="b-tier-head" onClick={() => onChange(k === 'single' ? single : k === 'suite' ? suite : k === 'people' ? people : (multiBundle ?? bestBundleFor(['production', 'quality'])))}>
+      {body}
+    </button>
+  );
+  const chip = (key: string, text: ReactNode, on: boolean, onClick: () => void, check = false) => (
+    <button key={key} type="button" role={check ? 'checkbox' : 'radio'} aria-checked={on} className={`b-chip${on ? ' on' : ''}`} onClick={onClick}>
+      <span className={check ? 'b-check' : 'b-radio'} aria-hidden />
+      {text}
+    </button>
+  );
+
+  return (
+    <div className="b-pick">
+      {legacy && info && (
+        <p className="b-legacy">
+          Your plan, <strong>{info.name}</strong>, is no longer offered to new companies. You can stay on it, or choose one of the plans below.
+        </p>
+      )}
+      <div className="b-tiers" role="radiogroup" aria-label="Type of plan">
+        <div className={`b-tier${kind === 'single' ? ' on' : ''}`}>
+          {head(
+            'single',
+            <>
+              <span className="b-tier-tag">Start</span>
+              <strong className="b-tier-title">Fix one problem</strong>
+              <span className="b-tier-amount">{m(singlePrice)}</span>
+              <span className="b-tier-per">{kind === 'single' ? 'per person per month' : 'from, per person per month'}</span>
+              <span className="b-pill">About {perDay(singlePrice)} a day</span>
+            </>,
+          )}
+          <div className="b-tier-body">
+            <p className="b-tier-q">Pick any one portal</p>
+            <div className="b-chips" role="radiogroup" aria-label="Which portal">
+              {JOB_PORTALS.map((p) => {
+                const b = bestBundleFor([p]);
+                return chip(
+                  p,
+                  <>
+                    {label(p)} <em>{m(price(b))}</em>
+                  </>,
+                  kind === 'single' && bundle === b,
+                  () => onChange(b),
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className={`b-tier${kind === 'multi' ? ' on' : ''}`}>
+          {head(
+            'multi',
+            <>
+              <span className="b-tier-tag">Grow</span>
+              <strong className="b-tier-title">Connect your teams</strong>
+              <span className="b-tier-amount">{m(multiPrice)}</span>
+              <span className="b-tier-per">{kind === 'multi' && multiBundle ? 'per person per month' : 'from, per person per month'}</span>
+              <span className="b-pill">
+                {kind === 'multi' && multiBundle && seatSavingPct(multiBundle, currency) > 0
+                  ? `Save ${seatSavingPct(multiBundle, currency)}% on ${picked.length} portals`
+                  : `Save up to ${Math.round(MIX_DISCOUNT(4) * 100)}%`}
+              </span>
+            </>,
+          )}
+          <div className="b-tier-body">
+            <p className="b-tier-q">
+              Pick any portals <span>{picked.length < 2 ? `tick ${2 - picked.length} more` : `${picked.length} chosen`}</span>
+            </p>
+            <div className="b-chips" role="group" aria-label="Which portals">
+              {ALL_PORTALS.map((p) => chip(p, <>{label(p)} <em>{m(price(bestBundleFor([p])))}</em></>, picked.includes(p), () => togglePortal(p), true))}
+            </div>
+            {kind === 'multi' && multiBundle && (
+              <p className="b-note">
+                {bundleName(multiBundle, companyType)}: <strong>{m(price(multiBundle))}</strong> instead of <s>{m(seatSeparately(multiBundle, currency))}</s>
+              </p>
+            )}
+            {tip && (
+              <button type="button" className="b-tip" onClick={() => onChange(tip)}>
+                Tip: the {bundleName(tip, companyType)} has all of these and more for {m(price(tip))}. Switch to it
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className={`b-tier dark${kind === 'suite' ? ' on' : ''}`}>
+          <span className="b-tier-badge">Most popular</span>
+          {head(
+            'suite',
+            <>
+              <span className="b-tier-tag">Run the factory</span>
+              <strong className="b-tier-title">{bundleName(kind === 'suite' ? bundle : 'factory', companyType)}</strong>
+              <span className="b-tier-amount">{m(price(kind === 'suite' ? bundle : 'factory'))}</span>
+              <span className="b-tier-per">per person per month · {perDay(price(kind === 'suite' ? bundle : 'factory'))} a day</span>
+              <span className="b-pill">Save {seatSavingPct(kind === 'suite' ? bundle : 'factory', currency)}% against buying separately</span>
+            </>,
+          )}
+          <div className="b-tier-body">
+            <p className="b-tier-q">Choose your suite</p>
+            <div className="b-chips col" role="radiogroup" aria-label="Which suite">
+              {bundlesIn('suite').map((b) =>
+                chip(
+                  b.id,
+                  <>
+                    <span className="b-chip-main">
+                      {bundleName(b.id, companyType)}
+                      <small>{b.id === 'factory' ? 'Sales, Purchase, Production, Quality' : b.id === 'complete' ? '+ Timesheet' : '+ Timesheet and HR'}</small>
+                    </span>
+                    <em>{m(price(b.id))}</em>
+                  </>,
+                  kind === 'suite' && bundle === b.id,
+                  () => onChange(b.id),
+                ),
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className={`b-people${kind === 'people' ? ' on' : ''}`} role="radiogroup" aria-label="People portals">
+        <span className="b-people-tag">People</span>
+        <span className="b-people-text">Only need Timesheet or HR?</span>
+        <div className="b-chips">
+          {PEOPLE.map((b) =>
+            chip(
+              b,
+              <>
+                {bundleName(b, companyType)} <em>{m(price(b))}</em>
+                {seatSavingPct(b, currency) > 0 && <span className="b-save">save {seatSavingPct(b, currency)}%</span>}
+              </>,
+              kind === 'people' && bundle === b,
+              () => onChange(b),
+            ),
+          )}
+        </div>
+      </div>
+      <div className="b-strip">
+        <span className="hi">Works alongside Tally or your ERP</span>
+        <span>GM + 1 director free</span>
+        <span>2 months free on yearly</span>
+        <span>{taxNote(currency)}</span>
       </div>
     </div>
   );
+}
+
+/** Company type on the public pricing page: it names the suite (Manufacturing or Production). */
+export function CompanyTypeSwitch({ value, onChange }: { value: CompanyType; onChange: (t: CompanyType) => void }) {
+  const types: { id: CompanyType; label: string }[] = [
+    { id: 'manufacturing', label: 'Manufacturing: fabrication, piping, projects' },
+    { id: 'production', label: 'Production: machining, moulding, press tools' },
+  ];
   return (
-    <div className="o-stack" style={{ gap: 12, flex: 1 }}>
-      {BUNDLE_GROUPS.map((g) => (
-        <div key={g.id}>{group(g.title, BUNDLES.filter((b) => b.group === g.id))}</div>
+    <div className="b-cycle" role="group" aria-label="Company type">
+      {types.map((t) => (
+        <button key={t.id} type="button" aria-pressed={value === t.id} onClick={() => onChange(t.id)}>
+          {t.label}
+        </button>
       ))}
     </div>
   );
@@ -90,6 +277,7 @@ export function SeatCalculator({
   minSeats = 1,
   peopleNote,
   action,
+  companyType = 'manufacturing',
 }: {
   bundle: Bundle;
   cycle: Cycle;
@@ -100,18 +288,18 @@ export function SeatCalculator({
   minSeats?: number;
   peopleNote?: ReactNode;
   action: ReactNode;
+  companyType?: CompanyType;
 }) {
   const q = seatQuote(bundle, seats, cycle, currency);
   const c = cycleOf(cycle);
   const m = (v: number) => money(v, currency);
-  const b = bundleOf(bundle)!;
   return (
     <div className="b-calc">
       <article className="b-plan popular">
-        <h3>{b.name}</h3>
-        <p className="b-tag">{b.desc}</p>
+        <h3>{bundleName(bundle, companyType)}</h3>
+        <p className="b-tag">{bundleDesc(bundle, companyType)}</p>
         <div className="b-price">
-          <strong>{m(SEAT_PRICE[bundle][currency])}</strong>
+          <strong>{m(seatPrice(bundle, currency))}</strong>
           <span>per person / month</span>
         </div>
         {isCombo(bundle) && (

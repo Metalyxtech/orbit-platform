@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { audit, companyIndustry, type ActionContext, type SessionContext } from '@orbit/core';
 import { billingEvents, companies, companyBilling, companyPortals, companySubscriptions, memberships, type Tx } from '@orbit/db';
@@ -8,7 +8,7 @@ import { fitPortalsToPlan } from './portals';
 import { getCustomPlan } from '../custom/plan';
 import { markCreditUsed } from '../custom/plan';
 import * as rz from './razorpay';
-import { completeSwitch, pendingCheckout, recordCheckout, switchTiming } from './switch';
+import { completeSwitch, pendingCheckout, recordCheckout, switchTiming, type PendingCheckout } from './switch';
 
 const pgCode = (err: unknown) => (err as { code?: string; cause?: { code?: string } })?.code ?? (err as { cause?: { code?: string } })?.cause?.code;
 /** Migrations 0011/0012 not run yet: every company is on the free trial. */
@@ -187,20 +187,59 @@ export async function confirmCheckout(tx: Tx, ctx: ActionContext, raw: z.input<t
   if (!sub) throw new Error('This payment is not for your company');
   if (!(await rz.verifyCheckoutSignature(input.paymentId, input.subscriptionId, input.signature))) throw new Error('The payment could not be verified. Nothing was charged twice; contact SteelConnect360 if money left your account.');
   const live = await rz.fetchSubscription(input.subscriptionId);
-  const state = await billingState(tx, ctx);
-  await completeSwitch(tx, ctx, input.subscriptionId, sub, new Date(state.trialEndsAt));
-  await applyRazorpay(tx, ctx.companyId, live);
+  const fit = await finishCheckout(tx, ctx, input.subscriptionId, sub, live, input.paymentId);
+  return { status: live.status, paused: fit.paused.map(portalName), resumed: fit.resumed.map(portalName) };
+}
+
+/** Who finished a checkout: the company admin in the browser, or Razorpay's webhook (no person). */
+export type BillingActor = { companyId: string; membershipId: string | null; requestId?: string };
+
+async function checkoutDone(tx: Tx, companyId: string, subId: string) {
+  const [e] = await tx
+    .select({ id: billingEvents.id })
+    .from(billingEvents)
+    .where(and(eq(billingEvents.companyId, companyId), eq(billingEvents.type, 'checkout.completed'), sql`${billingEvents.data}->>'subscription' = ${subId}`))
+    .limit(1);
+  return !!e;
+}
+
+/**
+ * A paid checkout becomes the company's plan: the subscription is switched, seats written, and
+ * portals outside the plan paused. Runs once per subscription, whichever arrives first: the
+ * browser coming back from Razorpay, or Razorpay's webhook (the customer closed the window).
+ */
+async function finishCheckout(tx: Tx, actor: BillingActor, subId: string, sub: PendingCheckout, live: rz.RzSubscription, paymentId: string) {
+  if (await checkoutDone(tx, actor.companyId, subId)) {
+    await applyRazorpay(tx, actor.companyId, live);
+    return { paused: [] as string[], resumed: [] as string[] };
+  }
+  const state = await billingStateFor(tx, actor.companyId);
+  await completeSwitch(tx, actor, subId, sub, new Date(state.trialEndsAt));
+  await applyRazorpay(tx, actor.companyId, live);
   // Per-user plan: the new subscription pays for all the seats, so extra-seat subscriptions bought
   // on the old plan stop when their paid period ends.
   if (sub.seats) {
-    await writeMainSeats(tx, ctx.companyId, sub.seats);
-    await endSeatAddons(tx, ctx.companyId);
+    await writeMainSeats(tx, actor.companyId, sub.seats);
+    await endSeatAddons(tx, actor.companyId);
   }
-  if (sub.credit) await markCreditUsed(tx, ctx.companyId);
-  const fit = await fitPortalsToPlan(tx, ctx, sub.plan);
-  await tx.insert(billingEvents).values({ companyId: ctx.companyId, type: 'checkout.completed', razorpayId: input.paymentId, data: { subscription: input.subscriptionId } });
-  await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'billing.subscribe', entity: 'company_subscriptions', entityId: ctx.companyId, data: { summary: [`Subscribed to ${planNameFor(sub.plan, state.companyType) ?? 'the custom plan'} (${sub.plan === 'custom' ? sub.cycle : cycleOf(sub.cycle).label})`] }, requestId: ctx.requestId });
-  return { status: live.status, paused: fit.paused.map(portalName), resumed: fit.resumed.map(portalName) };
+  if (sub.credit) await markCreditUsed(tx, actor.companyId);
+  const fit = await fitPortalsToPlan(tx, actor, sub.plan);
+  await tx.insert(billingEvents).values({ companyId: actor.companyId, type: 'checkout.completed', razorpayId: paymentId, data: { subscription: subId } });
+  await audit(tx, { companyId: actor.companyId, actorId: actor.membershipId, action: 'billing.subscribe', entity: 'company_subscriptions', entityId: actor.companyId, data: { summary: [`Subscribed to ${planNameFor(sub.plan, state.companyType) ?? 'the custom plan'} (${sub.plan === 'custom' ? sub.cycle : cycleOf(sub.cycle).label})`] }, requestId: actor.requestId });
+  return fit;
+}
+
+/**
+ * Webhook: a subscription the company started a checkout for is now paid or authorised, but the
+ * browser never came back (window closed, network dropped). Finish the checkout here, so the
+ * company gets the plan it paid for and only that plan's portals.
+ */
+export async function adoptPaidCheckout(tx: Tx, companyId: string, live: rz.RzSubscription, paymentId: string | null) {
+  if (live.status !== 'active' && live.status !== 'authenticated') return false;
+  const pending = await pendingCheckout(tx, companyId, live.id);
+  if (!pending) return false;
+  await finishCheckout(tx, { companyId, membershipId: null }, live.id, pending, live, paymentId ?? live.id);
+  return true;
 }
 
 /** Stores what Razorpay says about the subscription (checkout return and webhooks). */

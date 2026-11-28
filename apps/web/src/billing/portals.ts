@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
-import { audit, companyIndustry, type ActionContext } from '@orbit/core';
+import { audit, companyIndustry } from '@orbit/core';
 import { billingEvents, companyPortals, type Tx } from '@orbit/db';
 import { isCustomPortal } from '../portals';
 import { planNameFor, planOf, portalName } from './plans';
@@ -10,7 +10,8 @@ import { planNameFor, planOf, portalName } from './plans';
 
 const PAUSED = 'plan.portals_paused';
 
-export async function fitPortalsToPlan(tx: Tx, ctx: ActionContext, planId: string) {
+/** `membershipId` null: Razorpay's webhook finished the checkout, not a person. */
+export async function fitPortalsToPlan(tx: Tx, ctx: { companyId: string; membershipId: string | null; requestId?: string }, planId: string) {
   const plan = planOf(planId);
   if (!plan) return { paused: [] as string[], resumed: [] as string[] };
   const rows = await tx.select({ portal: companyPortals.portal, enabled: companyPortals.enabled }).from(companyPortals).where(eq(companyPortals.companyId, ctx.companyId));

@@ -1,4 +1,5 @@
 import { messages } from './messages';
+import type { TsKey } from './i18n';
 
 /** Company rules that affect totals and validation (subset of ts_settings). */
 export interface TsRules {
@@ -134,21 +135,24 @@ export function computeTotals(rows: GridRow[], rules: TsRules, plan?: DayPlan[],
   };
 }
 
-export type CellResult = { ok: true; value: number } | { ok: false; error: string };
+export type CellResult = { ok: true; value: number } | { ok: false; error: string; key: TsKey };
 
 /** Typing replaces the value; it is validated to the step and 0-24 (WeekGrid behaviour). */
 export function parseCell(input: string, stepHours: number): CellResult {
   const trimmed = input.trim().replace(',', '.');
   if (trimmed === '' || trimmed === '-') return { ok: true, value: 0 };
   const n = Number(trimmed);
-  if (!Number.isFinite(n) || n < 0) return { ok: false, error: 'Enter hours as a number, e.g. 7.5' };
-  if (n > 24) return { ok: false, error: messages.cellOver24 };
+  if (!Number.isFinite(n) || n < 0) return { ok: false, error: 'Enter hours as a number, e.g. 7.5', key: 'cellNumber' };
+  if (n > 24) return { ok: false, error: messages.cellOver24, key: 'cellOver24' };
   return { ok: true, value: round2(Math.round(n / stepHours) * stepHours) };
 }
 
 export interface SubmitIssue {
   level: 'error' | 'warning';
   message: string;
+  /** The same message for the person's language (i18n.ts), with its values. */
+  key?: TsKey;
+  vars?: Record<string, string | number>;
   rowKey?: string;
   day?: number;
 }
@@ -159,14 +163,14 @@ export function validateSubmit(rows: GridRow[], rules: TsRules, note: string | n
 
   for (const r of rows) {
     if (!r.projectId || (rules.requireCostCode && !r.costCodeId)) {
-      issues.push({ level: 'error', message: messages.missingCostCode, rowKey: r.key });
+      issues.push({ level: 'error', message: messages.missingCostCode, key: 'missingCostCode', rowKey: r.key });
     }
   }
   totals.dayTotals.forEach((h, d) => {
-    if (h > 24) issues.push({ level: 'error', message: messages.cellOver24, day: d });
+    if (h > 24) issues.push({ level: 'error', message: messages.cellOver24, key: 'cellOver24', day: d });
   });
   if (totals.dayTotals.some((h) => h > rules.noteOverHours) && !note?.trim()) {
-    issues.push({ level: 'error', message: messages.noteRequired(rules.noteOverHours) });
+    issues.push({ level: 'error', message: messages.noteRequired(rules.noteOverHours), key: 'noteRequired', vars: { h: rules.noteOverHours.toFixed(1) } });
   }
   const dates = weekDates(weekStartDate);
   dates.forEach((date, d) => {
@@ -180,9 +184,9 @@ export function validateSubmit(rows: GridRow[], rules: TsRules, note: string | n
   // (only for weeks that use the roster or advance approval, so other companies work as before).
   const usesPlanning = totals.rostered || !!plan?.some((p) => p.preApproved > 0);
   if (usesPlanning && totals.notPreApprovedOt > 0 && !note?.trim()) {
-    issues.push({ level: 'error', message: messages.otReasonRequired(totals.notPreApprovedOt) });
+    issues.push({ level: 'error', message: messages.otReasonRequired(totals.notPreApprovedOt), key: 'otReasonRequired', vars: { h: totals.notPreApprovedOt.toFixed(2) } });
   }
-  if (totals.total === 0) issues.push({ level: 'error', message: 'Enter some hours before you submit.' });
+  if (totals.total === 0) issues.push({ level: 'error', message: 'Enter some hours before you submit.', key: 'enterSomeHours' });
 
   // One message per kind is enough for the banner.
   const seen = new Set<string>();

@@ -1,7 +1,9 @@
 'use client';
 import Link from 'next/link';
-import { Fragment, useState } from 'react';
-import { Button, Chip, EmptyState, TopBar } from '@orbit/ui';
+import { Fragment, useMemo, useState } from 'react';
+import { dateLabel } from '@orbit/core/i18n';
+import { Button, Chip, EmptyState, TopBar, useLang } from '@orbit/ui';
+import { prodT, termT } from '../i18n';
 import { fmtDate, fmtQty, OP_STATUS, pct, SHIFTS, type OpStatus } from '../config';
 import { reportOutputAction } from '../actions';
 import type { FloorWo } from '../server';
@@ -11,6 +13,8 @@ import { useRun } from './useRun';
 /** The supervisor's daily production report: one screen, every work order on the floor, one row per operation. */
 export function DailyReportClient({ wos }: { wos: FloorWo[] }) {
   const { busy, run } = useRun();
+  const lang = useLang();
+  const { t, term } = useMemo(() => ({ t: prodT(lang), term: termT(lang) }), [lang]);
   const t0 = new Date().toISOString().slice(0, 10);
   const [day, setDay] = useState(t0);
   const [shift, setShift] = useState(SHIFTS[0]);
@@ -39,23 +43,25 @@ export function DailyReportClient({ wos }: { wos: FloorWo[] }) {
 
   return (
     <>
-      <TopBar crumbs={['Production', 'Daily production report']} />
+      <TopBar crumbs={[t('production'), t('dailyReport')]} />
       <div className="o-page">
-        <PageHead title="Daily production report" lead="Enter today’s output and hours for each operation, then save once.">
+        <PageHead title={t('dailyReport')} lead={t('reportLead')}>
           <label className="o-field">
-            Date
+            {t('date')}
             <input className="o-input" type="date" value={day} max={t0} onChange={(e) => setDay(e.target.value)} />
           </label>
           <label className="o-field">
-            Shift
+            {t('shift')}
             <select className="o-select" value={shift} onChange={(e) => setShift(e.target.value)}>
               {SHIFTS.map((s) => (
-                <option key={s}>{s}</option>
+                <option key={s} value={s}>
+                  {term(s)}
+                </option>
               ))}
             </select>
           </label>
         </PageHead>
-        {wos.length === 0 && <EmptyState title="No work orders on the shop floor. They appear here once released." />}
+        {wos.length === 0 && <EmptyState title={t('noWos')} />}
         {wos.map((w) => (
           <div key={w.id} className="o-panel flush">
             <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
@@ -63,20 +69,20 @@ export function DailyReportClient({ wos }: { wos: FloorWo[] }) {
                 <Link href={woHref(w.id)}>{w.number}</Link> {w.title} <PriorityChip priority={w.priority} />
               </h2>
               <span className="muted" style={{ fontSize: 12 }}>
-                {w.trade} · {fmtQty(w.qty)} {w.unit} · due {fmtDate(w.due)} ·{' '}
-                <Link href={woHref(w.id)}>{w.drawings ? `${w.drawings} drawing${w.drawings === 1 ? '' : 's'}` : 'no drawings'}</Link>
+                {w.trade} · {fmtQty(w.qty)} {w.unit} · {t('due', { date: w.due ? dateLabel(lang, w.due, { day: 'numeric', month: 'short', year: 'numeric' }) : fmtDate(w.due) })} ·{' '}
+                <Link href={woHref(w.id)}>{w.drawings ? (w.drawings === 1 ? t('oneDrawing') : t('drawings', { n: w.drawings })) : t('noDrawings')}</Link>
               </span>
             </div>
             <div className="o-scroll">
               <table className="o-table">
                 <thead>
                   <tr>
-                    <th>Operation</th>
-                    <th>Progress</th>
-                    <th className="num">{w.measures.length ? 'Good qty today' : 'Qty today'}</th>
-                    <th className="num">Hours</th>
-                    <th className="num">People</th>
-                    <th>Remarks</th>
+                    <th>{t('operation')}</th>
+                    <th>{t('progress')}</th>
+                    <th className="num">{w.measures.length ? t('goodQtyToday') : t('qtyToday')}</th>
+                    <th className="num">{t('hours')}</th>
+                    <th className="num">{t('people')}</th>
+                    <th>{t('remarks')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -88,7 +94,7 @@ export function DailyReportClient({ wos }: { wos: FloorWo[] }) {
                       <Fragment key={o.id}>
                       <tr>
                         <td>
-                          {o.name} {!open && <Chip tone={OP_STATUS[o.status as OpStatus].tone}>{OP_STATUS[o.status as OpStatus].label}</Chip>}
+                          {o.name} {!open && <Chip tone={OP_STATUS[o.status as OpStatus].tone}>{term(OP_STATUS[o.status as OpStatus].label)}</Chip>}
                         </td>
                         <td style={{ width: 170 }}>
                           <Progress value={pct(o.doneQty, w.qty)} tone={o.status === 'rework' ? 'bad' : undefined} />
@@ -96,21 +102,21 @@ export function DailyReportClient({ wos }: { wos: FloorWo[] }) {
                         {open ? (
                           <>
                             <td className="num" style={{ width: 100 }}>
-                              <input className="o-input" type="number" min={0} step="any" value={r.qty} aria-label={`${w.number} ${o.name} quantity`} onChange={(e) => setRow(o.id, { qty: e.target.value })} />
+                              <input className="o-input" type="number" min={0} step="any" value={r.qty} aria-label={`${w.number} ${o.name} ${w.measures.length ? t('goodQtyToday') : t('qtyToday')}`} onChange={(e) => setRow(o.id, { qty: e.target.value })} />
                             </td>
                             <td className="num" style={{ width: 90 }}>
-                              <input className="o-input" type="number" min={0} step="0.5" value={r.hours} aria-label={`${w.number} ${o.name} hours`} onChange={(e) => setRow(o.id, { hours: e.target.value })} />
+                              <input className="o-input" type="number" min={0} step="0.5" value={r.hours} aria-label={`${w.number} ${o.name} ${t('hours')}`} onChange={(e) => setRow(o.id, { hours: e.target.value })} />
                             </td>
                             <td className="num" style={{ width: 80 }}>
-                              <input className="o-input" type="number" min={0} value={r.workers} aria-label={`${w.number} ${o.name} people`} onChange={(e) => setRow(o.id, { workers: e.target.value })} />
+                              <input className="o-input" type="number" min={0} value={r.workers} aria-label={`${w.number} ${o.name} ${t('people')}`} onChange={(e) => setRow(o.id, { workers: e.target.value })} />
                             </td>
                             <td>
-                              <input className="o-input" value={r.remarks} maxLength={1000} aria-label={`${w.number} ${o.name} remarks`} onChange={(e) => setRow(o.id, { remarks: e.target.value })} />
+                              <input className="o-input" value={r.remarks} maxLength={1000} aria-label={`${w.number} ${o.name} ${t('remarks')}`} onChange={(e) => setRow(o.id, { remarks: e.target.value })} />
                             </td>
                           </>
                         ) : (
                           <td colSpan={4} className="faint" style={{ fontSize: 12 }}>
-                            Complete.
+                            {t('complete')}
                           </td>
                         )}
                       </tr>
@@ -120,13 +126,15 @@ export function DailyReportClient({ wos }: { wos: FloorWo[] }) {
                             <div className="o-row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                               {w.measures.map((f) => (
                                 <label key={f.id} className="o-field" style={{ margin: 0, fontSize: 12, minWidth: 120 }}>
-                                  {f.label}
+                                  {term(f.label)}
                                   {f.unit ? ` (${f.unit})` : ''}
                                   {f.options ? (
                                     <select className="o-select" value={r.m[f.id] ?? ''} onChange={(e) => setRow(o.id, { m: { ...r.m, [f.id]: e.target.value } })}>
                                       <option value="">-</option>
                                       {f.options.map((x) => (
-                                        <option key={x}>{x}</option>
+                                        <option key={x} value={x}>
+                                          {term(x)}
+                                        </option>
                                       ))}
                                     </select>
                                   ) : (
@@ -157,10 +165,10 @@ export function DailyReportClient({ wos }: { wos: FloorWo[] }) {
         {wos.length > 0 && (
           <div className="o-row" style={{ position: 'sticky', bottom: 0, background: 'var(--paper)', padding: '10px 0' }}>
             <Button variant="primary" disabled={busy || !filled.length} onClick={saveAll}>
-              Save report ({filled.length} {filled.length === 1 ? 'line' : 'lines'})
+              {t('saveReport', { n: filled.length })}
             </Button>
             <span className="muted" style={{ fontSize: 12 }}>
-              Lines with a problem stay on the screen with the reason; the rest are saved.
+              {t('saveHint')}
             </span>
           </div>
         )}

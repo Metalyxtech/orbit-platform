@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
-import { companies } from './platform';
+import { companies, memberships } from './platform';
 import { prodReports } from './production';
 
 /**
@@ -13,6 +13,8 @@ export const companyProfile = pgTable('company_profile', {
     .primaryKey()
     .references(() => companies.id),
   industry: text('industry').notNull().default(sql`'manufacturing'`),
+  /** Languages the company offers its people, default first (migration 0038). */
+  languages: text('languages').array().notNull().default(sql`ARRAY['en']::text[]`),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -25,4 +27,16 @@ export const prodReportMeasures = pgTable('prod_report_measures', {
     .notNull()
     .references(() => companies.id),
   measures: jsonb('measures').$type<Record<string, string | number>>().notNull().default({}),
+});
+
+/** Each person's own settings in a company: the language they picked (migration 0038). */
+export const memberPrefs = pgTable('member_prefs', {
+  membershipId: uuid('membership_id')
+    .primaryKey()
+    .references(() => memberships.id),
+  companyId: uuid('company_id')
+    .notNull()
+    .references(() => companies.id),
+  language: text('language'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

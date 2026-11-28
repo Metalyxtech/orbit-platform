@@ -18,6 +18,8 @@ export function companyAdminItems(
     { href: '/manage/company/people', label: 'People and portals', group: 'Company' },
     { href: '/manage/company/portals', label: 'Company portals', group: 'Company' },
     { href: '/manage/company/billing', label: 'Plan and billing', group: 'Company' },
+    // Which languages people can use (Hindi, Tamil, Urdu, French, German...).
+    { href: '/manage/company/languages', label: 'Languages', group: 'Company' },
     // Tally, Zoho Books, QuickBooks or Xero: Sales invoices and Purchase bills.
     { href: '/manage/company/accounting', label: 'Accounting', group: 'Company' },
     { href: '/manage/company/history', label: 'Change history', group: 'Company' },

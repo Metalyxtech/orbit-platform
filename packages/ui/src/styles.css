@@ -1173,3 +1173,23 @@ p { margin: 0 0 12px; }
 .hr-att .m-H, .hr-att .m-WO { color: var(--ink-3); background: var(--paper); }
 .hr-att .m-A { color: var(--bad); font-weight: 700; background: color-mix(in srgb, var(--bad) 8%, transparent); }
 .hr-att .bad { color: var(--bad); font-weight: 600; }
+
+/* Languages: Indian scripts and Urdu use the device's own fonts after Inter (which has no glyphs for them). */
+.o-lang { display: contents; }
+.o-lang-hi, .o-lang-mr { font-family: Inter, 'Noto Sans Devanagari', 'Nirmala UI', 'Kohinoor Devanagari', 'Mangal', sans-serif; }
+.o-lang-gu { font-family: Inter, 'Noto Sans Gujarati', 'Nirmala UI', 'Gujarati Sangam MN', 'Shruti', sans-serif; }
+.o-lang-pa { font-family: Inter, 'Noto Sans Gurmukhi', 'Nirmala UI', 'Gurmukhi MN', 'Raavi', sans-serif; }
+.o-lang-bn { font-family: Inter, 'Noto Sans Bengali', 'Nirmala UI', 'Kohinoor Bangla', 'Vrinda', sans-serif; }
+.o-lang-or { font-family: Inter, 'Noto Sans Oriya', 'Nirmala UI', 'Oriya Sangam MN', 'Kalinga', sans-serif; }
+.o-lang-ta { font-family: Inter, 'Noto Sans Tamil', 'Nirmala UI', 'Tamil Sangam MN', 'Latha', sans-serif; }
+.o-lang-te { font-family: Inter, 'Noto Sans Telugu', 'Nirmala UI', 'Kohinoor Telugu', 'Gautami', sans-serif; }
+.o-lang-kn { font-family: Inter, 'Noto Sans Kannada', 'Nirmala UI', 'Kannada Sangam MN', 'Tunga', sans-serif; }
+.o-lang-ml { font-family: Inter, 'Noto Sans Malayalam', 'Nirmala UI', 'Malayalam Sangam MN', 'Kartika', sans-serif; }
+.o-lang-ur { font-family: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Noto Naskh Arabic', 'Geeza Pro', 'Segoe UI', Inter, sans-serif; }
+/* Right-to-left (Urdu): numbers and hour boxes stay left-to-right so 7.5 reads correctly. */
+[dir='rtl'] .num, [dir='rtl'] input[inputmode='decimal'], [dir='rtl'] input[type='number'], [dir='rtl'] input[type='date'] { direction: ltr; unicode-bidi: plaintext; }
+[dir='rtl'] th, [dir='rtl'] td { text-align: right; }
+[dir='rtl'] .o-table th.num, [dir='rtl'] .o-table td.num { text-align: left; }
+.o-lang-switch { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--side-ink-2, #9aa3ad); padding: 6px 12px; }
+.o-lang-switch select { flex: 1; min-width: 0; background: transparent; color: inherit; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; padding: 4px 6px; font: inherit; }
+.o-lang-switch select option { color: #1b2026; }

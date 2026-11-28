@@ -19,7 +19,9 @@
     "./teams": "./src/teams.ts",
     "./teams-actions": "./src/teams-actions.ts",
     "./attendance": "./src/attendance.ts",
-    "./accounting": "./src/accounting.ts"
+    "./accounting": "./src/accounting.ts",
+    "./i18n": "./src/i18n.ts",
+    "./i18n-store": "./src/i18n-store.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

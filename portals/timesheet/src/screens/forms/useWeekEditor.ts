@@ -6,7 +6,7 @@ import type { RouteStep } from '@orbit/core/workflow';
 import { useToast } from '@orbit/ui';
 import { copyLastWeekAction, previewRouteAction, saveEntriesAction, submitAction } from '../../actions';
 import { computeTotals, type GridRow } from '../../calc';
-import { messages } from '../../messages';
+import { useTs } from '../useTs';
 import type { WeekRow, WeekView } from '../../server/week';
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'offline' | 'error';
@@ -28,6 +28,7 @@ export const newKey = () => `r${Date.now().toString(36)}${Math.random().toString
 export function useWeekEditor(view: WeekView, draftKey: string) {
   const router = useRouter();
   const toast = useToast();
+  const { t } = useTs();
   const [rows, setRows] = useState<WeekRow[]>(view.rows);
   const [note, setNoteState] = useState(view.timesheet.note ?? '');
   const [timesheetId, setTimesheetId] = useState(view.timesheet.id);
@@ -217,7 +218,7 @@ export function useWeekEditor(view: WeekView, draftKey: string) {
     await flush();
     const res = await copyLastWeekAction({ weekStart: view.weekStart });
     if (!res.ok) return toast(res.error, 'bad');
-    toast(res.data.copied ? `Copied ${res.data.copied} rows from last week.` : 'Nothing new to copy from last week.');
+    toast(res.data.copied ? t('copied', { n: res.data.copied }) : t('nothingToCopy'));
     router.refresh();
   }
 
@@ -227,18 +228,18 @@ export function useWeekEditor(view: WeekView, draftKey: string) {
     const saved = await flush();
     if (!saved || !timesheetId) {
       setSubmitting(false);
-      return toast(messages.serverError, 'bad');
+      return toast(t('serverError'), 'bad');
     }
     const res = await submitAction({ timesheetId, note });
     setSubmitting(false);
     if (!res.ok) return toast(res.error, 'bad');
     if (!res.data.ok) {
-      setIssues(res.data.issues.filter((i) => i.level === 'error').map((i) => i.message));
+      setIssues(res.data.issues.filter((i) => i.level === 'error').map((i) => (i.key ? t(i.key, i.vars) : i.message)));
       return;
     }
     setIssues([]);
     await del(draftKey).catch(() => {});
-    toast(res.data.message);
+    toast(t('submitted', { week: res.data.week, approver: res.data.approver }));
     router.refresh();
   }
 

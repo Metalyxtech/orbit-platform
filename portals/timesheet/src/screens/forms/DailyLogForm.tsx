@@ -4,6 +4,7 @@ import { Button } from '@orbit/ui';
 import { round2 } from '../../calc';
 import type { WeekRow, WeekView } from '../../server/week';
 import { HoursInput } from './HoursInput';
+import { useTs } from '../useTs';
 import { RowPickers } from './RowPickers';
 import { useWeekEditor } from './useWeekEditor';
 import { WeekFrame } from './WeekFrame';
@@ -17,6 +18,7 @@ const lineKey = (rowKey: string, d: number) => `${rowKey}:${d}`;
 export function DailyLogForm({ view, draftKey }: { view: WeekView; draftKey: string }) {
   const e = useWeekEditor(view, draftKey);
   const { rows, totals, readOnly } = e;
+  const { t, day: dayOf, date: dateOf } = useTs();
   const [open, setOpen] = useState(() => new Set<string>());
   const std = view.rules.stdDayHours;
 
@@ -66,25 +68,25 @@ export function DailyLogForm({ view, draftKey }: { view: WeekView; draftKey: str
   };
 
   return (
-    <WeekFrame e={e} actions={<Button onClick={e.copyLastWeek}>Copy last week's jobs</Button>}>
+    <WeekFrame e={e} actions={<Button onClick={e.copyLastWeek}>{t('copyLastWeeksJobs')}</Button>}>
       <div className="o-daylog">
         {view.days.map((day, d) => {
           const lines = linesFor(d);
           const total = totals.dayTotals[d];
           const over = round2(total - std);
           return (
-            <section key={day.date} className={`o-panel o-daycard${day.weeklyOff ? ' off' : ''}`} aria-label={`${day.name} ${day.label}`}>
+            <section key={day.date} className={`o-panel o-daycard${day.weeklyOff ? ' off' : ''}`} aria-label={`${dayOf(day.date)} ${dateOf(day.date)}`}>
               <header className="o-daycard-head">
                 <div>
-                  <strong>{day.name}</strong> <span className="muted">{day.label}</span>
-                  {day.weeklyOff && <span className="o-chip">Weekly off</span>}
+                  <strong>{dayOf(day.date)}</strong> <span className="muted">{dateOf(day.date)}</span>
+                  {day.weeklyOff && <span className="o-chip">{t('weeklyOff')}</span>}
                 </div>
                 <div className="o-row" style={{ gap: 8 }}>
-                  {over > 0 && <span className="o-chip warn">{over.toFixed(1)} h over</span>}
+                  {over > 0 && <span className="o-chip warn">{t('hOver', { h: over.toFixed(1) })}</span>}
                   <span className="o-daycard-total">{total.toFixed(1)} h</span>
                 </div>
               </header>
-              {lines.length === 0 && <p className="faint o-daycard-empty">{readOnly ? 'No hours.' : 'No hours yet. Add the jobs you worked on.'}</p>}
+              {lines.length === 0 && <p className="faint o-daycard-empty">{readOnly ? t('noHours') : t('noHoursYet')}</p>}
               {lines.map(({ r, i }) => (
                 <div key={r.key} className="o-dayline">
                   <div className="o-dayline-pick">
@@ -98,15 +100,15 @@ export function DailyLogForm({ view, draftKey }: { view: WeekView; draftKey: str
                     onError={(m) => e.toast(m, 'bad')}
                   />
                   {!readOnly && (
-                    <button type="button" className="o-btn small" aria-label="Remove line" title="Remove line" onClick={() => removeLine(r, i, d)}>
-                      Remove
+                    <button type="button" className="o-btn small" aria-label={t('removeLine')} title={t('removeLine')} onClick={() => removeLine(r, i, d)}>
+                      {t('remove')}
                     </button>
                   )}
                 </div>
               ))}
               {!readOnly && (
                 <button type="button" className="o-dayline-add" onClick={() => addLine(d)}>
-                  + Add a job for {day.name}
+                  {t('addJobFor', { day: dayOf(day.date) })}
                 </button>
               )}
             </section>

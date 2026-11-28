@@ -1,7 +1,8 @@
 import { notFound, redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { getSession, query } from '@orbit/core/next';
-import { AppShell } from '@orbit/ui';
+import { langInfo } from '@orbit/core/i18n';
+import { currentLanguage, getSession, query } from '@orbit/core/next';
+import { AppShell, LanguageProvider } from '@orbit/ui';
 import { BillingBanner } from '@/billing/BillingBanner';
 import { SubscriptionGate } from '@/billing/lock';
 import { unreadCount } from '@/messages';
@@ -11,7 +12,8 @@ import { companyAdminItems } from '@/company-admin-nav';
 import { portalNavItems } from '@/portal-nav';
 import { portalRolesFor, queueCounts } from '@/portal-role';
 import { BRAND, portalModules } from '@/portals';
-import { switchCompanyAction } from '@/session-actions';
+import { setMyLanguageAction, switchCompanyAction } from '@/session-actions';
+import { navLabel } from '@/i18n/nav';
 import { requireAgreement } from '@/legal/gate';
 import { PROJECT_DOCS_HREF, projectDocsOn } from '@/project-docs';
 
@@ -56,7 +58,10 @@ export default async function PortalLayout({ children, params }: { children: Rea
   const adminNav = companyAdminItems(ctx, enabled, roles).map((n) => ({ ...n, section: 'admin' as const, badge: undefined }));
   // The footer shows who the person is in this portal (e.g. "Estimator · Sales"), not their job title elsewhere.
   const roleHere = mod.manifest.portalRoles?.find((r) => r.id === portalRole)?.label ?? COMPANY_ROLE[ctx.role] ?? ctx.role;
-  const shellNav = [...nav.filter((n) => n.section !== 'admin'), ...adminNav];
+  // Menu labels in the person's language (admin settings stay in English).
+  const language = await currentLanguage();
+  const tr = navLabel(language.lang);
+  const shellNav = [...nav.filter((n) => n.section !== 'admin').map((n) => ({ ...n, label: tr(n.label), menu: n.menu ? tr(n.menu) : undefined })), ...adminNav];
 
   return (
     <AppShell
@@ -69,6 +74,10 @@ export default async function PortalLayout({ children, params }: { children: Rea
       nav={shellNav}
       user={{ name: ctx.name, title: `${roleHere} · ${mod.manifest.name}` }}
       signOutHref="/auth/sign-out"
+      languages={language.offered.map((l) => ({ code: l, label: langInfo(l).native }))}
+      language={language.lang}
+      languageLabel={tr('Language')}
+      onLanguage={setMyLanguageAction}
     >
       <BillingBanner role={ctx.role} />
       {ctx.companyStage === 'sandbox' && (
@@ -76,7 +85,11 @@ export default async function PortalLayout({ children, params }: { children: Rea
           Sandbox company: emails only go to verified test addresses.
         </div>
       )}
-      <SubscriptionGate role={ctx.role}>{children}</SubscriptionGate>
+      <SubscriptionGate role={ctx.role}>
+        <LanguageProvider lang={language.lang} dir={language.dir}>
+          {children}
+        </LanguageProvider>
+      </SubscriptionGate>
     </AppShell>
   );
 }

@@ -4,7 +4,8 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { companies, companyPortals, memberships, withTenant } from '@orbit/db';
-import { COMPANY_COOKIE, getDb, getSession } from '@orbit/core/next';
+import { COMPANY_COOKIE, getDb, getSession, runAction } from '@orbit/core/next';
+import { setMyLanguage } from '@orbit/core/i18n-store';
 import { isIndustry, requestMemberPortals, setCompanyIndustry } from '@orbit/core';
 import { INDUSTRY_PORTALS } from './industry-portals';
 import { saveBillingSettings } from './billing/admin';
@@ -128,4 +129,10 @@ export async function joinCompanyAction(form: FormData) {
   });
   if (!offered) redirect('/register?error=no_portal');
   redirect('/pending');
+}
+
+/** The person picks their language (from the ones the company offers). */
+export async function setMyLanguageAction(language: string) {
+  const res = await runAction((tx, ctx) => setMyLanguage(tx, ctx, { language }), { always: true });
+  return res.ok ? { ok: true as const } : { ok: false as const, error: res.error };
 }

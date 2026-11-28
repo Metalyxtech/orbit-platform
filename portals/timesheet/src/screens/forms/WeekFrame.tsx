@@ -3,16 +3,12 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ApprovalRoute, Button, ConfirmDialog, StatusChip, TopBar } from '@orbit/ui';
 import { addDays } from '../../calc';
-import { messages } from '../../messages';
+import type { TsKey } from '../../i18n';
+import { useTs } from '../useTs';
 import type { SaveState, WeekEditor } from './useWeekEditor';
 
-const savedText: Record<SaveState, string> = {
-  idle: '',
-  saving: 'Saving...',
-  saved: 'Saved',
-  offline: messages.offline,
-  error: messages.serverError,
-};
+const SAVED: Record<SaveState, TsKey | null> = { idle: null, saving: 'saving', saved: 'saved', offline: 'offline', error: 'serverError' };
+const STATUS_KEY: Record<string, TsKey> = { draft: 'statusDraft', in_approval: 'statusInApproval', returned: 'statusReturned', locked: 'statusLocked' };
 
 /**
  * The part of My week every form shares: week switcher, banners, totals, who will approve,
@@ -20,30 +16,34 @@ const savedText: Record<SaveState, string> = {
  */
 export function WeekFrame({ e, actions, children }: { e: WeekEditor; actions?: ReactNode; children: ReactNode }) {
   const { view, totals, readOnly, saveState } = e;
-  const weekLabel = `Week ${view.weekNumber}`;
+  const { t, day: dayOf, date: dateOf } = useTs();
+  const range = `${dateOf(view.days[0].date)} – ${dateOf(view.days[6].date)}`;
+  const deadline = view.deadline ? `${dayOf(view.deadline.date)} ${dateOf(view.deadline.date)}, ${view.deadline.time}` : view.deadlineLabel;
+  const savedText = (s: SaveState) => (SAVED[s] ? t(SAVED[s]!) : '');
+  const weekLabel = t('week', { n: view.weekNumber });
   const status = view.timesheet.status;
   return (
     <>
-      <TopBar crumbs={['Timesheet', 'My week']}>
+      <TopBar crumbs={[t('timesheet'), t('myWeek')]}>
         <span className={`o-saved ${saveState === 'offline' || saveState === 'error' ? 'off' : ''}`} aria-live="polite">
-          {savedText[saveState]}
+          {savedText(saveState)}
         </span>
         <Link className="o-btn small" href={`?week=${addDays(view.weekStart, -7)}`}>
-          Previous
+          {t('previous')}
         </Link>
         <span className="o-btn small" style={{ cursor: 'default' }}>
-          <strong>{weekLabel}</strong> <span className="muted">{view.rangeLabel}</span>
+          <strong>{weekLabel}</strong> <span className="muted">{range}</span>
         </span>
         <Link className="o-btn small" href={`?week=${addDays(view.weekStart, 7)}`}>
-          Next
+          {t('next')}
         </Link>
       </TopBar>
 
       <div className="o-page">
         {status === 'returned' && view.timesheet.returnComment && (
-          <div className="o-banner">{messages.returnedBanner(view.timesheet.returnedBy ?? 'approver', view.timesheet.returnComment)}</div>
+          <div className="o-banner">{t('returnedBanner', { by: view.timesheet.returnedBy ?? '-', comment: view.timesheet.returnComment })}</div>
         )}
-        {status === 'locked' && <div className="o-banner info">{messages.lockedWeek}</div>}
+        {status === 'locked' && <div className="o-banner info">{t('lockedWeek')}</div>}
         {e.issues.length > 0 && (
           <div className="o-banner bad" role="alert">
             {e.issues.map((m) => (
@@ -58,10 +58,10 @@ export function WeekFrame({ e, actions, children }: { e: WeekEditor; actions?: R
               <div>
                 <div className="o-row">
                   <h1>{weekLabel}</h1>
-                  <StatusChip status={status} revision={view.timesheet.revision || undefined} />
+                  <StatusChip status={status} revision={view.timesheet.revision || undefined} label={STATUS_KEY[status] ? t(STATUS_KEY[status]) : undefined} />
                 </div>
                 <p>
-                  Submit by {view.deadlineLabel}. {readOnly ? '' : 'Hours are saved as you type.'}
+                  {t('submitBy', { date: deadline })} {readOnly ? '' : t('savedAsYouType')}
                 </p>
               </div>
               {!readOnly && actions && <div className="o-row">{actions}</div>}
@@ -72,44 +72,44 @@ export function WeekFrame({ e, actions, children }: { e: WeekEditor; actions?: R
 
           <div className="o-stack">
             <div className="o-panel">
-              <h2>This week</h2>
+              <h2>{t('thisWeek')}</h2>
               <div className="o-kv">
-                <span>Regular hours</span>
+                <span>{t('regularHours')}</span>
                 <span>{totals.regular.toFixed(1)}</span>
               </div>
               <div className="o-kv">
-                <span>Overtime</span>
+                <span>{t('overtime')}</span>
                 <span className={totals.overtime > 0 ? 'hivis' : ''}>{totals.overtime.toFixed(1)}</span>
               </div>
               {totals.overtime > 0 && (totals.rostered || view.plan.some((p) => p.preApproved > 0)) && (
                 <>
                   <div className="o-kv" style={{ fontSize: 12 }}>
-                    <span className="muted">Pre-approved</span>
+                    <span className="muted">{t('preApproved')}</span>
                     <span>{totals.preApprovedOt.toFixed(1)}</span>
                   </div>
                   <div className="o-kv" style={{ fontSize: 12 }}>
-                    <span className="muted">Not approved in advance</span>
+                    <span className="muted">{t('notPreApproved')}</span>
                     <span className={totals.notPreApprovedOt > 0 ? 'hivis' : ''}>{totals.notPreApprovedOt.toFixed(1)}</span>
                   </div>
                 </>
               )}
               {totals.offdayOt > 0 && (
                 <div className="o-kv" style={{ fontSize: 12 }}>
-                  <span className="muted">Of which on days off</span>
+                  <span className="muted">{t('onDaysOff')}</span>
                   <span>{totals.offdayOt.toFixed(1)}</span>
                 </div>
               )}
               <div className="o-kv total">
-                <span>Total</span>
+                <span>{t('total')}</span>
                 <span>{totals.total.toFixed(1)}</span>
               </div>
               <p className="faint" style={{ fontSize: 12, margin: '8px 0 0' }}>
-                Working late or on a day off? <Link href="/timesheet/overtime">Ask for overtime in advance</Link>.
+                {t('otHint')} <Link href="/timesheet/overtime">{t('otHintLink')}</Link>.
               </p>
             </div>
 
             <div className="o-panel">
-              <h2>Who will approve</h2>
+              <h2>{t('whoApproves')}</h2>
               {e.route
                 .filter((s) => s.reason)
                 .map((s) => (
@@ -125,12 +125,12 @@ export function WeekFrame({ e, actions, children }: { e: WeekEditor; actions?: R
             {!readOnly && (
               <div className="o-panel">
                 <label className="o-field">
-                  Note for approver (optional)
+                  {t('noteForApprover')}
                   <textarea className="o-textarea" value={e.note} maxLength={2000} onChange={(ev) => e.setNote(ev.target.value)} />
                 </label>
                 <div style={{ marginTop: 12 }}>
                   <Button variant="primary" block disabled={e.submitting || totals.total === 0} onClick={() => e.setConfirm(true)}>
-                    {status === 'returned' ? `Submit ${weekLabel.toLowerCase()} again` : `Submit ${weekLabel.toLowerCase()}`}
+                    {status === 'returned' ? t('submitWeekAgain', { n: view.weekNumber }) : t('submitWeek', { n: view.weekNumber })}
                   </Button>
                 </div>
               </div>
@@ -138,21 +138,22 @@ export function WeekFrame({ e, actions, children }: { e: WeekEditor; actions?: R
           </div>
         </div>
         <div className="phone-only o-saved" style={{ textAlign: 'center' }}>
-          {saveState === 'offline' ? 'Saved on this phone. Syncs when online.' : savedText[saveState]}
+          {saveState === 'offline' ? t('savedOnPhone') : savedText(saveState)}
         </div>
       </div>
 
       <ConfirmDialog
         open={e.confirm}
-        title={`Submit ${weekLabel.toLowerCase()}?`}
-        confirmLabel="Submit"
+        title={t('confirmTitle', { n: view.weekNumber })}
+        confirmLabel={t('submit')}
+        cancelLabel={t('cancel')}
         onConfirm={e.doSubmit}
         onCancel={() => e.setConfirm(false)}
       >
-        {totals.total.toFixed(1)} h, of which {totals.overtime.toFixed(1)} h overtime.
+        {t('confirmBody', { total: totals.total.toFixed(1), ot: totals.overtime.toFixed(1) })}
         {view.days.some((d, i) => d.weeklyOff && totals.dayTotals[i] > 0) && (
           <div className="o-banner" style={{ marginTop: 8 }}>
-            You entered hours on the weekly off.
+            {t('weeklyOffWarning')}
           </div>
         )}
       </ConfirmDialog>
@@ -163,23 +164,24 @@ export function WeekFrame({ e, actions, children }: { e: WeekEditor; actions?: R
 /** The person's published roster for the week, above the hours. Shown once anything is planned. */
 function RosterStrip({ e }: { e: WeekEditor }) {
   const { view, totals } = e;
+  const { t, day: dayOf, date: dateOf } = useTs();
   if (!view.plan.some((p) => p.kind || p.holiday)) return null;
   return (
-    <div className="o-panel" aria-label="Your roster this week">
-      <h2 style={{ margin: '0 0 8px', fontSize: 14 }}>Your roster</h2>
+    <div className="o-panel" aria-label={t('yourRoster')}>
+      <h2 style={{ margin: '0 0 8px', fontSize: 14 }}>{t('yourRoster')}</h2>
       <div className="ts-roster-strip">
         {view.days.map((d, i) => {
           const p = view.plan[i];
-          const label = p.holiday ? p.holiday : p.kind === 'shift' ? p.shiftName : p.kind === 'off' ? 'Day off' : p.kind === 'leave' ? (p.shiftName ?? 'Leave') : d.weeklyOff ? 'Weekly off' : 'Not rostered';
+          const label = p.holiday ? p.holiday : p.kind === 'shift' ? p.shiftName : p.kind === 'off' ? t('dayOff') : p.kind === 'leave' ? (p.shiftName ?? t('leave')) : d.weeklyOff ? t('weeklyOff') : t('notRostered');
           const time = p.kind === 'shift' && p.start ? `${p.start}-${p.end}` : '';
           return (
             <div key={d.date} className={`ts-roster-day${p.kind === 'shift' ? '' : ' off'}${totals.overDays[i] ? ' over' : ''}`} style={p.kind === 'shift' && p.color ? { borderTopColor: p.color } : undefined}>
               <span className="faint">
-                {d.name} {d.label}
+                {dayOf(d.date)} {dateOf(d.date)}
               </span>
               <strong>{label}</strong>
               {time && <span className="muted">{time}</span>}
-              {p.preApproved > 0 && <span className="o-chip ok">+{p.preApproved} h OT approved</span>}
+              {p.preApproved > 0 && <span className="o-chip ok">{t('otApproved', { h: p.preApproved })}</span>}
             </div>
           );
         })}

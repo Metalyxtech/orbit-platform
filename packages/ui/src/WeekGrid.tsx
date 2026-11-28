@@ -23,6 +23,8 @@ export interface WeekGridProps {
   onPaste: (rowIndex: number, startDay: number, values: number[]) => void;
   onRemoveRow?: (rowIndex: number) => void;
   onError?: (message: string) => void;
+  /** Header words in the person's language (English when left out). */
+  labels?: { rows?: string; total?: string; dayTotal?: string; hours?: string };
 }
 
 const fmt = (h: number) => (h ? h.toFixed(1) : '');
@@ -104,14 +106,14 @@ export function WeekGrid(props: WeekGridProps) {
     <table className="o-week">
       <thead>
         <tr>
-          <th>Project and cost code</th>
+          <th>{props.labels?.rows ?? 'Project and cost code'}</th>
           {props.days.map((day) => (
             <th key={day.name + day.label}>
               {day.name}
               <span className="d">{day.label}</span>
             </th>
           ))}
-          <th>Total</th>
+          <th>{props.labels?.total ?? 'Total'}</th>
           {props.onRemoveRow && !props.readOnly && <th aria-label="Remove" />}
         </tr>
       </thead>
@@ -131,7 +133,7 @@ export function WeekGrid(props: WeekGridProps) {
                     }}
                     className={`cell ${invalid === cid ? 'invalid' : ''}`}
                     inputMode="decimal"
-                    aria-label={`${props.days[d].name} hours`}
+                    aria-label={`${props.days[d].name} ${props.labels?.hours ?? 'hours'}`}
                     placeholder="-"
                     readOnly={props.readOnly}
                     value={editing ? draft.text : fmt(h)}
@@ -162,7 +164,7 @@ export function WeekGrid(props: WeekGridProps) {
       </tbody>
       <tfoot>
         <tr>
-          <td className="label">Day total</td>
+          <td className="label">{props.labels?.dayTotal ?? 'Day total'}</td>
           {props.dayTotals.map((t, d) => (
             <td key={d} className={props.overDays[d] ? 'over' : undefined}>
               {t.toFixed(1)}

@@ -5,11 +5,13 @@ import { useState } from 'react';
 import { Button, ConfirmDialog, DataTable, EmptyState, KpiStrip, TopBar, useToast } from '@orbit/ui';
 import { cancelOtAction, decideOtAction, requestOtAction } from '../actions';
 import type { OtReportRow } from '../server';
+import type { TsKey } from '../i18n';
+import { useTs } from './useTs';
 
 type Req = { id: string; name: string; dateLabel: string; hours: number; project: string | null; reason: string; status: string; decisionNote: string | null };
 type Report = { month: string; rates: { workday: number; offday: number }; rows: OtReportRow[]; totals: Omit<OtReportRow, 'membershipId' | 'name'> };
 
-const STATUS: Record<string, string> = { pending: 'Waiting', approved: 'Approved', rejected: 'Rejected', cancelled: 'Cancelled' };
+const STATUS: Record<string, TsKey> = { pending: 'otPending', approved: 'otApprovedStatus', rejected: 'otRejected', cancelled: 'otCancelled' };
 const h = (n: number) => n.toLocaleString('en-GB', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
 
 /**
@@ -31,6 +33,7 @@ export function OvertimeClient({
 }) {
   const router = useRouter();
   const toast = useToast();
+  const { t } = useTs();
   const [form, setForm] = useState({ date: today, hours: 2, projectId: '', reason: '' });
   const [busy, setBusy] = useState(false);
   const [deciding, setDeciding] = useState<{ r: Req; approve: boolean } | null>(null);
@@ -47,12 +50,12 @@ export function OvertimeClient({
 
   return (
     <>
-      <TopBar crumbs={['Timesheet', 'Overtime']} />
+      <TopBar crumbs={[t('timesheet'), t('overtime')]} />
       <div className="o-page">
         <div className="o-page-head">
           <div>
-            <h1>Overtime</h1>
-            <p>Ask before working overtime. Approved overtime is shown as pre-approved on your timesheet; overtime without approval needs a reason when you submit.</p>
+            <h1>{t('overtime')}</h1>
+            <p>{t('otLead')}</p>
           </div>
         </div>
 
@@ -92,20 +95,20 @@ export function OvertimeClient({
 
         <div className="o-cols">
           <div className="o-panel">
-            <h2>Ask for overtime</h2>
+            <h2>{t('askForOt')}</h2>
             <div className="o-grid2">
               <label className="o-field">
-                Day
+                {t('day')}
                 <input className="o-input" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
               </label>
               <label className="o-field">
-                Hours
+                {t('hours')}
                 <input className="o-input" type="number" min={0.25} max={16} step={0.25} value={form.hours} onChange={(e) => setForm({ ...form, hours: Number(e.target.value) || 0 })} />
               </label>
               <label className="o-field">
-                Project (optional)
+                {t('projectOptional')}
                 <select className="o-select" value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })}>
-                  <option value="">No project</option>
+                  <option value="">{t('noProject')}</option>
                   {projects.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.code} {p.name}
@@ -115,8 +118,8 @@ export function OvertimeClient({
               </label>
             </div>
             <label className="o-field">
-              Why is it needed?
-              <textarea className="o-textarea" maxLength={500} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder="e.g. Finish the girder welding before the inspection on Monday" />
+              {t('whyNeeded')}
+              <textarea className="o-textarea" maxLength={500} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder={t('whyPlaceholder')} />
             </label>
             <Button
               variant="primary"
@@ -126,30 +129,30 @@ export function OvertimeClient({
                   const res = await requestOtAction({ date: form.date, hours: form.hours, projectId: form.projectId || null, reason: form.reason });
                   if (res.ok) setForm({ ...form, reason: '' });
                   return res;
-                }, 'Sent. Your supervisor or project manager will decide.')
+                }, t('otSent'))
               }
             >
-              Send request
+              {t('sendRequest')}
             </Button>
           </div>
 
           <div className="o-panel flush">
             <div className="o-panel-head" style={{ padding: '12px 16px 0' }}>
-              <h2>My requests</h2>
+              <h2>{t('myRequests')}</h2>
             </div>
             <DataTable
               rows={mine}
               rowKey={(r) => r.id}
-              empty={<EmptyState title="No overtime requests yet." />}
+              empty={<EmptyState title={t('noRequests')} />}
               columns={[
-                { key: 'd', header: 'Day', render: (r) => r.dateLabel },
-                { key: 'h', header: 'Hours', num: true, render: (r) => h(r.hours) },
+                { key: 'd', header: t('day'), render: (r) => r.dateLabel },
+                { key: 'h', header: t('hours'), num: true, render: (r) => h(r.hours) },
                 {
                   key: 's',
-                  header: 'Status',
+                  header: t('status'),
                   render: (r) => (
                     <span title={r.decisionNote ?? undefined} className={`o-chip ${r.status === 'approved' ? 'ok' : r.status === 'rejected' ? 'bad' : r.status === 'pending' ? 'warn' : ''}`}>
-                      {STATUS[r.status] ?? r.status}
+                      {STATUS[r.status] ? t(STATUS[r.status]) : r.status}
                     </span>
                   ),
                 },
@@ -158,8 +161,8 @@ export function OvertimeClient({
                   header: '',
                   render: (r) =>
                     r.status === 'pending' ? (
-                      <Button size="small" disabled={busy} onClick={() => void run(() => cancelOtAction({ id: r.id }), 'Request cancelled.')}>
-                        Cancel
+                      <Button size="small" disabled={busy} onClick={() => void run(() => cancelOtAction({ id: r.id }), t('requestCancelled'))}>
+                        {t('cancel')}
                       </Button>
                     ) : null,
                 },

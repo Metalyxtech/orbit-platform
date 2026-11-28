@@ -28,6 +28,11 @@ export interface AppShellProps {
   onSwitchCompany?: (companyId: string) => Promise<void>;
   /** Where the sign-out form posts. */
   signOutHref: string;
+  /** Languages the company offers (shown when more than one) and the person's current one. */
+  languages?: { code: string; label: string }[];
+  language?: string;
+  languageLabel?: string;
+  onLanguage?: (code: string) => Promise<unknown>;
   children: ReactNode;
 }
 
@@ -73,6 +78,26 @@ export function AppShell(props: AppShellProps) {
           ]}
         />
         <SideFoot name={props.user.name} title={props.user.title} signOutAction={props.signOutHref}>
+          {props.languages && props.languages.length > 1 && props.onLanguage && (
+            <label className="o-lang-switch">
+              <span aria-hidden>Aa</span>
+              <select
+                aria-label={props.languageLabel ?? 'Language'}
+                title={props.languageLabel ?? 'Language'}
+                value={props.language}
+                onChange={async (e) => {
+                  await props.onLanguage!(e.target.value);
+                  router.refresh();
+                }}
+              >
+                {props.languages.map((l) => (
+                  <option key={l.code} value={l.code}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {props.companies.length > 1 && props.onSwitchCompany && (
             <select
               aria-label="Switch company"

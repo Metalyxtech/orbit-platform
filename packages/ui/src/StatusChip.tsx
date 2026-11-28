@@ -15,8 +15,10 @@ const STATUS: Record<string, { label: string; tone: ChipTone }> = {
 };
 
 /** Draft (grey), In approval (steel), Returned (warn), Locked (ok), Rejected (bad), Revision n (grey). */
-export function StatusChip({ status, revision }: { status: string; revision?: number }) {
-  const s = STATUS[status] ?? { label: status, tone: 'grey' as const };
+/** `label` replaces the English status name (for other languages). */
+export function StatusChip({ status, revision, label }: { status: string; revision?: number; label?: string }) {
+  const s0 = STATUS[status] ?? { label: status, tone: 'grey' as const };
+  const s = label ? { ...s0, label } : s0;
   return (
     <span className="o-row" style={{ gap: 4, display: 'inline-flex' }}>
       <span className={`o-chip dot ${s.tone === 'grey' ? '' : s.tone}`}>{s.label}</span>

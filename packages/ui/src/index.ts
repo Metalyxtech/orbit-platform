@@ -20,3 +20,4 @@ export * from './ColumnChart';
 export * from './LineChart';
 export * from './RoleCovers';
 export * from './ProcessControl';
+export * from './I18n';

@@ -47,7 +47,7 @@ describe('parseCell', () => {
   it('rounds to the step', () => expect(parseCell('7.6', 0.25)).toEqual({ ok: true, value: 7.5 }));
   it('treats empty as zero', () => expect(parseCell('', 0.25)).toEqual({ ok: true, value: 0 }));
   it('rejects over 24 with the exact message', () =>
-    expect(parseCell('25', 0.25)).toEqual({ ok: false, error: messages.cellOver24 }));
+    expect(parseCell('25', 0.25)).toEqual({ ok: false, error: messages.cellOver24, key: 'cellOver24' }));
   it('accepts a comma decimal', () => expect(parseCell('7,5', 0.25)).toEqual({ ok: true, value: 7.5 }));
 });
 

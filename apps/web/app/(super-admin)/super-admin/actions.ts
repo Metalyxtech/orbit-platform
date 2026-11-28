@@ -1,4 +1,6 @@
 'use server';
+import { isLang, langInfo } from '@orbit/core/i18n';
+import { setAllowedLanguages } from '@orbit/core/i18n-store';
 import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
@@ -201,5 +203,26 @@ export async function resetSandboxAction(rawId: string) {
     await audit(tx, { companyId, actorId: null, action: 'company.sandbox_reset', entity: 'companies', entityId: companyId });
   });
   await effects.flush(db, scope);
+  revalidatePath('/super-admin', 'layout');
+}
+
+/** Super Admin: which languages this company may offer its people (all = no limit). English is always allowed. */
+export async function setAllowedLanguagesAction(companyId: string, form: FormData) {
+  const userId = await requireSuperAdmin();
+  const id = z.uuid().parse(companyId);
+  const all = form.get('all') === '1';
+  const picked = form.getAll('lang').map(String).filter(isLang);
+  const db = await getDb();
+  await withTenant(db, { companyId: id, userId }, async (tx) => {
+    const res = await setAllowedLanguages(tx, id, all ? null : picked);
+    await audit(tx, {
+      companyId: id,
+      actorId: null,
+      action: 'company.allowed_languages',
+      entity: 'companies',
+      entityId: id,
+      data: { summary: [res.allowed ? `Languages allowed: ${res.allowed.map((l) => langInfo(l).name).join(', ')}` : 'Languages allowed: all', `Company languages: ${res.languages.map((l) => langInfo(l).name).join(', ')}`] },
+    });
+  });
   revalidatePath('/super-admin', 'layout');
 }

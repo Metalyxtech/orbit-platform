@@ -56,6 +56,8 @@ export interface WeekView {
   rangeLabel: string;
   days: { date: string; name: string; label: string; weeklyOff: boolean }[];
   deadlineLabel: string;
+  /** The deadline as data, so screens can show it in the person's language. */
+  deadline: { date: string; time: string };
   rules: TsRules;
   /** Published roster, holidays and pre-approved overtime for each day of the week. */
   plan: DayPlan[];
@@ -165,6 +167,7 @@ export async function getWeek(tx: Tx, ctx: SessionContext, input: { weekStart?: 
       weeklyOff: rules.weeklyOff.includes(dayOfWeek(date)),
     })),
     deadlineLabel: `${dayName(deadline)} ${dayLabel(deadline)}, ${settings.deadlineTime}`,
+    deadline: { date: deadline, time: settings.deadlineTime },
     rules,
     plan,
     otRates: await otRates(tx, ctx.companyId),
@@ -296,7 +299,7 @@ export async function copyLastWeek(tx: Tx, ctx: SessionContext, input: { weekSta
   return { copied: toCopy.length };
 }
 
-export type SubmitResult = { ok: true; message: string; warnings: SubmitIssue[] } | { ok: false; issues: SubmitIssue[] };
+export type SubmitResult = { ok: true; message: string; week: number; approver: string; warnings: SubmitIssue[] } | { ok: false; issues: SubmitIssue[] };
 
 /** ts.submit: validate, status In approval, workflow.start('timesheet.submit') in one transaction. */
 export async function submit(tx: Tx, ctx: ActionContext, input: { timesheetId: string; note?: string | null }): Promise<SubmitResult> {
@@ -358,7 +361,7 @@ export async function submit(tx: Tx, ctx: ActionContext, input: { timesheetId: s
   await emit(tx, ctx, 'timesheet.submitted', { timesheetId: sheet.id });
 
   const first = result.createdTasks.map((t) => t.approver.name).join(' and ');
-  return { ok: true, message: messages.submitted(week, first), warnings: issues };
+  return { ok: true, message: messages.submitted(week, first), week, approver: first, warnings: issues };
 }
 
 export interface HistoryRow {

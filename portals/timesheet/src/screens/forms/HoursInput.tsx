@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { parseCell } from '../../calc';
+import { useTs } from '../useTs';
 
 /** Hours box for one line: type freely, saved when you leave the box or press Enter. */
 export function HoursInput({
@@ -16,12 +17,13 @@ export function HoursInput({
   onChange: (v: number) => void;
   onError: (m: string) => void;
 }) {
+  const { t } = useTs();
   const [text, setText] = useState(value ? String(value) : '');
   useEffect(() => setText(value ? String(value) : ''), [value]);
   const commit = () => {
     const r = parseCell(text, step);
     if (!r.ok) {
-      onError(r.error);
+      onError(t(r.key));
       setText(value ? String(value) : '');
       return;
     }
@@ -32,7 +34,7 @@ export function HoursInput({
     <input
       className="o-input o-hours"
       inputMode="decimal"
-      aria-label="Hours"
+      aria-label={t('hours')}
       placeholder="0.0"
       value={text}
       disabled={disabled}

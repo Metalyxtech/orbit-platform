@@ -8,6 +8,11 @@ import { COMPANY_COOKIE, getDb, getSession, runAction } from '@orbit/core/next';
 import { setMyLanguage } from '@orbit/core/i18n-store';
 import { isIndustry, requestMemberPortals, setCompanyIndustry } from '@orbit/core';
 import { INDUSTRY_PORTALS } from './industry-portals';
+import { saveBillingSettings } from './billing/admin';
+import { TRIAL_DAYS } from './billing/plans';
+
+/** Which currency a company pays in, by country (the same rule as Super Admin > Add company). */
+const COUNTRY_CURRENCY = { india: 'INR', uk: 'GBP', abroad: 'USD' } as const;
 import { activeCompany } from './company-directory';
 import { requestFromSignUp } from './custom/requests';
 import { fileUnderCompany } from './legal/state';
@@ -41,6 +46,8 @@ export async function registerCompanyAction(form: FormData) {
   const input = registerSchema.parse(Object.fromEntries(form));
   const industryRaw = String(form.get('industry') ?? '');
   const industry = isIndustry(industryRaw) ? industryRaw : 'manufacturing';
+  const countryRaw = String(form.get('country') ?? '');
+  const country: keyof typeof COUNTRY_CURRENCY = countryRaw === 'uk' || countryRaw === 'abroad' ? countryRaw : 'india';
   // Only the chosen company type's portals.
   const portals = pickedPortals(form).filter((p) => INDUSTRY_PORTALS[industry].includes(p));
   // A custom portal alone is fine (companies that need neither Timesheet nor Purchase).
@@ -66,6 +73,8 @@ export async function registerCompanyAction(form: FormData) {
       .returning({ id: memberships.id });
     await fileUnderCompany(tx, s.userId, company.id);
     await setCompanyIndustry(tx, company.id, industry);
+    // Prices and payments in the company's own currency: rupees in India, pounds in the UK, US dollars elsewhere.
+    await saveBillingSettings(tx, company.id, { currency: COUNTRY_CURRENCY[country], showPlans: true, trialDays: TRIAL_DAYS });
     // Requested portals start switched off; Super Admin switches them on when approving.
     if (portals.length) await tx.insert(companyPortals).values(portals.map((portal) => ({ companyId: company.id, portal, enabled: false })));
     if (custom) await requestFromSignUp(tx, { companyId: company.id, membershipId: m.id, name: s.name, details: String(form.get('customDetails') ?? '') });

@@ -63,7 +63,7 @@ export async function pendingCheckout(tx: Tx, companyId: string, subId: string):
 }
 
 /** Payment confirmed: the new subscription becomes the company's, and the old one is cancelled. */
-export async function completeSwitch(tx: Tx, ctx: ActionContext, subId: string, p: PendingCheckout, trialEndsAt: Date) {
+export async function completeSwitch(tx: Tx, ctx: Pick<ActionContext, 'companyId'>, subId: string, p: PendingCheckout, trialEndsAt: Date) {
   await tx
     .insert(companySubscriptions)
     .values({ companyId: ctx.companyId, plan: p.plan, cycle: p.cycle, status: 'created', razorpaySubscriptionId: subId, trialEndsAt })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUNDLES, CURRENCIES, bundleFor, MIN_SEATS, SEAT_PRICE, billableSeats, extraSeatsQuote, money, planOf, priceFor, seatQuote, seatSavingPct } from './plans';
+import { BUNDLES, CURRENCIES, PAIR_PORTALS, bundleFor, bundleForPortals, bundleName, bundlesIn, planNameFor, seatSeparately, bestBundleFor, isBundle, mixId, seatPrice, MIN_SEATS, SEAT_PRICE, billableSeats, extraSeatsQuote, money, planOf, priceFor, seatQuote, seatSavingPct } from './plans';
 
 describe('per-user pricing', () => {
   it('prices every bundle in every currency', () => {
@@ -87,5 +87,62 @@ describe('extra seats', () => {
 
   it('charges nothing now when the period has ended', () => {
     expect(extraSeatsQuote('timesheet', 5, 1, 'yearly', 'GBP', new Date(Date.now() - day)).dueNow).toBe(0);
+  });
+});
+
+describe('plan choices: one portal, two portals, a suite, or HR + Timesheet', () => {
+  it('sells every pair of the five work portals', () => {
+    for (const a of PAIR_PORTALS) for (const b of PAIR_PORTALS) if (a !== b) expect(bundleForPortals([a, b]), `${a}+${b}`).toBeDefined();
+    expect(bundlesIn('pair')).toHaveLength(10);
+  });
+
+  it('makes every combination cheaper than its portals bought one by one, in every currency', () => {
+    for (const b of BUNDLES.filter((x) => x.portals.length > 1)) for (const c of CURRENCIES) expect(SEAT_PRICE[b.id][c.id], `${b.id} ${c.id}`).toBeLessThan(seatSeparately(b.id, c.id));
+  });
+
+  it('offers HR with Timesheet as its own plan', () => {
+    expect(bundleForPortals(['hr', 'timesheet'])).toBe('hr_timesheet');
+    expect(planOf('factory_users')?.portals).not.toContain('hr');
+  });
+
+  it('picks the matching pair for the portals a company uses, not a bigger suite', () => {
+    expect(bundleFor(['sales', 'quality'])).toBe('sales_quality');
+    expect(bundleFor(['timesheet', 'production'])).toBe('timesheet_production');
+    expect(bundleFor(['sales', 'procurement', 'production', 'quality'])).toBe('factory');
+    expect(bundleFor(['timesheet', 'hr'])).toBe('hr_timesheet');
+  });
+
+  it('names the suite after the company type', () => {
+    expect(bundleName('factory')).toBe('Manufacturing suite');
+    expect(bundleName('factory', 'production')).toBe('Production suite');
+    expect(bundleName('complete', 'production')).toBe('Complete suite');
+    expect(planNameFor('factory_users', 'production')).toBe('Production suite');
+    expect(planNameFor('factory_users', 'manufacturing')).toBe('Manufacturing suite');
+    expect(planNameFor('factory_growth', 'production')).toBe('Production suite Growth');
+  });
+});
+
+describe('a company\'s own mix of portals', () => {
+  it('uses a fixed bundle when one matches, else a mix', () => {
+    expect(bestBundleFor(['quality', 'production'])).toBe('production_quality');
+    expect(bestBundleFor(['sales', 'procurement', 'production', 'quality'])).toBe('factory');
+    expect(bestBundleFor(['sales', 'quality', 'hr'])).toBe('mix-hr-quality-sales');
+    expect(bestBundleFor(['hr'])).toBe('hr');
+  });
+
+  it('prices a mix below buying its portals one by one', () => {
+    // Sales 399 + Quality 299 + HR 199 = 897, 25% off three portals = 672.75 -> 649.
+    expect(seatPrice('mix-hr-quality-sales', 'INR')).toBe(649);
+    for (const c of CURRENCIES) expect(seatPrice(mixId(['sales', 'quality', 'hr']), c.id)).toBeLessThan(seatSeparately('mix-hr-quality-sales', c.id));
+    expect(planOf('mix-hr-quality-sales_users')?.portals).toEqual(['hr', 'quality', 'sales']);
+    expect(planOf('mix-hr-quality-sales_users')?.name).toBe('Sales + Quality + HR');
+  });
+
+  it('accepts only valid mixes at checkout', () => {
+    expect(isBundle('mix-hr-quality-sales')).toBe(true);
+    expect(isBundle('mix-sales-hr')).toBe(false); // not sorted
+    expect(isBundle('mix-sales')).toBe(false); // one portal
+    expect(isBundle('mix-sales-nope')).toBe(false);
+    expect(planOf('mix-hr-sales_growth')).toBeUndefined(); // per person only
   });
 });

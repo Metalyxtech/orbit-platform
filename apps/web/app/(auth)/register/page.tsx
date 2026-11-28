@@ -111,9 +111,17 @@ export default async function Register({ searchParams }: { searchParams: Promise
         <label className="o-field">
           Time zone
           <select className="o-select" name="timezone" defaultValue="Asia/Kolkata">
-            {['Asia/Kolkata', 'Asia/Singapore', 'Asia/Dubai', 'Asia/Riyadh', 'Asia/Qatar', 'Europe/London', 'Australia/Perth', 'UTC'].map((t) => (
+            {['Asia/Kolkata', 'Asia/Singapore', 'Asia/Dubai', 'Asia/Riyadh', 'Asia/Qatar', 'Europe/London', 'America/New_York', 'Australia/Perth', 'UTC'].map((t) => (
               <option key={t}>{t}</option>
             ))}
+          </select>
+        </label>
+        <label className="o-field">
+          Where is your company?
+          <select className="o-select" name="country" defaultValue="india">
+            <option value="india">India: prices in rupees (₹), GST extra</option>
+            <option value="uk">United Kingdom: prices in pounds (£), VAT extra</option>
+            <option value="abroad">Any other country: prices in US dollars ($)</option>
           </select>
         </label>
         <PortalPicker industry={industry} hint="The portals your company needs. SteelConnect360 reviews and switches them on." />

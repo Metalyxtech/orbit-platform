@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getDb } from '@orbit/core/next';
 import { billingEvents, withTenant } from '@orbit/db';
 import { applySeatAddonEvent } from '@/billing/extra-seats';
-import { applyRazorpay } from '@/billing/state';
+import { adoptPaidCheckout, applyRazorpay } from '@/billing/state';
 import { verifyWebhookSignature, type RzSubscription } from '@/billing/razorpay';
 
 export const dynamic = 'force-dynamic';
@@ -30,7 +30,11 @@ export async function POST(req: NextRequest) {
   await withTenant(db, { companyId, userId: SYSTEM_USER }, async (tx) => {
     // Extra seats are their own subscriptions; everything else is the company's main subscription.
     if (sub.notes?.kind === 'seats') await applySeatAddonEvent(tx, companyId, sub);
-    else await applyRazorpay(tx, companyId, sub);
+    else {
+      await applyRazorpay(tx, companyId, sub);
+      // Paid, but the customer closed the window before coming back: finish the switch here.
+      await adoptPaidCheckout(tx, companyId, sub, evt.payload.payment?.entity.id ?? null);
+    }
     const pay = evt.payload.payment?.entity;
     await tx.insert(billingEvents).values({
       companyId,

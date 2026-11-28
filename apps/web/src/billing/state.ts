@@ -1,14 +1,14 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { audit, type ActionContext, type SessionContext } from '@orbit/core';
+import { audit, companyIndustry, type ActionContext, type SessionContext } from '@orbit/core';
 import { billingEvents, companies, companyBilling, companyPortals, companySubscriptions, memberships, type Tx } from '@orbit/db';
-import { BILLING_LAUNCH, BUNDLES, CYCLES, TRIAL_DAYS, TRIAL_LIMITS, asCurrency, cycleOf, planId, planOf, portalName, priceFor, type Bundle, type Currency, type Cycle } from './plans';
+import { BILLING_LAUNCH, CYCLES, isBundle, TRIAL_DAYS, TRIAL_LIMITS, asCurrency, cycleOf, planId, planNameFor, planOf, portalName, priceFor, type Bundle, type Currency, type Cycle } from './plans';
 import { endSeatAddons, headcount, readSeats, seatPlanId, seatsTaken, writeMainSeats } from './seats';
 import { fitPortalsToPlan } from './portals';
 import { getCustomPlan } from '../custom/plan';
 import { markCreditUsed } from '../custom/plan';
 import * as rz from './razorpay';
-import { completeSwitch, pendingCheckout, recordCheckout, switchTiming } from './switch';
+import { completeSwitch, pendingCheckout, recordCheckout, switchTiming, type PendingCheckout } from './switch';
 
 const pgCode = (err: unknown) => (err as { code?: string; cause?: { code?: string } })?.code ?? (err as { cause?: { code?: string } })?.cause?.code;
 /** Migrations 0011/0012 not run yet: every company is on the free trial. */
@@ -39,6 +39,8 @@ export async function billingStateFor(tx: Tx, companyId: string) {
   const trialEnds = sub?.trialEndsAt ?? new Date(trialStart + settings.trialDays * DAY);
   const periodEnd = sub?.currentPeriodEnd ?? null;
   const plan = sub ? planOf(sub.plan) : undefined;
+  // Machining, moulding and press tool shops see the Production suite; everyone else the Manufacturing suite.
+  const companyType = await companyIndustry(tx, companyId);
   let status: BillingStatus;
   if (sub && PAID.includes(sub.status) && (!periodEnd || periodEnd.getTime() > now - 3 * DAY)) status = 'active';
   else if (sub && (sub.status === 'pending' || sub.status === 'halted')) status = 'past_due';
@@ -65,10 +67,11 @@ export async function billingStateFor(tx: Tx, companyId: string) {
   return {
     status,
     currency: settings.currency,
+    companyType,
     showPlans: settings.showPlans,
     trialDays: settings.trialDays,
     plan: plan?.id ?? (sub?.plan === 'custom' ? 'custom' : null),
-    planName: plan?.name ?? (sub?.plan === 'custom' ? (custom?.label ?? 'Custom plan') : null),
+    planName: (plan && planNameFor(plan.id, companyType)) ?? (sub?.plan === 'custom' ? (custom?.label ?? 'Custom plan') : null),
     bundle: plan?.bundle ?? null,
     tier: plan?.tier ?? null,
     perUser: plan?.perUser ?? false,
@@ -135,7 +138,8 @@ const requireAdmin = (ctx: SessionContext) => {
 };
 
 const startInput = z.object({
-  bundle: z.enum(BUNDLES.map((b) => b.id) as [Bundle, ...Bundle[]]),
+  /** A fixed bundle, or the company's own mix of portals ("mix-quality-sales"). */
+  bundle: z.string().max(120).refine(isBundle, 'Choose a plan').transform((b) => b as Bundle),
   cycle: z.enum(CYCLES.map((c) => c.id) as [Cycle, ...Cycle[]]),
   /** Seats to buy; at least the people in the company today (and the minimum). */
   seats: z.number().int().min(1).max(100_000).optional(),
@@ -170,7 +174,7 @@ export async function startCheckout(tx: Tx, ctx: ActionContext, raw: z.input<typ
   });
   const amount = priceFor(input.bundle, 'users', input.cycle, currency, seats);
   await recordCheckout(tx, ctx.companyId, sub.id, Math.round(amount * 100), { plan: id, cycle: input.cycle, currency, replaces, seats });
-  return { subscriptionId: sub.id, keyId: await rz.publicKeyId(), planName: `${plan.name}, ${seats} seats`, amount, currency, cycle: cycleOf(input.cycle).label, email: ctx.email, name: ctx.name, paidUntil };
+  return { subscriptionId: sub.id, keyId: await rz.publicKeyId(), planName: `${planNameFor(id, state.companyType) ?? plan.name}, ${seats} seats`, amount, currency, cycle: cycleOf(input.cycle).label, email: ctx.email, name: ctx.name, paidUntil };
 }
 
 const confirmInput = z.object({ paymentId: z.string().min(5).max(80), subscriptionId: z.string().min(5).max(80), signature: z.string().min(10).max(200) });
@@ -183,20 +187,59 @@ export async function confirmCheckout(tx: Tx, ctx: ActionContext, raw: z.input<t
   if (!sub) throw new Error('This payment is not for your company');
   if (!(await rz.verifyCheckoutSignature(input.paymentId, input.subscriptionId, input.signature))) throw new Error('The payment could not be verified. Nothing was charged twice; contact SteelConnect360 if money left your account.');
   const live = await rz.fetchSubscription(input.subscriptionId);
-  const state = await billingState(tx, ctx);
-  await completeSwitch(tx, ctx, input.subscriptionId, sub, new Date(state.trialEndsAt));
-  await applyRazorpay(tx, ctx.companyId, live);
+  const fit = await finishCheckout(tx, ctx, input.subscriptionId, sub, live, input.paymentId);
+  return { status: live.status, paused: fit.paused.map(portalName), resumed: fit.resumed.map(portalName) };
+}
+
+/** Who finished a checkout: the company admin in the browser, or Razorpay's webhook (no person). */
+export type BillingActor = { companyId: string; membershipId: string | null; requestId?: string };
+
+async function checkoutDone(tx: Tx, companyId: string, subId: string) {
+  const [e] = await tx
+    .select({ id: billingEvents.id })
+    .from(billingEvents)
+    .where(and(eq(billingEvents.companyId, companyId), eq(billingEvents.type, 'checkout.completed'), sql`${billingEvents.data}->>'subscription' = ${subId}`))
+    .limit(1);
+  return !!e;
+}
+
+/**
+ * A paid checkout becomes the company's plan: the subscription is switched, seats written, and
+ * portals outside the plan paused. Runs once per subscription, whichever arrives first: the
+ * browser coming back from Razorpay, or Razorpay's webhook (the customer closed the window).
+ */
+async function finishCheckout(tx: Tx, actor: BillingActor, subId: string, sub: PendingCheckout, live: rz.RzSubscription, paymentId: string) {
+  if (await checkoutDone(tx, actor.companyId, subId)) {
+    await applyRazorpay(tx, actor.companyId, live);
+    return { paused: [] as string[], resumed: [] as string[] };
+  }
+  const state = await billingStateFor(tx, actor.companyId);
+  await completeSwitch(tx, actor, subId, sub, new Date(state.trialEndsAt));
+  await applyRazorpay(tx, actor.companyId, live);
   // Per-user plan: the new subscription pays for all the seats, so extra-seat subscriptions bought
   // on the old plan stop when their paid period ends.
   if (sub.seats) {
-    await writeMainSeats(tx, ctx.companyId, sub.seats);
-    await endSeatAddons(tx, ctx.companyId);
+    await writeMainSeats(tx, actor.companyId, sub.seats);
+    await endSeatAddons(tx, actor.companyId);
   }
-  if (sub.credit) await markCreditUsed(tx, ctx.companyId);
-  const fit = await fitPortalsToPlan(tx, ctx, sub.plan);
-  await tx.insert(billingEvents).values({ companyId: ctx.companyId, type: 'checkout.completed', razorpayId: input.paymentId, data: { subscription: input.subscriptionId } });
-  await audit(tx, { companyId: ctx.companyId, actorId: ctx.membershipId, action: 'billing.subscribe', entity: 'company_subscriptions', entityId: ctx.companyId, data: { summary: [`Subscribed to ${planOf(sub.plan)?.name ?? 'the custom plan'} (${sub.plan === 'custom' ? sub.cycle : cycleOf(sub.cycle).label})`] }, requestId: ctx.requestId });
-  return { status: live.status, paused: fit.paused.map(portalName), resumed: fit.resumed.map(portalName) };
+  if (sub.credit) await markCreditUsed(tx, actor.companyId);
+  const fit = await fitPortalsToPlan(tx, actor, sub.plan);
+  await tx.insert(billingEvents).values({ companyId: actor.companyId, type: 'checkout.completed', razorpayId: paymentId, data: { subscription: subId } });
+  await audit(tx, { companyId: actor.companyId, actorId: actor.membershipId, action: 'billing.subscribe', entity: 'company_subscriptions', entityId: actor.companyId, data: { summary: [`Subscribed to ${planNameFor(sub.plan, state.companyType) ?? 'the custom plan'} (${sub.plan === 'custom' ? sub.cycle : cycleOf(sub.cycle).label})`] }, requestId: actor.requestId });
+  return fit;
+}
+
+/**
+ * Webhook: a subscription the company started a checkout for is now paid or authorised, but the
+ * browser never came back (window closed, network dropped). Finish the checkout here, so the
+ * company gets the plan it paid for and only that plan's portals.
+ */
+export async function adoptPaidCheckout(tx: Tx, companyId: string, live: rz.RzSubscription, paymentId: string | null) {
+  if (live.status !== 'active' && live.status !== 'authenticated') return false;
+  const pending = await pendingCheckout(tx, companyId, live.id);
+  if (!pending) return false;
+  await finishCheckout(tx, { companyId, membershipId: null }, live.id, pending, live, paymentId ?? live.id);
+  return true;
 }
 
 /** Stores what Razorpay says about the subscription (checkout return and webhooks). */

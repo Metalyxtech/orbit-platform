@@ -5,7 +5,7 @@
 // Safe to import from client components.
 
 /** Stored in plan ids (e.g. "both_growth"), so existing ids never change: 'both' is Timesheet + Purchase. */
-export type Bundle =
+export type FixedBundle =
   | 'timesheet'
   | 'purchase'
   | 'sales'
@@ -20,7 +20,18 @@ export type Bundle =
   | 'complete'
   | 'hr'
   | 'hr_timesheet'
+  | 'timesheet_production'
+  | 'timesheet_quality'
+  | 'purchase_production'
+  | 'purchase_quality'
+  | 'sales_production'
+  | 'sales_quality'
   | 'complete_hr';
+/**
+ * A plan: one of the fixed bundles above, or a company's own mix of portals ("mix-hr-quality-sales",
+ * portal ids sorted), priced by MIX_DISCOUNT. Mixes are per-user plans only.
+ */
+export type Bundle = FixedBundle | `mix-${string}`;
 /** Fixed team sizes (older plans, kept for companies already on them). */
 export type TierId = 'starter' | 'growth' | 'business';
 /** 'users': priced per person (the current plans); the others are the older fixed team sizes. */
@@ -43,43 +54,91 @@ export const asCurrency = (c: string | null | undefined): Currency => (c === 'US
 /** Older fixed-size plans: foreign clients pay in US dollars at this rate (rounded up to whole dollars). */
 export const USD_RATE = 90;
 
-/** Where a bundle is listed on the plan picker. */
-export type BundleGroup = 'single' | 'combo' | 'factory';
-export const BUNDLE_GROUPS: { id: BundleGroup; title: string }[] = [
-  { id: 'single', title: 'One portal' },
-  { id: 'combo', title: 'Combine portals and save' },
-  { id: 'factory', title: 'Manufacturing packages: best price' },
-];
+/**
+ * How the plan picker offers a bundle:
+ *  - single: one portal (pick which);
+ *  - pair:   any two of the five work portals (pick which two);
+ *  - suite:  the company-type suite (Manufacturing or Production) or the Complete suite;
+ *  - people: HR + Timesheet together;
+ *  - legacy: no longer offered; kept so companies already on it keep their plan.
+ */
+export type BundleGroup = 'single' | 'pair' | 'suite' | 'people' | 'legacy' | 'mix';
 
-export const BUNDLES: { id: Bundle; name: string; portals: string[]; desc: string; group: BundleGroup; best?: boolean }[] = [
-  { id: 'timesheet', name: 'Timesheet', portals: ['timesheet'], group: 'single', desc: 'Weekly timesheets, approvals, overtime and project hours' },
+export const BUNDLES: { id: FixedBundle; name: string; portals: string[]; desc: string; group: BundleGroup; best?: boolean }[] = [
+  { id: 'timesheet', name: 'Timesheet', portals: ['timesheet'], group: 'single', desc: 'Weekly timesheets, roster, approvals, overtime and project hours' },
   { id: 'purchase', name: 'Purchase', portals: ['procurement'], group: 'single', desc: 'Requisitions, quotes, POs, stock, receipts and invoices' },
-  { id: 'sales', name: 'Sales', portals: ['sales'], group: 'single', desc: 'Enquiries, project documents, costing, quotations, orders and collections' },
-  { id: 'production', name: 'Production', portals: ['production'], group: 'single', desc: 'Work orders, trade forms, workshop drawings and daily shop-floor reports' },
-  { id: 'quality', name: 'Quality (QC)', portals: ['quality'], group: 'single', desc: 'Incoming and final inspections, NCRs, QC manager approval and QC dashboard' },
+  { id: 'sales', name: 'Sales', portals: ['sales'], group: 'single', desc: 'Enquiries, costing, quotations, orders and collections' },
+  { id: 'production', name: 'Production', portals: ['production'], group: 'single', desc: 'Work orders, trade forms, drawings and daily shop-floor reports' },
+  { id: 'quality', name: 'Quality (QC)', portals: ['quality'], group: 'single', desc: 'Incoming and final inspections, NCRs and QC approval' },
   { id: 'hr', name: 'HR', portals: ['hr'], group: 'single', desc: 'Employee records, leave requests and approvals, leave balances and monthly attendance' },
-  { id: 'hr_timesheet', name: 'HR + Timesheet', portals: ['timesheet', 'hr'], group: 'combo', desc: 'Hours, roster and overtime, with leave and attendance' },
-  { id: 'both', name: 'Timesheet + Purchase', portals: ['timesheet', 'procurement'], group: 'combo', desc: 'Site hours and buying in one login' },
-  { id: 'timesheet_sales', name: 'Timesheet + Sales', portals: ['timesheet', 'sales'], group: 'combo', desc: 'Win the work and track the hours on it' },
-  { id: 'purchase_sales', name: 'Purchase + Sales', portals: ['procurement', 'sales'], group: 'combo', desc: 'Quote, win, then buy for the job' },
-  { id: 'all', name: 'Timesheet + Purchase + Sales', portals: ['timesheet', 'procurement', 'sales'], group: 'combo', desc: 'One login, one GM dashboard' },
-  { id: 'production_quality', name: 'Production + Quality', portals: ['production', 'quality'], group: 'factory', desc: 'Make it and inspect it: work orders go straight to QC' },
+  { id: 'both', name: 'Timesheet + Purchase', portals: ['timesheet', 'procurement'], group: 'pair', desc: 'Site hours and buying in one login' },
+  { id: 'timesheet_sales', name: 'Timesheet + Sales', portals: ['timesheet', 'sales'], group: 'pair', desc: 'Win the work and track the hours on it' },
+  { id: 'timesheet_production', name: 'Timesheet + Production', portals: ['timesheet', 'production'], group: 'pair', desc: 'Work orders and the hours booked to them' },
+  { id: 'timesheet_quality', name: 'Timesheet + Quality', portals: ['timesheet', 'quality'], group: 'pair', desc: 'Inspections and the hours behind them' },
+  { id: 'purchase_sales', name: 'Purchase + Sales', portals: ['procurement', 'sales'], group: 'pair', desc: 'Quote, win, then buy for the job' },
+  { id: 'purchase_production', name: 'Purchase + Production', portals: ['procurement', 'production'], group: 'pair', desc: 'Material requests from the floor go straight to buying' },
+  { id: 'purchase_quality', name: 'Purchase + Quality', portals: ['procurement', 'quality'], group: 'pair', desc: 'Goods received are inspected before they are accepted' },
+  { id: 'sales_production', name: 'Sales + Production', portals: ['sales', 'production'], group: 'pair', desc: 'Orders and drawings go straight to the shop floor' },
+  { id: 'sales_quality', name: 'Sales + Quality', portals: ['sales', 'quality'], group: 'pair', desc: 'Every order inspected before it is invoiced' },
+  { id: 'production_quality', name: 'Production + Quality', portals: ['production', 'quality'], group: 'pair', desc: 'Make it and inspect it: work orders go straight to QC' },
   {
     id: 'factory',
     name: 'Manufacturing suite',
     portals: ['sales', 'procurement', 'production', 'quality'],
-    group: 'factory',
+    group: 'suite',
     desc: 'Sales, Purchase, Production and Quality: from enquiry to inspected, dispatched job',
     best: true,
   },
-  { id: 'complete', name: 'Complete suite', portals: ['timesheet', 'sales', 'procurement', 'production', 'quality'], group: 'factory', desc: 'All five portals, with timesheets and project hours' },
-  { id: 'complete_hr', name: 'Complete suite + HR', portals: ['timesheet', 'hr', 'sales', 'procurement', 'production', 'quality'], group: 'factory', desc: 'All six portals: the Complete suite with leave, attendance and employee records' },
+  {
+    id: 'complete',
+    name: 'Complete suite',
+    portals: ['timesheet', 'sales', 'procurement', 'production', 'quality'],
+    group: 'suite',
+    desc: 'All five work portals: the four job portals plus Timesheet',
+  },
+  {
+    id: 'complete_hr',
+    name: 'Complete suite + HR',
+    portals: ['timesheet', 'hr', 'sales', 'procurement', 'production', 'quality'],
+    group: 'suite',
+    desc: 'All six portals: the Complete suite with leave, attendance and employee records',
+  },
+  { id: 'hr_timesheet', name: 'HR + Timesheet', portals: ['timesheet', 'hr'], group: 'people', desc: 'Hours, roster and overtime, with leave and attendance' },
+  { id: 'all', name: 'Timesheet + Purchase + Sales', portals: ['timesheet', 'procurement', 'sales'], group: 'legacy', desc: 'One login, one GM dashboard' },
 ];
 /** Each portal's own bundle, for "you save" against buying them separately. */
-const SINGLE: Record<string, Bundle> = { timesheet: 'timesheet', procurement: 'purchase', sales: 'sales', production: 'production', quality: 'quality', hr: 'hr' };
+const SINGLE: Record<string, FixedBundle> = { timesheet: 'timesheet', procurement: 'purchase', sales: 'sales', production: 'production', quality: 'quality', hr: 'hr' };
 /** Every portal that is sold in a plan. */
 export const PRICED_PORTALS = Object.keys(SINGLE);
+/** The portals a company can pair in a two-portal plan (HR pairs only with Timesheet, in the people plan). */
+export const PAIR_PORTALS = ['sales', 'procurement', 'production', 'quality', 'timesheet'];
 export const isCombo = (b: Bundle) => (bundleOf(b)?.portals.length ?? 0) > 1;
+export const bundlesIn = (group: BundleGroup) => BUNDLES.filter((b) => b.group === group);
+/** The bundle sold for exactly these portals (any order), if there is one. */
+export function bundleForPortals(portals: string[]): FixedBundle | undefined {
+  const want = [...new Set(portals)].sort().join('+');
+  return BUNDLES.find((b) => b.group !== 'legacy' && [...b.portals].sort().join('+') === want)?.id;
+}
+
+/**
+ * The suite's name follows the company type: machining, moulding and press tool shops see the
+ * Production suite, everyone else the Manufacturing suite. Same portals, same price.
+ */
+export type CompanyType = 'manufacturing' | 'production';
+export function bundleName(b: Bundle, type: CompanyType = 'manufacturing') {
+  if (b === 'factory' && type === 'production') return 'Production suite';
+  return bundleOf(b)?.name ?? b;
+}
+/** A stored plan's name as this company sees it (the suite follows the company type). */
+export function planNameFor(id: string, type: CompanyType = 'manufacturing') {
+  const p = planOf(id);
+  if (!p) return undefined;
+  return p.bundle === 'factory' ? p.name.replace(bundleOf('factory')!.name, bundleName('factory', type)) : p.name;
+}
+export function bundleDesc(b: Bundle, type: CompanyType = 'manufacturing') {
+  if (b === 'factory' && type === 'production') return 'Sales, Purchase, Production and Quality: from RFQ to inspected, delivered parts';
+  return bundleOf(b)?.desc ?? '';
+}
 
 export const TIERS: { id: TierId; name: string; tagline: string; users: number; popular?: boolean; features: string[] }[] = [
   { id: 'starter', name: 'Starter', tagline: 'For small teams getting started', users: 10, features: ['Up to 10 people', 'Approval workflows', 'Dashboards and reports', 'Email support'] },
@@ -97,7 +156,8 @@ export const TIERS: { id: TierId; name: string; tagline: string; users: number; 
 /** Price per month in rupees when paid monthly (covers hosting and payment costs). */
 // Two portals together cost about 20% less than separately; three about 30% less;
 // the Manufacturing suite about 40% less and the Complete suite about 45% less.
-const MONTHLY_INR: Record<Bundle, Record<TierId, number>> = {
+// Older fixed-size plans only: bundles added later have no fixed-size price.
+const MONTHLY_INR: Partial<Record<FixedBundle, Record<TierId, number>>> = {
   timesheet: { starter: 1199, growth: 2999, business: 6999 },
   purchase: { starter: 1799, growth: 4199, business: 9599 },
   sales: { starter: 1799, growth: 4199, business: 9599 },
@@ -118,7 +178,7 @@ const MONTHLY_INR: Record<Bundle, Record<TierId, number>> = {
 
 /** Monthly price in the client's currency: rupees, or dollars at USD_RATE rounded up. */
 export function monthly(b: Bundle, t: TierId, cur: Currency = 'INR') {
-  const v = MONTHLY_INR[b][t];
+  const v = MONTHLY_INR[b as FixedBundle]?.[t] ?? 0;
   return cur === 'INR' ? v : Math.ceil(v / USD_RATE);
 }
 
@@ -140,7 +200,17 @@ export const UNPRICED_PORTALS: string[] = [];
 export const TRIAL_LIMITS = { users: 40, portals: [...PRICED_PORTALS, ...UNPRICED_PORTALS] };
 
 export const cycleOf = (c: string) => CYCLES.find((x) => x.id === c) ?? CYCLES[0];
-export const bundleOf = (b: string) => BUNDLES.find((x) => x.id === b);
+export type BundleInfo = { id: Bundle; name: string; portals: string[]; desc: string; group: BundleGroup; best?: boolean };
+/** A fixed bundle, or a company's own mix of portals. */
+export function bundleOf(b: string): BundleInfo | undefined {
+  const fixed = BUNDLES.find((x) => x.id === b);
+  if (fixed) return fixed;
+  const portals = mixPortals(b);
+  if (!portals) return undefined;
+  const order = ['sales', 'procurement', 'production', 'quality', 'timesheet', 'hr'];
+  const name = [...portals].sort((x, y) => order.indexOf(x) - order.indexOf(y)).map(portalName).join(' + ');
+  return { id: b as Bundle, name, portals, desc: 'Your own choice of portals, in one login', group: 'mix' };
+}
 export const tierOf = (t: string) => TIERS.find((x) => x.id === t);
 export const planId = (b: Bundle, t: PlanTier): PlanId => `${b}_${t}`;
 
@@ -150,6 +220,8 @@ export function planOf(id: string) {
   const [b, t] = [id.slice(0, cut), id.slice(cut + 1)];
   const bundle = bundleOf(b);
   if (!bundle) return undefined;
+  // A mix is sold per person only.
+  if (bundle.group === 'mix' && t !== 'users') return undefined;
   const portals = [...bundle.portals, ...UNPRICED_PORTALS];
   // Per-user plans have no people limit: the bill follows the number of people.
   if (t === 'users') return { id: id as PlanId, bundle: bundle.id, tier: 'users' as PlanTier, name: bundle.name, users: Number.POSITIVE_INFINITY, portals, perUser: true };
@@ -185,8 +257,12 @@ export const bundleSavingPct = (b: Bundle, t: TierId = 'growth') => (isCombo(b) 
 
 /** The smallest bundle that covers every portal in use (the default choice on the billing page). */
 export function bundleFor(used: string[]): Bundle {
-  const fits = BUNDLES.filter((b) => used.every((p) => b.portals.includes(p) || !SINGLE[p]));
-  return fits.sort((a, b) => a.portals.length - b.portals.length)[0]?.id ?? 'complete_hr';
+  // Exactly the portals in use, as a fixed bundle or the company's own mix.
+  const priced = used.filter((p) => SINGLE[p]);
+  if (priced.length) return bestBundleFor(priced);
+  const fits = BUNDLES.filter((b) => b.group !== 'legacy' && used.every((p) => b.portals.includes(p) || !SINGLE[p]));
+  // Fewest portals first; of those, the cheapest.
+  return fits.sort((a, b) => a.portals.length - b.portals.length || SEAT_PRICE[a.id].INR - SEAT_PRICE[b.id].INR)[0]?.id ?? 'complete_hr';
 }
 
 /** Money in the client's currency, e.g. ₹5,999 or $67. */
@@ -208,7 +284,7 @@ export const currencyWords = (cur: Currency) => (cur === 'USD' ? 'US dollars' : 
 // ---------------------------------------------------------------------------------------------
 
 /** Price per person per month, paid monthly, in each currency. */
-export const SEAT_PRICE: Record<Bundle, Record<Currency, number>> = {
+export const SEAT_PRICE: Record<FixedBundle, Record<Currency, number>> = {
   timesheet: { INR: 149, USD: 1.99, GBP: 1.99 },
   quality: { INR: 299, USD: 4.99, GBP: 3.99 },
   purchase: { INR: 399, USD: 6.99, GBP: 5.99 },
@@ -224,7 +300,55 @@ export const SEAT_PRICE: Record<Bundle, Record<Currency, number>> = {
   hr: { INR: 199, USD: 2.99, GBP: 2.49 },
   hr_timesheet: { INR: 299, USD: 3.99, GBP: 3.49 },
   complete_hr: { INR: 1399, USD: 24.99, GBP: 21.99 },
+  // Any two portals: about 15% to 25% less than buying them one by one.
+  timesheet_production: { INR: 549, USD: 9.49, GBP: 8.49 },
+  timesheet_quality: { INR: 349, USD: 5.99, GBP: 4.99 },
+  purchase_production: { INR: 749, USD: 13.99, GBP: 11.99 },
+  purchase_quality: { INR: 599, USD: 9.99, GBP: 8.49 },
+  sales_production: { INR: 749, USD: 13.99, GBP: 11.99 },
+  sales_quality: { INR: 599, USD: 9.99, GBP: 8.49 },
 };
+/**
+ * A company's own mix of portals costs less per portal the more it takes: 15% off two portals,
+ * 25% off three, 30% off four or more, against buying them one by one.
+ */
+export const MIX_DISCOUNT = (n: number) => (n >= 4 ? 0.3 : n === 3 ? 0.25 : n === 2 ? 0.15 : 0);
+/** Rounded to a price that reads well: ₹x49 / ₹x99, or .49 / .99 in pounds and dollars. */
+const nicePrice = (v: number, cur: Currency) => (cur === 'INR' ? Math.max(49, Math.round(v / 50) * 50 - 1) : Math.max(0.99, Math.round(v * 2) / 2 - 0.01));
+
+/** The portals in a mix id, or undefined when it is not a valid mix (2 or more priced portals, sorted). */
+export function mixPortals(id: string): string[] | undefined {
+  if (!id.startsWith('mix-')) return undefined;
+  const portals = id.slice(4).split('-');
+  const ok = portals.length >= 2 && portals.every((p) => SINGLE[p]) && new Set(portals).size === portals.length && [...portals].sort().join('-') === id.slice(4);
+  return ok ? portals : undefined;
+}
+export const mixId = (portals: string[]): Bundle => `mix-${[...new Set(portals)].sort().join('-')}`;
+export const isBundle = (id: string): id is Bundle => !!bundleOf(id);
+
+/** Price per person per month of any plan, fixed bundle or mix. */
+export function seatPrice(b: Bundle, cur: Currency): number {
+  const fixed = SEAT_PRICE[b as FixedBundle];
+  if (fixed) return fixed[cur];
+  const portals = mixPortals(b) ?? [];
+  const sum = portals.reduce((n, p) => n + SEAT_PRICE[SINGLE[p]][cur], 0);
+  return nicePrice(sum * (1 - MIX_DISCOUNT(portals.length)), cur);
+}
+
+/** The plan for exactly these portals: a fixed bundle when there is one, else the company's own mix. */
+export function bestBundleFor(portals: string[]): Bundle {
+  const set = [...new Set(portals)];
+  if (set.length === 1) return SINGLE[set[0]];
+  return bundleForPortals(set) ?? mixId(set);
+}
+
+/** The cheapest suite that covers these portals and costs no more than `limit`, for a "get the suite" tip. */
+export function suiteCovering(portals: string[], cur: Currency, limit: number): FixedBundle | undefined {
+  return bundlesIn('suite')
+    .filter((b) => portals.every((p) => b.portals.includes(p)) && b.portals.length > portals.length && SEAT_PRICE[b.id][cur] <= limit)
+    .sort((a, b) => SEAT_PRICE[a.id][cur] - SEAT_PRICE[b.id][cur])[0]?.id;
+}
+
 /** Smallest number of people a company pays for. */
 export const MIN_SEATS = 5;
 /** People with the management role (GM, directors) who use SteelConnect360 free: they view, hold and comment. */
@@ -248,7 +372,7 @@ export const billableSeats = (activePeople: number, managementPeople = 0) => Mat
  */
 export function seatQuote(b: Bundle, seats: number, cycle: Cycle, cur: Currency) {
   const n = Math.max(MIN_SEATS, Math.floor(seats));
-  const unit = SEAT_PRICE[b][cur];
+  const unit = seatPrice(b, cur);
   const c = cycleOf(cycle);
   const lines = VOLUME_BANDS.map((band) => {
     const people = Math.max(0, Math.min(n, band.to) - band.from + 1);
@@ -261,9 +385,13 @@ export function seatQuote(b: Bundle, seats: number, cycle: Cycle, cur: Currency)
 }
 
 /** Per-person price of a bundle's portals bought one by one. */
-export const seatSeparately = (b: Bundle, cur: Currency) => roundMoney((bundleOf(b)?.portals ?? []).reduce((n, p) => n + SEAT_PRICE[SINGLE[p]][cur], 0), cur);
+export const seatSeparately = (b: Bundle, cur: Currency) => roundMoney((bundleOf(b)?.portals ?? []).reduce((n, p) => n + seatPrice(SINGLE[p], cur), 0), cur);
 /** A combined bundle's saving against buying its portals one by one, as a whole percentage. */
-export const seatSavingPct = (b: Bundle, cur: Currency = 'INR') => (isCombo(b) ? Math.round((1 - SEAT_PRICE[b][cur] / seatSeparately(b, cur)) * 100) : 0);
+export const seatSavingPct = (b: Bundle, cur: Currency = 'INR') => (isCombo(b) ? Math.round((1 - seatPrice(b, cur) / seatSeparately(b, cur)) * 100) : 0);
+/** Lowest per-person price in a group of bundles, for "from ₹149" labels. */
+export const groupFrom = (group: BundleGroup, cur: Currency) => Math.min(...bundlesIn(group).map((b) => seatPrice(b.id, cur)));
+/** Biggest saving in a group of bundles, for "save up to 25%" labels. */
+export const groupMaxSaving = (group: BundleGroup, cur: Currency) => Math.max(0, ...bundlesIn(group).map((b) => seatSavingPct(b.id, cur)));
 
 /** A yearly price paid monthly: 12 equal payments (rounded up to the whole rupee or dollar). */
 export const installmentOf = (yearly: number) => Math.ceil(yearly / 12);
